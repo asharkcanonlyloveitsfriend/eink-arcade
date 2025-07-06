@@ -32,26 +32,25 @@ data class Level(
     val playerStart: Position
 ) {
     companion object {
-        fun random(): Level {
-            val grid = List(MainActivity.GRID_HEIGHT) { row ->
-                MutableList(MainActivity.GRID_WIDTH) { col ->
-                    when {
-                        row == 2 && col == 2 -> Tile.WALL
-                        row == 4 && col == 4 -> Tile.TARGET
+        fun fromAscii(ascii: String): Level {
+            var playerStart: Position? = null
+            val grid = ascii.trim().lines().mapIndexed { rowIndex, line ->
+                line.mapIndexed { colIndex, char ->
+                    when (char) {
+                        '#' -> Tile.WALL
+                        '.' -> Tile.TARGET
+                        '$' -> Tile.BOX
+                        '@' -> {
+                            playerStart = Position(rowIndex, colIndex)
+                            Tile.EMPTY
+                        }
+                        ' ' -> Tile.EMPTY
                         else -> Tile.EMPTY
                     }
                 }
             }
-
-            val possiblePositions = listOf(
-                Position(1, 1), Position(1, 2), Position(1, 3),
-                Position(2, 1), Position(2, 3), Position(3, 1),
-                Position(3, 2)
-            )
-            val randomBoxPos = possiblePositions.random()
-            grid[randomBoxPos.row][randomBoxPos.col] = Tile.BOX
-
-            return Level(grid, playerStart = Position(0, 0))
+            requireNotNull(playerStart) { "Player start '@' not found in level" }
+            return Level(grid, playerStart!!)
         }
     }
 }
@@ -83,7 +82,26 @@ data class GameState(
 }
 
 class GameController {
-    private var level = Level.random()
+    private val levels = listOf(
+        """
+        ######
+        #    #
+        # @$ #
+        #   .#
+        #    #
+        ######
+        """.trimIndent(),
+        """
+        ######
+        #  @ #
+        #    #
+        # $$ #
+        # .. #
+        ######
+        """.trimIndent()
+    )
+    private var currentLevelIndex = 0
+    private var level = Level.fromAscii(levels[currentLevelIndex])
     private var gameEngine = GameEngine(level)
 
     val playerPosition: Position
@@ -98,13 +116,20 @@ class GameController {
 
     fun restart() {
         if (isGameWon) {
-            level = Level.random()
+            nextLevel()
+        } else {
+            gameEngine = GameEngine(level)
         }
-        gameEngine = GameEngine(level)
     }
 
     fun handleDirectionInput(direction: Direction) {
         gameEngine.move(direction)
+    }
+
+    fun nextLevel() {
+        currentLevelIndex = (currentLevelIndex + 1) % levels.size
+        level = Level.fromAscii(levels[currentLevelIndex])
+        gameEngine = GameEngine(level)
     }
 }
 
