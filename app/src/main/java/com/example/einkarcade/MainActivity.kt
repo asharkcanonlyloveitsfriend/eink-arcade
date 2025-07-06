@@ -88,7 +88,6 @@ class GameController {
         #    #
         # @$ #
         #   .#
-        #    #
         ######
         """.trimIndent(),
         """
@@ -109,6 +108,11 @@ class GameController {
 
     val isGameWon: Boolean
         get() = gameEngine.isGameWon
+
+    val gridHeight: Int
+        get() = level.grid.size
+    val gridWidth: Int
+        get() = level.grid[0].size
 
     fun getTileAt(position: Position): Tile? {
         return gameEngine.getTileAt(position)
@@ -139,10 +143,6 @@ class MainActivity : ComponentActivity() {
         internal const val CELL_SIZE = 100f
         internal const val GAME_LEFT = 50f
         internal const val GAME_TOP = 0f
-        internal const val GRID_WIDTH = 6
-        internal const val GRID_HEIGHT = 6
-        internal const val GAME_WIDTH = CELL_SIZE * GRID_WIDTH
-        internal const val GAME_HEIGHT = CELL_SIZE * GRID_HEIGHT
     }
 
     private val gameController = GameController()
@@ -187,15 +187,17 @@ fun GameScreen(modifier: Modifier = Modifier, gameController: GameController, pl
         derivedStateOf { gameController.isGameWon }
     }
     Canvas(modifier = modifier.fillMaxSize()) {
+        val gameWidth = MainActivity.CELL_SIZE * gameController.gridWidth
+        val gameHeight = MainActivity.CELL_SIZE * gameController.gridHeight
         drawRect(
             color = androidx.compose.ui.graphics.Color.DarkGray,
             topLeft = androidx.compose.ui.geometry.Offset(MainActivity.GAME_LEFT, MainActivity.GAME_TOP),
-            size = androidx.compose.ui.geometry.Size(MainActivity.GAME_WIDTH, MainActivity.GAME_HEIGHT),
+            size = androidx.compose.ui.geometry.Size(gameWidth, gameHeight),
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
         )
         val player = playerPositionState.value
-        for (row in 0 until MainActivity.GRID_HEIGHT) {
-            for (col in 0 until MainActivity.GRID_WIDTH) {
+        for (row in 0 until gameController.gridHeight) {
+            for (col in 0 until gameController.gridWidth) {
                 val x = MainActivity.GAME_LEFT + col * MainActivity.CELL_SIZE
                 val y = MainActivity.GAME_TOP + row * MainActivity.CELL_SIZE
                 drawRect(
