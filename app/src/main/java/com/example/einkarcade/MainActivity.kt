@@ -292,31 +292,30 @@ class GameEngine(level: Level) {
         if (isGameWon) return
 
         val newPosition = playerPosition.move(direction)
-
         val targetTile = gameState.tileAt(newPosition) ?: return
         if (targetTile == Tile.WALL) return
 
-        if (targetTile == Tile.BOX) {
+        if (targetTile == Tile.BOX || targetTile == Tile.BOX_ON_TARGET) {
             val boxNewPosition = newPosition.move(direction)
             if (
                 gameState.isInBounds(boxNewPosition) &&
-                gameState.tileAt(boxNewPosition) == Tile.EMPTY
+                (gameState.tileAt(boxNewPosition) == Tile.EMPTY || gameState.tileAt(boxNewPosition) == Tile.TARGET)
             ) {
-                gameState.grid[newPosition.row][newPosition.col] = Tile.EMPTY
-                gameState.grid[boxNewPosition.row][boxNewPosition.col] = Tile.BOX
-            } else if (
-                gameState.isInBounds(boxNewPosition) &&
-                gameState.tileAt(boxNewPosition) == Tile.TARGET
-            ) {
-                gameState.grid[newPosition.row][newPosition.col] = Tile.EMPTY
-                gameState.grid[boxNewPosition.row][boxNewPosition.col] = Tile.BOX_ON_TARGET
+                // Move box
+                val leavingTile = targetTile
+                val destinationTile = gameState.tileAt(boxNewPosition)
+
+                gameState.grid[newPosition.row][newPosition.col] =
+                    if (leavingTile == Tile.BOX_ON_TARGET) Tile.TARGET else Tile.EMPTY
+
+                gameState.grid[boxNewPosition.row][boxNewPosition.col] =
+                    if (destinationTile == Tile.TARGET) Tile.BOX_ON_TARGET else Tile.BOX
             } else {
                 return
             }
         }
 
         playerPosition = newPosition
-
     }
 
     fun getTileAt(position: Position): Tile? {
