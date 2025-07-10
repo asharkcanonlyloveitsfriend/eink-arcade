@@ -48,6 +48,7 @@ data class Level(
                             playerStart = Position(rowIndex, colIndex)
                             Tile.EMPTY
                         }
+
                         ' ' -> Tile.EMPTY
                         else -> Tile.EMPTY
                     }
@@ -76,9 +77,11 @@ data class GameState(
     fun isInBounds(position: Position): Boolean {
         return position.row in grid.indices && position.col in grid[0].indices
     }
+
     fun tileAt(position: Position): Tile? {
         return if (isInBounds(position)) grid[position.row][position.col] else null
     }
+
     companion object {
         fun fromLevel(level: Level): GameState {
             return GameState(
@@ -88,17 +91,25 @@ data class GameState(
     }
 }
 
-class GameController(context: Context) {
-    private val levelFiles = context.assets.list("levels")?.toList() ?: emptyList()
-
-    private val levels = levelFiles.map { filename ->
-        context.assets.open("levels/$filename").bufferedReader().use { it.readText() }
-    }
+class GameController(context: Context, testLevels: List<String>? = null) {
+    private val levels: List<String>
     private var currentLevelIndex = 0
+    private var level: Level
+    private var gameEngine: GameEngine
+
+    init {
+        levels = testLevels ?: run {
+            val levelFiles = context.assets.list("levels")?.toList() ?: emptyList()
+            levelFiles.map { filename ->
+                context.assets.open("levels/$filename").bufferedReader().use { it.readText() }
+            }
+        }
+        level = Level.fromAscii(levels[currentLevelIndex])
+        gameEngine = GameEngine(level)
+    }
+
     val currentLevel: Int
         get() = currentLevelIndex + 1
-    private var level = Level.fromAscii(levels[currentLevelIndex])
-    private var gameEngine = GameEngine(level)
 
     val playerPosition: Position
         get() = gameEngine.playerPosition
@@ -134,9 +145,14 @@ class GameController(context: Context) {
     }
 
     fun previousLevel() {
-        currentLevelIndex = if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
+        currentLevelIndex =
+            if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
         level = Level.fromAscii(levels[currentLevelIndex])
         gameEngine = GameEngine(level)
+    }
+
+    fun undo() {
+        gameEngine.undo()
     }
 }
 
@@ -146,15 +162,17 @@ class MainActivity : ComponentActivity() {
         internal const val CELL_SIZE = 100f
         internal const val GRID_OFFSET_X = 50f
         internal const val GRID_OFFSET_Y = 50f
+
+        // Test-only override for injecting test levels
+        var testLevels: List<String>? = null
     }
 
     private lateinit var gameController: GameController
     private val uiState = mutableStateOf(GameUiState(Position(0, 0), 1))
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        gameController = GameController(this)
+        gameController = GameController(this, testLevels)
         uiState.value = GameUiState(gameController.playerPosition, gameController.currentLevel)
         enableEdgeToEdge()
         setContent {
@@ -179,6 +197,7 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_BUTTON_X -> gameController.restart()
             102 -> gameController.previousLevel() // L
             103 -> gameController.nextLevel() // R
+            KeyEvent.KEYCODE_BUTTON_B -> gameController.undo()
             else -> {
                 Log.d("GameInput", "KeyDown: $keyCode")
             }
@@ -189,7 +208,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun GameScreen(modifier: Modifier = Modifier, gameController: GameController, uiState: State<GameUiState>) {
+fun GameScreen(
+    modifier: Modifier = Modifier,
+    gameController: GameController,
+    uiState: State<GameUiState>
+) {
     val playerPosition = uiState.value.playerPosition
     val levelNumber = uiState.value.levelNumber
 
@@ -219,37 +242,56 @@ fun GameScreen(modifier: Modifier = Modifier, gameController: GameController, ui
                         drawRect(
                             color = androidx.compose.ui.graphics.Color.Black,
                             topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                            size = androidx.compose.ui.geometry.Size(MainActivity.CELL_SIZE, MainActivity.CELL_SIZE)
+                            size = androidx.compose.ui.geometry.Size(
+                                MainActivity.CELL_SIZE,
+                                MainActivity.CELL_SIZE
+                            )
                         )
                     }
+
                     Tile.BOX -> {
                         val padding = MainActivity.CELL_SIZE * 0.2f
                         drawRect(
                             color = androidx.compose.ui.graphics.Color.DarkGray,
                             topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
-                            size = androidx.compose.ui.geometry.Size(MainActivity.CELL_SIZE - 2 * padding, MainActivity.CELL_SIZE - 2 * padding)
+                            size = androidx.compose.ui.geometry.Size(
+                                MainActivity.CELL_SIZE - 2 * padding,
+                                MainActivity.CELL_SIZE - 2 * padding
+                            )
                         )
                     }
+
                     Tile.BOX_ON_TARGET -> {
                         drawRect(
                             color = androidx.compose.ui.graphics.Color.LightGray,
                             topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                            size = androidx.compose.ui.geometry.Size(MainActivity.CELL_SIZE, MainActivity.CELL_SIZE)
+                            size = androidx.compose.ui.geometry.Size(
+                                MainActivity.CELL_SIZE,
+                                MainActivity.CELL_SIZE
+                            )
                         )
                         val padding = MainActivity.CELL_SIZE * 0.2f
                         drawRect(
                             color = androidx.compose.ui.graphics.Color.DarkGray,
                             topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
-                            size = androidx.compose.ui.geometry.Size(MainActivity.CELL_SIZE - 2 * padding, MainActivity.CELL_SIZE - 2 * padding)
+                            size = androidx.compose.ui.geometry.Size(
+                                MainActivity.CELL_SIZE - 2 * padding,
+                                MainActivity.CELL_SIZE - 2 * padding
+                            )
                         )
                     }
+
                     Tile.TARGET -> {
                         drawRect(
                             color = androidx.compose.ui.graphics.Color.LightGray,
                             topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                            size = androidx.compose.ui.geometry.Size(MainActivity.CELL_SIZE, MainActivity.CELL_SIZE)
+                            size = androidx.compose.ui.geometry.Size(
+                                MainActivity.CELL_SIZE,
+                                MainActivity.CELL_SIZE
+                            )
                         )
                     }
+
                     else -> {}
                 }
                 if (row == playerPosition.row && col == playerPosition.col) {
@@ -286,6 +328,7 @@ class GameEngine(level: Level) {
     private var gameState = GameState.fromLevel(level)
     var playerPosition = level.playerStart
         private set
+    private var lastSavedState: Pair<GameState, Position>? = null
 
     val isGameWon: Boolean
         get() = gameState.grid.flatten().none { it == Tile.TARGET }
@@ -303,6 +346,10 @@ class GameEngine(level: Level) {
                 gameState.isInBounds(boxNewPosition) &&
                 (gameState.tileAt(boxNewPosition) == Tile.EMPTY || gameState.tileAt(boxNewPosition) == Tile.TARGET)
             ) {
+                lastSavedState = Pair(
+                    gameState.copy(grid = gameState.grid.map { it.toMutableList() }),
+                    playerPosition
+                )
                 // Move box
                 val leavingTile = targetTile
                 val destinationTile = gameState.tileAt(boxNewPosition)
@@ -322,5 +369,12 @@ class GameEngine(level: Level) {
 
     fun getTileAt(position: Position): Tile? {
         return gameState.tileAt(position)
+    }
+
+    fun undo() {
+        val savedState = lastSavedState ?: return
+        gameState = GameState(savedState.first.grid.map { it.toMutableList() })
+        playerPosition = savedState.second
+        lastSavedState = null
     }
 }

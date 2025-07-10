@@ -14,5 +14,8 @@
 .gradle/
 /local.properties
 
+# Kotlin
+/.kotlin/
+
 # macOS
 .DS_Store
