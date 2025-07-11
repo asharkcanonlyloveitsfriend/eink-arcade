@@ -22,6 +22,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
@@ -75,12 +78,6 @@ data class Level(
         }
     }
 
-    val gridHeight: Int
-        get() = grid.size
-
-    val gridWidth: Int
-        get() = grid[0].size
-
     fun isWall(position: Position): Boolean {
         return grid.getOrNull(position.row)?.getOrNull(position.col) == Tile.WALL
     }
@@ -95,12 +92,6 @@ data class Level(
 
     private fun isInBounds(position: Position): Boolean {
         return position.row in grid.indices && position.col in grid[0].indices
-    }
-
-    fun getTileAt(position: Position): Tile? {
-        return if (isInBounds(position)) {
-            grid[position.row][position.col]
-        } else null
     }
 }
 
@@ -170,21 +161,14 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     val playerPosition: Position
         get() = gameEngine.playerPosition
 
+    val boxPositions: Set<Position>
+        get() = gameEngine.boxPositions
+
     val isGameWon: Boolean
         get() = gameEngine.isGameWon
 
-    val gridHeight: Int
-        get() = level.gridHeight
-    val gridWidth: Int
-        get() = level.gridWidth
-
-    fun getTileAt(position: Position): Tile? {
-        return level.getTileAt(position)
-    }
-
-    fun hasBoxAt(position: Position): Boolean {
-        return gameEngine.hasBoxAt(position)
-    }
+    val grid: List<List<Tile>>
+        get() = level.grid
 
     fun restart() {
         if (isGameWon) {
@@ -267,6 +251,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun drawGameObject(
+    position: Position,
+    draw: (Offset) -> Unit
+) {
+    val x = MainActivity.GRID_OFFSET_X + position.col * MainActivity.CELL_SIZE
+    val y = MainActivity.GRID_OFFSET_Y + position.row * MainActivity.CELL_SIZE
+    draw(Offset(x, y))
+}
+
 @Composable
 fun GameScreen(
     modifier: Modifier = Modifier,
@@ -292,58 +285,63 @@ fun GameScreen(
     }
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        for (row in 0 until gameController.gridHeight) {
-            for (col in 0 until gameController.gridWidth) {
-                val x = MainActivity.GRID_OFFSET_X + col * MainActivity.CELL_SIZE
-                val y = MainActivity.GRID_OFFSET_Y + row * MainActivity.CELL_SIZE
-                val tile = gameController.getTileAt(Position(row, col))
+        for ((rowIndex, row) in gameController.grid.withIndex()) {
+            for ((colIndex, tile) in row.withIndex()) {
                 when (tile) {
                     Tile.WALL -> {
-                        drawRect(
-                            color = androidx.compose.ui.graphics.Color.Black,
-                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                            size = androidx.compose.ui.geometry.Size(
-                                MainActivity.CELL_SIZE,
-                                MainActivity.CELL_SIZE
+                        drawGameObject(Position(rowIndex, colIndex)) { offset ->
+                            drawRect(
+                                color = Color.Black,
+                                topLeft = offset,
+                                size = Size(
+                                    MainActivity.CELL_SIZE,
+                                    MainActivity.CELL_SIZE
+                                )
                             )
-                        )
+                        }
                     }
-
                     Tile.TARGET -> {
-                        drawRect(
-                            color = androidx.compose.ui.graphics.Color.LightGray,
-                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                            size = androidx.compose.ui.geometry.Size(
-                                MainActivity.CELL_SIZE,
-                                MainActivity.CELL_SIZE
+                        drawGameObject(Position(rowIndex, colIndex)) { offset ->
+                            drawRect(
+                                color = Color.LightGray,
+                                topLeft = offset,
+                                size = Size(
+                                    MainActivity.CELL_SIZE,
+                                    MainActivity.CELL_SIZE
+                                )
                             )
-                        )
+                        }
                     }
-
                     else -> {}
                 }
-                if (gameController.hasBoxAt(Position(row, col))) {
-                    val padding = MainActivity.CELL_SIZE * 0.2f
-                    drawRect(
-                        color = androidx.compose.ui.graphics.Color.Gray,
-                        topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
-                        size = androidx.compose.ui.geometry.Size(
-                            MainActivity.CELL_SIZE - 2 * padding,
-                            MainActivity.CELL_SIZE - 2 * padding
-                        )
-                    )
-                }
-                if (row == playerPosition.row && col == playerPosition.col) {
-                    drawCircle(
-                        color = androidx.compose.ui.graphics.Color.Gray,
-                        radius = MainActivity.CELL_SIZE * 0.4f,
-                        center = androidx.compose.ui.geometry.Offset(
-                            x + MainActivity.CELL_SIZE / 2,
-                            y + MainActivity.CELL_SIZE / 2
-                        )
-                    )
-                }
             }
+        }
+
+        // Draw boxes
+        for (position in gameController.boxPositions) {
+            val padding = MainActivity.CELL_SIZE * 0.2f
+            drawGameObject(position) { offset ->
+                drawRect(
+                    color = Color.Gray,
+                    topLeft = Offset(offset.x + padding, offset.y + padding),
+                    size = Size(
+                        MainActivity.CELL_SIZE - 2 * padding,
+                        MainActivity.CELL_SIZE - 2 * padding
+                    )
+                )
+            }
+        }
+
+        // Draw player
+        drawGameObject(playerPosition) { offset ->
+            drawCircle(
+                color = Color.Gray,
+                radius = MainActivity.CELL_SIZE * 0.4f,
+                center = Offset(
+                    offset.x + MainActivity.CELL_SIZE / 2,
+                    offset.y + MainActivity.CELL_SIZE / 2
+                )
+            )
         }
     }
 
@@ -355,7 +353,7 @@ fun GameScreen(
         ) {
             Text(
                 text = "You win!",
-                color = androidx.compose.ui.graphics.Color.Black,
+                color = Color.Black,
                 fontSize = 32.sp
             )
         }
@@ -369,6 +367,9 @@ class GameEngine(private val level: Level) {
 
     val playerPosition: Position
         get() = gameState.playerPosition
+
+    val boxPositions: Set<Position>
+        get() = gameState.boxPositions
 
     val isGameWon: Boolean
         get() = gameState.boxPositions.all { level.isTarget(it) }
@@ -396,7 +397,7 @@ class GameEngine(private val level: Level) {
         }
     }
 
-    fun hasBoxAt(position: Position): Boolean {
+    private fun hasBoxAt(position: Position): Boolean {
         return gameState.boxPositions.contains(position)
     }
 
