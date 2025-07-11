@@ -27,36 +27,56 @@ import androidx.compose.ui.unit.sp
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
 
 enum class Direction { UP, DOWN, LEFT, RIGHT }
-enum class Tile { EMPTY, WALL, BOX, TARGET, BOX_ON_TARGET }
+enum class Tile { EMPTY, WALL, TARGET }
 
 data class Level(
     val grid: List<List<Tile>>,
-    val playerStart: Position
+    val playerStart: Position,
+    val boxPositions: Set<Position>
 ) {
     companion object {
         fun fromAscii(ascii: String): Level {
             val lines = ascii.lines().dropLastWhile { it.isBlank() }
             val maxWidth = lines.maxOfOrNull { it.length } ?: 0
             var playerStart: Position? = null
+            val boxes = mutableSetOf<Position>()
             val grid = lines.mapIndexed { rowIndex, line ->
                 line.padEnd(maxWidth).mapIndexed { colIndex, char ->
+                    val isTarget = char == '.' || char == '*'
+                    val isBox = char == '$' || char == '*'
+                    val tile = if (isTarget) Tile.TARGET else Tile.EMPTY
+                    if (isBox) {
+                        boxes.add(Position(rowIndex, colIndex))
+                    }
                     when (char) {
                         '#' -> Tile.WALL
-                        '.' -> Tile.TARGET
-                        '$' -> Tile.BOX
                         '@' -> {
                             playerStart = Position(rowIndex, colIndex)
-                            Tile.EMPTY
+                            tile
                         }
-
-                        ' ' -> Tile.EMPTY
-                        else -> Tile.EMPTY
+                        else -> tile
                     }
                 }
             }
             requireNotNull(playerStart) { "Player start '@' not found in level" }
-            return Level(grid, playerStart!!)
+            return Level(grid, playerStart!!, boxes)
         }
+    }
+
+    fun isWall(position: Position): Boolean {
+        return grid.getOrNull(position.row)?.getOrNull(position.col) == Tile.WALL
+    }
+
+    fun isTarget(position: Position): Boolean {
+        return grid.getOrNull(position.row)?.getOrNull(position.col) == Tile.TARGET
+    }
+
+    fun isPassable(position: Position): Boolean {
+        return isInBounds(position) && !isWall(position)
+    }
+
+    private fun isInBounds(position: Position): Boolean {
+        return position.row in grid.indices && position.col in grid[0].indices
     }
 }
 
@@ -72,22 +92,32 @@ data class Position(val row: Int, val col: Int) {
 data class GameUiState(val playerPosition: Position, val levelNumber: Int)
 
 data class GameState(
-    val grid: List<MutableList<Tile>>
+    var playerPosition: Position,
+    val boxPositions: MutableSet<Position>
 ) {
-    fun isInBounds(position: Position): Boolean {
-        return position.row in grid.indices && position.col in grid[0].indices
-    }
-
-    fun tileAt(position: Position): Tile? {
-        return if (isInBounds(position)) grid[position.row][position.col] else null
-    }
-
     companion object {
         fun fromLevel(level: Level): GameState {
             return GameState(
-                grid = level.grid.map { it.toMutableList() }
+                playerPosition = level.playerStart,
+                boxPositions = level.boxPositions.toMutableSet()
             )
         }
+    }
+    fun moveBox(from: Position, to: Position) {
+        if (!boxPositions.contains(from)) {
+            error("No box at position $from")
+        }
+        boxPositions.remove(from)
+        boxPositions.add(to)
+    }
+    fun movePlayer(to: Position) {
+        playerPosition = to
+    }
+    fun deepCopy(): GameState {
+        return GameState(
+            playerPosition = playerPosition,
+            boxPositions = boxPositions.toMutableSet()
+        )
     }
 }
 
@@ -122,7 +152,13 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         get() = level.grid[0].size
 
     fun getTileAt(position: Position): Tile? {
-        return gameEngine.getTileAt(position)
+        return if (position.row in level.grid.indices && position.col in level.grid[0].indices) {
+            level.grid[position.row][position.col]
+        } else null
+    }
+
+    fun hasBoxAt(position: Position): Boolean {
+        return gameEngine.hasBoxAt(position)
     }
 
     fun restart() {
@@ -248,38 +284,6 @@ fun GameScreen(
                         )
                     }
 
-                    Tile.BOX -> {
-                        val padding = MainActivity.CELL_SIZE * 0.2f
-                        drawRect(
-                            color = androidx.compose.ui.graphics.Color.Gray,
-                            topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
-                            size = androidx.compose.ui.geometry.Size(
-                                MainActivity.CELL_SIZE - 2 * padding,
-                                MainActivity.CELL_SIZE - 2 * padding
-                            )
-                        )
-                    }
-
-                    Tile.BOX_ON_TARGET -> {
-                        drawRect(
-                            color = androidx.compose.ui.graphics.Color.LightGray,
-                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                            size = androidx.compose.ui.geometry.Size(
-                                MainActivity.CELL_SIZE,
-                                MainActivity.CELL_SIZE
-                            )
-                        )
-                        val padding = MainActivity.CELL_SIZE * 0.2f
-                        drawRect(
-                            color = androidx.compose.ui.graphics.Color.Gray,
-                            topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
-                            size = androidx.compose.ui.geometry.Size(
-                                MainActivity.CELL_SIZE - 2 * padding,
-                                MainActivity.CELL_SIZE - 2 * padding
-                            )
-                        )
-                    }
-
                     Tile.TARGET -> {
                         drawRect(
                             color = androidx.compose.ui.graphics.Color.LightGray,
@@ -292,6 +296,17 @@ fun GameScreen(
                     }
 
                     else -> {}
+                }
+                if (gameController.hasBoxAt(Position(row, col))) {
+                    val padding = MainActivity.CELL_SIZE * 0.2f
+                    drawRect(
+                        color = androidx.compose.ui.graphics.Color.Gray,
+                        topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
+                        size = androidx.compose.ui.geometry.Size(
+                            MainActivity.CELL_SIZE - 2 * padding,
+                            MainActivity.CELL_SIZE - 2 * padding
+                        )
+                    )
                 }
                 if (row == playerPosition.row && col == playerPosition.col) {
                     drawCircle(
@@ -323,57 +338,46 @@ fun GameScreen(
 }
 
 
-class GameEngine(level: Level) {
+class GameEngine(private val level: Level) {
     private var gameState = GameState.fromLevel(level)
-    var playerPosition = level.playerStart
-        private set
-    private var lastSavedState: Pair<GameState, Position>? = null
+    private var lastSavedState: GameState? = null
+
+    val playerPosition: Position
+        get() = gameState.playerPosition
 
     val isGameWon: Boolean
-        get() = gameState.grid.flatten().none { it == Tile.TARGET }
+        get() = gameState.boxPositions.all { level.isTarget(it) }
 
     fun move(direction: Direction) {
         if (isGameWon) return
 
         val newPosition = playerPosition.move(direction)
-        val targetTile = gameState.tileAt(newPosition) ?: return
-        if (targetTile == Tile.WALL) return
+        if (level.isWall(newPosition)) return
 
-        if (targetTile == Tile.BOX || targetTile == Tile.BOX_ON_TARGET) {
+        if (gameState.boxPositions.contains(newPosition)) {
             val boxNewPosition = newPosition.move(direction)
             if (
-                gameState.isInBounds(boxNewPosition) &&
-                (gameState.tileAt(boxNewPosition) == Tile.EMPTY || gameState.tileAt(boxNewPosition) == Tile.TARGET)
+                level.isPassable(boxNewPosition) &&
+                !gameState.boxPositions.contains(boxNewPosition)
             ) {
-                lastSavedState = Pair(
-                    gameState.copy(grid = gameState.grid.map { it.toMutableList() }),
-                    playerPosition
-                )
-                // Move box
-                val leavingTile = targetTile
-                val destinationTile = gameState.tileAt(boxNewPosition)
-
-                gameState.grid[newPosition.row][newPosition.col] =
-                    if (leavingTile == Tile.BOX_ON_TARGET) Tile.TARGET else Tile.EMPTY
-
-                gameState.grid[boxNewPosition.row][boxNewPosition.col] =
-                    if (destinationTile == Tile.TARGET) Tile.BOX_ON_TARGET else Tile.BOX
+                lastSavedState = gameState.deepCopy()
+                gameState.moveBox(newPosition, boxNewPosition)
+                gameState.movePlayer(newPosition)
             } else {
                 return
             }
+        } else {
+            gameState.movePlayer(newPosition)
         }
-
-        playerPosition = newPosition
     }
 
-    fun getTileAt(position: Position): Tile? {
-        return gameState.tileAt(position)
+    fun hasBoxAt(position: Position): Boolean {
+        return gameState.boxPositions.contains(position)
     }
 
     fun undo() {
         val savedState = lastSavedState ?: return
-        gameState = GameState(savedState.first.grid.map { it.toMutableList() })
-        playerPosition = savedState.second
+        gameState = savedState.deepCopy()
         lastSavedState = null
     }
 }
