@@ -92,18 +92,17 @@ data class GameState(
 }
 
 class GameController(context: Context, testLevels: List<String>? = null) {
-    private val levels: List<String>
+    private val levels: List<String> = testLevels ?: run {
+        val levelFiles = context.assets.list("levels")?.toList() ?: emptyList()
+        levelFiles.map { filename ->
+            context.assets.open("levels/$filename").bufferedReader().use { it.readText() }
+        }
+    }
     private var currentLevelIndex = 0
     private var level: Level
     private var gameEngine: GameEngine
 
     init {
-        levels = testLevels ?: run {
-            val levelFiles = context.assets.list("levels")?.toList() ?: emptyList()
-            levelFiles.map { filename ->
-                context.assets.open("levels/$filename").bufferedReader().use { it.readText() }
-            }
-        }
         level = Level.fromAscii(levels[currentLevelIndex])
         gameEngine = GameEngine(level)
     }
@@ -252,7 +251,7 @@ fun GameScreen(
                     Tile.BOX -> {
                         val padding = MainActivity.CELL_SIZE * 0.2f
                         drawRect(
-                            color = androidx.compose.ui.graphics.Color.DarkGray,
+                            color = androidx.compose.ui.graphics.Color.Gray,
                             topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
                             size = androidx.compose.ui.geometry.Size(
                                 MainActivity.CELL_SIZE - 2 * padding,
@@ -272,7 +271,7 @@ fun GameScreen(
                         )
                         val padding = MainActivity.CELL_SIZE * 0.2f
                         drawRect(
-                            color = androidx.compose.ui.graphics.Color.DarkGray,
+                            color = androidx.compose.ui.graphics.Color.Gray,
                             topLeft = androidx.compose.ui.geometry.Offset(x + padding, y + padding),
                             size = androidx.compose.ui.geometry.Size(
                                 MainActivity.CELL_SIZE - 2 * padding,
