@@ -167,7 +167,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     val isGameWon: Boolean
         get() = gameEngine.isGameWon
 
-    val grid: List<List<Tile>>
+    val tiles: List<List<Tile>>
         get() = level.grid
 
     fun restart() {
@@ -217,7 +217,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         gameController = GameController(this, testLevels)
-        uiState.value = GameUiState(gameController.playerPosition, gameController.currentLevel)
+        updateUiState()
         enableEdgeToEdge()
         setContent {
             EinkArcadeTheme {
@@ -246,8 +246,15 @@ class MainActivity : ComponentActivity() {
                 Log.d("GameInput", "KeyDown: $keyCode")
             }
         }
-        uiState.value = GameUiState(gameController.playerPosition, gameController.currentLevel)
+        updateUiState()
         return true
+    }
+
+    private fun updateUiState() {
+        uiState.value = GameUiState(
+            gameController.playerPosition,
+            gameController.currentLevel
+        )
     }
 }
 
@@ -285,7 +292,7 @@ fun GameScreen(
     }
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        for ((rowIndex, row) in gameController.grid.withIndex()) {
+        for ((rowIndex, row) in gameController.tiles.withIndex()) {
             for ((colIndex, tile) in row.withIndex()) {
                 when (tile) {
                     Tile.WALL -> {
@@ -377,24 +384,28 @@ class GameEngine(private val level: Level) {
     fun move(direction: Direction) {
         if (isGameWon) return
 
-        val newPosition = playerPosition.move(direction)
-        if (level.isWall(newPosition)) return
+        val targetPosition = playerPosition.move(direction)
+        if (level.isWall(targetPosition)) return
 
-        if (hasBoxAt(newPosition)) {
-            val boxNewPosition = newPosition.move(direction)
-            if (
-                level.isPassable(boxNewPosition) &&
-                !hasBoxAt(boxNewPosition)
-            ) {
-                lastSavedState = gameState.deepCopy()
-                gameState.moveBox(newPosition, boxNewPosition)
-                gameState.movePlayer(newPosition)
-            } else {
-                return
+        if (hasBoxAt(targetPosition)) {
+            if (canPushBox(targetPosition, direction)) {
+                pushBox(targetPosition, direction)
             }
         } else {
-            gameState.movePlayer(newPosition)
+            gameState.movePlayer(targetPosition)
         }
+    }
+
+    private fun canPushBox(boxPosition: Position, direction: Direction): Boolean {
+        val newBoxPosition = boxPosition.move(direction)
+        return level.isPassable(newBoxPosition) && !hasBoxAt(newBoxPosition)
+    }
+
+    private fun pushBox(boxPosition: Position, direction: Direction) {
+        val newBoxPosition = boxPosition.move(direction)
+        lastSavedState = gameState.deepCopy()
+        gameState.moveBox(boxPosition, newBoxPosition)
+        gameState.movePlayer(boxPosition)
     }
 
     private fun hasBoxAt(position: Position): Boolean {
