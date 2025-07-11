@@ -42,19 +42,31 @@ data class Level(
             val boxes = mutableSetOf<Position>()
             val grid = lines.mapIndexed { rowIndex, line ->
                 line.padEnd(maxWidth).mapIndexed { colIndex, char ->
-                    val isTarget = char == '.' || char == '*'
-                    val isBox = char == '$' || char == '*'
-                    val tile = if (isTarget) Tile.TARGET else Tile.EMPTY
-                    if (isBox) {
-                        boxes.add(Position(rowIndex, colIndex))
-                    }
+                    val position = Position(rowIndex, colIndex)
                     when (char) {
                         '#' -> Tile.WALL
-                        '@' -> {
-                            playerStart = Position(rowIndex, colIndex)
-                            tile
+                        '.' -> Tile.TARGET
+                        '$' -> {
+                            boxes.add(position)
+                            Tile.EMPTY
                         }
-                        else -> tile
+
+                        '*' -> {
+                            boxes.add(position)
+                            Tile.TARGET
+                        }
+
+                        '@' -> {
+                            playerStart = position
+                            Tile.EMPTY
+                        }
+
+                        '+' -> {
+                            playerStart = position
+                            Tile.TARGET
+                        }
+
+                        else -> Tile.EMPTY
                     }
                 }
             }
@@ -62,6 +74,12 @@ data class Level(
             return Level(grid, playerStart!!, boxes)
         }
     }
+
+    val gridHeight: Int
+        get() = grid.size
+
+    val gridWidth: Int
+        get() = grid[0].size
 
     fun isWall(position: Position): Boolean {
         return grid.getOrNull(position.row)?.getOrNull(position.col) == Tile.WALL
@@ -77,6 +95,12 @@ data class Level(
 
     private fun isInBounds(position: Position): Boolean {
         return position.row in grid.indices && position.col in grid[0].indices
+    }
+
+    fun getTileAt(position: Position): Tile? {
+        return if (isInBounds(position)) {
+            grid[position.row][position.col]
+        } else null
     }
 }
 
@@ -103,6 +127,7 @@ data class GameState(
             )
         }
     }
+
     fun moveBox(from: Position, to: Position) {
         if (!boxPositions.contains(from)) {
             error("No box at position $from")
@@ -110,9 +135,11 @@ data class GameState(
         boxPositions.remove(from)
         boxPositions.add(to)
     }
+
     fun movePlayer(to: Position) {
         playerPosition = to
     }
+
     fun deepCopy(): GameState {
         return GameState(
             playerPosition = playerPosition,
@@ -147,14 +174,12 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         get() = gameEngine.isGameWon
 
     val gridHeight: Int
-        get() = level.grid.size
+        get() = level.gridHeight
     val gridWidth: Int
-        get() = level.grid[0].size
+        get() = level.gridWidth
 
     fun getTileAt(position: Position): Tile? {
-        return if (position.row in level.grid.indices && position.col in level.grid[0].indices) {
-            level.grid[position.row][position.col]
-        } else null
+        return level.getTileAt(position)
     }
 
     fun hasBoxAt(position: Position): Boolean {
@@ -230,8 +255,8 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_DPAD_LEFT -> gameController.handleDirectionInput(Direction.LEFT)
             KeyEvent.KEYCODE_DPAD_RIGHT -> gameController.handleDirectionInput(Direction.RIGHT)
             KeyEvent.KEYCODE_BUTTON_X -> gameController.restart()
-            102 -> gameController.previousLevel() // L
-            103 -> gameController.nextLevel() // R
+            KeyEvent.KEYCODE_BUTTON_L1 -> gameController.previousLevel()
+            KeyEvent.KEYCODE_BUTTON_R1 -> gameController.nextLevel()
             KeyEvent.KEYCODE_BUTTON_B -> gameController.undo()
             else -> {
                 Log.d("GameInput", "KeyDown: $keyCode")
@@ -354,11 +379,11 @@ class GameEngine(private val level: Level) {
         val newPosition = playerPosition.move(direction)
         if (level.isWall(newPosition)) return
 
-        if (gameState.boxPositions.contains(newPosition)) {
+        if (hasBoxAt(newPosition)) {
             val boxNewPosition = newPosition.move(direction)
             if (
                 level.isPassable(boxNewPosition) &&
-                !gameState.boxPositions.contains(boxNewPosition)
+                !hasBoxAt(boxNewPosition)
             ) {
                 lastSavedState = gameState.deepCopy()
                 gameState.moveBox(newPosition, boxNewPosition)
