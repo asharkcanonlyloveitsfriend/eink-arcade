@@ -60,7 +60,7 @@ class BoxMover(
         val tempGrid = Array(staticGrid.size) { row ->
             staticGrid[row].copyOf()
         }
-        tempGrid[box.row][box.col] = true
+        tempGrid[box.row][box.col] = false
         return Pathfinder(tempGrid)
     }
 }

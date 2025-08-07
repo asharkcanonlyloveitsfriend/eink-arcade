@@ -55,8 +55,9 @@ class BoxMoverTest {
     fun testCanMoveBox_Blocked() {
         val asciiMap = """
             #####
-            #@ ##
-            # $ #
+            #   #
+            ###$#
+            #  @#
             # #x#
             #####
         """.trimIndent()
