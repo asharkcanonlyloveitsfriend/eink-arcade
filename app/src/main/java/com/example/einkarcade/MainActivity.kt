@@ -17,13 +17,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -41,12 +45,13 @@ import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
 
 data class Level(
+    val name: String,
     val grid: List<List<Tile>>,
     val playerStart: Position,
     val boxPositions: Set<Position>
 ) {
     companion object {
-        fun fromAscii(ascii: String): Level {
+        fun fromAscii(name: String, ascii: String): Level {
             val lines = ascii.lines().dropLastWhile { it.isBlank() }
             val maxWidth = lines.maxOfOrNull { it.length } ?: 0
             var playerStart: Position? = null
@@ -61,28 +66,24 @@ data class Level(
                             boxes.add(position)
                             Tile.EMPTY
                         }
-
                         '*' -> {
                             boxes.add(position)
                             Tile.TARGET
                         }
-
                         '@' -> {
                             playerStart = position
                             Tile.EMPTY
                         }
-
                         '+' -> {
                             playerStart = position
                             Tile.TARGET
                         }
-
                         else -> Tile.EMPTY
                     }
                 }
             }
             requireNotNull(playerStart) { "Player start '@' not found in level" }
-            return Level(grid, playerStart!!, boxes)
+            return Level(name, grid, playerStart!!, boxes)
         }
     }
 
@@ -103,7 +104,7 @@ data class Level(
     }
 }
 
-data class GameUiState(val playerPosition: Position, val levelNumber: Int)
+data class GameUiState(val playerPosition: Position, val levelName: String)
 
 data class GameState(
     var playerPosition: Position,
@@ -139,23 +140,89 @@ data class GameState(
 }
 
 class GameController(context: Context, testLevels: List<String>? = null) {
-    private val levels: List<String> = testLevels ?: run {
-        val levelFiles = context.assets.list("levels")?.toList() ?: emptyList()
-        levelFiles.map { filename ->
-            context.assets.open("levels/$filename").bufferedReader().use { it.readText() }
-        }
-    }
-    private var currentLevelIndex = 0
-    private var level: Level
-    private var gameEngine: GameEngine
 
-    init {
-        level = Level.fromAscii(levels[currentLevelIndex])
+    private val levelSets: Map<String, List<Level>> = testLevels?.let {
+        mapOf("test" to it.mapIndexed { index, content ->
+            Level.fromAscii("TestLevel$index", content)
+        })
+    } ?: run {
+        val sets = mutableMapOf<String, List<Level>>()
+        val levelEntries = context.assets.list("levels")?.sorted() ?: emptyList()
+
+        for (entry in levelEntries) {
+            val fullPath = "levels/$entry"
+            if (entry.endsWith(".txt")) {
+                val raw = context.assets.open(fullPath).bufferedReader().use { it.readText() }
+                val setName = entry.removeSuffix(".txt")
+                    .replace('_', ' ')
+                    .replaceFirstChar { it.uppercaseChar() }
+
+                val levels = mutableListOf<Level>()
+                val buffer = mutableListOf<String>()
+                raw.lineSequence().forEach { line ->
+                    if (line.startsWith("Title:")) {
+                        val name = line.removePrefix("Title:").trim()
+                        val ascii = buffer.joinToString("\n").trimEnd()
+                        if (ascii.isNotEmpty()) {
+                            levels.add(Level.fromAscii(name, ascii))
+                        }
+                        buffer.clear()
+                    } else {
+                        buffer.add(line)
+                    }
+                }
+                sets[setName] = levels
+            } else {
+                val files = context.assets.list(fullPath)?.sorted() ?: continue
+                val levels = files.map { filename ->
+                    val content = context.assets.open("$fullPath/$filename").bufferedReader().use { it.readText() }
+                    Level.fromAscii(filename.removeSuffix(".xsb"), content)
+                }
+                val setName = entry.replaceFirstChar { it.uppercaseChar() }
+                sets[setName] = levels
+            }
+        }
+        sets
+    }
+
+    val availableSets: List<String>
+        get() = levelSets.keys.toList()
+
+    fun selectSet(setName: String) {
+        if (!levelSets.containsKey(setName)) return
+        currentSet = setName
+        currentLevelIndex = 0
+        level = levelsInCurrentSet[currentLevelIndex]
         gameEngine = GameEngine(level)
     }
 
-    val currentLevel: Int
-        get() = currentLevelIndex + 1
+    private var currentSet: String = levelSets.keys.first()
+    private var currentLevelIndex = 0
+    private var level: Level
+    private var gameEngine: GameEngine
+    val currentSetName: String
+        get() = currentSet
+
+    private val levelsInCurrentSet: List<Level>
+        get() = levelSets[currentSet]!!
+
+    val availableLevels: List<String>
+        get() = levelsInCurrentSet.map { it.name }
+    fun selectLevel(name: String) {
+        val index = levelsInCurrentSet.indexOfFirst { it.name == name }
+        if (index != -1) {
+            currentLevelIndex = index
+            level = levelsInCurrentSet[currentLevelIndex]
+            gameEngine = GameEngine(level)
+        }
+    }
+
+    init {
+        level = levelsInCurrentSet[currentLevelIndex]
+        gameEngine = GameEngine(level)
+    }
+
+
 
     val playerPosition: Position
         get() = gameEngine.playerPosition
@@ -168,6 +235,9 @@ class GameController(context: Context, testLevels: List<String>? = null) {
 
     val tiles: List<List<Tile>>
         get() = level.grid
+
+    val levelName: String
+        get() = level.name
 
     fun restart() {
         if (isGameWon) {
@@ -182,15 +252,16 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     }
 
     fun nextLevel() {
+        val levels = levelsInCurrentSet
         currentLevelIndex = (currentLevelIndex + 1) % levels.size
-        level = Level.fromAscii(levels[currentLevelIndex])
+        level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
     }
 
     fun previousLevel() {
-        currentLevelIndex =
-            if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
-        level = Level.fromAscii(levels[currentLevelIndex])
+        val levels = levelsInCurrentSet
+        currentLevelIndex = if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
+        level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
     }
 
@@ -223,7 +294,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var gameController: GameController
-    private val uiState = mutableStateOf(GameUiState(Position(0, 0), 1))
+    private val uiState = mutableStateOf(GameUiState(Position(0, 0), ""))
     private val selectedBoxPosition = mutableStateOf<Position?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -267,7 +338,7 @@ class MainActivity : ComponentActivity() {
     private fun updateUiState() {
         uiState.value = GameUiState(
             gameController.playerPosition,
-            gameController.currentLevel
+            gameController.levelName
         )
     }
 }
@@ -288,7 +359,8 @@ fun GameScreen(
     onStateUpdated: () -> Unit
 ) {
     val playerPosition = uiState.value.playerPosition
-    val levelNumber = uiState.value.levelNumber
+    val selectedLevel = remember { mutableStateOf(uiState.value.levelName) }
+    selectedLevel.value = uiState.value.levelName
 
     Box(modifier = modifier.fillMaxSize()) {
         fun handleTap(tappedPosition: Position) {
@@ -321,11 +393,62 @@ fun GameScreen(
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = "Level $levelNumber",
-                fontSize = 24.sp,
-                modifier = Modifier.padding(16.dp)
-            )
+            val setExpanded = remember { mutableStateOf(false) }
+            val selectedSet = remember { mutableStateOf(gameController.currentSetName) }
+            val sets = gameController.availableSets.toList()
+
+            Box(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .clickable { setExpanded.value = true }
+            ) {
+                Text("Set: ${selectedSet.value}", fontSize = 24.sp)
+                DropdownMenu(
+                    expanded = setExpanded.value,
+                    onDismissRequest = { setExpanded.value = false }
+                ) {
+                    sets.forEach { setName ->
+                        DropdownMenuItem(
+                            text = { Text(setName) },
+                            onClick = {
+                                gameController.selectSet(setName)
+                                selectedSet.value = setName
+                                selectedLevel.value = gameController.availableLevels.firstOrNull() ?: ""
+                                setExpanded.value = false
+                                onStateUpdated()
+                            },
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            val levelExpanded = remember { mutableStateOf(false) }
+            val levels = gameController.availableLevels
+
+            Box(
+                modifier = Modifier
+                    .padding(start = 16.dp, bottom = 8.dp)
+                    .clickable { levelExpanded.value = true }
+            ) {
+                Text("Level: ${selectedLevel.value}", fontSize = 24.sp)
+                DropdownMenu(
+                    expanded = levelExpanded.value,
+                    onDismissRequest = { levelExpanded.value = false }
+                ) {
+                    levels.forEach { level ->
+                        DropdownMenuItem(
+                            text = { Text(level) },
+                            onClick = {
+                                gameController.selectLevel(level)
+                                selectedLevel.value = level
+                                levelExpanded.value = false
+                                onStateUpdated()
+                            }
+                        )
+                    }
+                }
+            }
 
             Canvas(
                 modifier = Modifier
@@ -559,7 +682,6 @@ class GameEngine(private val level: Level) {
             }
         }
 }
-// Extension function to convert Position to Offset based on MainActivity constants
 private fun Position.toOffset(): Offset {
     return Offset(
         MainActivity.GRID_OFFSET_X + this.col * MainActivity.CELL_SIZE,
