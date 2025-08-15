@@ -1,9 +1,15 @@
 package com.example.einkarcade
 
+
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import android.content.ContentValues
+import android.net.Uri
+import android.provider.MediaStore
+import org.json.JSONObject
+import org.json.JSONArray
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -141,48 +147,94 @@ data class GameState(
 
 class GameController(context: Context, testLevels: List<String>? = null) {
 
+    private companion object {
+        private const val DL_RELATIVE_PATH = "Download/EinkArcade/"
+        private const val DL_FILE_NAME = "levels.txt"
+    }
+
+    private fun loadLevelSetsFromDownloads(context: Context): Map<String, List<Level>>? {
+        val cr = context.contentResolver
+        val projection = arrayOf(
+            MediaStore.Downloads._ID,
+            MediaStore.Downloads.DISPLAY_NAME,
+            MediaStore.Downloads.RELATIVE_PATH
+        )
+        val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
+        val args = arrayOf(DL_FILE_NAME, DL_RELATIVE_PATH)
+        val uri = cr.query(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            args,
+            null
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+            if (cursor.moveToFirst()) {
+                val id = cursor.getLong(idCol)
+                Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
+            } else null
+        } ?: return null
+
+        val jsonText = cr.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: return null
+        val root = org.json.JSONObject(jsonText)
+        val setsArr = root.getJSONArray("sets")
+        val out = mutableMapOf<String, List<Level>>()
+        for (i in 0 until setsArr.length()) {
+            val setObj = setsArr.getJSONObject(i)
+            val setName = (if (setObj.has("name")) setObj.getString("name") else setObj.optString("id", "Set${i+1}"))
+            val levelsArr = setObj.getJSONArray("levels")
+            val levels = mutableListOf<Level>()
+            for (j in 0 until levelsArr.length()) {
+                val lvl = levelsArr.getJSONObject(j)
+                val name = lvl.optString("name", lvl.optString("id", "${j+1}"))
+                val ascii = lvl.getString("ascii")
+                levels.add(Level.fromAscii(name, ascii))
+            }
+            out[setName] = levels
+        }
+        return out
+    }
+
     private val levelSets: Map<String, List<Level>> = testLevels?.let {
         mapOf("test" to it.mapIndexed { index, content ->
             Level.fromAscii("TestLevel$index", content)
         })
     } ?: run {
-        val sets = mutableMapOf<String, List<Level>>()
-        val levelEntries = context.assets.list("levels")?.sorted() ?: emptyList()
-
-        for (entry in levelEntries) {
-            val fullPath = "levels/$entry"
-            if (entry.endsWith(".txt")) {
-                val raw = context.assets.open(fullPath).bufferedReader().use { it.readText() }
-                val setName = entry.removeSuffix(".txt")
-                    .replace('_', ' ')
-                    .replaceFirstChar { it.uppercaseChar() }
-
-                val levels = mutableListOf<Level>()
-                val buffer = mutableListOf<String>()
-                raw.lineSequence().forEach { line ->
-                    if (line.startsWith("Title:")) {
-                        val name = line.removePrefix("Title:").trim()
-                        val ascii = buffer.joinToString("\n").trimEnd()
-                        if (ascii.isNotEmpty()) {
-                            levels.add(Level.fromAscii(name, ascii))
-                        }
-                        buffer.clear()
-                    } else {
-                        buffer.add(line)
+        // 1) Prefer the Downloads JSON if present
+        loadLevelSetsFromDownloads(context) ?: run {
+            // 2) Fallback: existing assets scan (kept for importer)
+            val sets = mutableMapOf<String, List<Level>>()
+            val levelEntries = context.assets.list("levels")?.sorted() ?: emptyList()
+            for (entry in levelEntries) {
+                val fullPath = "levels/$entry"
+                if (entry.endsWith(".txt")) {
+                    val raw = context.assets.open(fullPath).bufferedReader().use { it.readText() }
+                    val setName = entry.removeSuffix(".txt")
+                        .replace('_', ' ')
+                        .replaceFirstChar { it.uppercaseChar() }
+                    val levels = mutableListOf<Level>()
+                    val buffer = mutableListOf<String>()
+                    raw.lineSequence().forEach { line ->
+                        if (line.startsWith("Title:")) {
+                            val name = line.removePrefix("Title:").trim()
+                            val ascii = buffer.joinToString("\n").trimEnd()
+                            if (ascii.isNotEmpty()) levels.add(Level.fromAscii(name, ascii))
+                            buffer.clear()
+                        } else buffer.add(line)
                     }
+                    sets[setName] = levels
+                } else {
+                    val files = context.assets.list(fullPath)?.sorted() ?: continue
+                    val levels = files.map { filename ->
+                        val content = context.assets.open("$fullPath/$filename").bufferedReader().use { it.readText() }
+                        Level.fromAscii(filename.removeSuffix(".xsb"), content)
+                    }
+                    val setName = entry.replaceFirstChar { it.uppercaseChar() }
+                    sets[setName] = levels
                 }
-                sets[setName] = levels
-            } else {
-                val files = context.assets.list(fullPath)?.sorted() ?: continue
-                val levels = files.map { filename ->
-                    val content = context.assets.open("$fullPath/$filename").bufferedReader().use { it.readText() }
-                    Level.fromAscii(filename.removeSuffix(".xsb"), content)
-                }
-                val setName = entry.replaceFirstChar { it.uppercaseChar() }
-                sets[setName] = levels
             }
+            sets
         }
-        sets
     }
 
     val availableSets: List<String>
@@ -291,6 +343,115 @@ class MainActivity : ComponentActivity() {
 
         // Test-only override for injecting test levels
         var testLevels: List<String>? = null
+
+        private const val LEVELS_DIR_RELATIVE_PATH = "Download/EinkArcade/"
+        private const val LEVELS_JSON_NAME = "levels.txt"
+        private const val DEFAULT_LEVELS_ASSET = "default_levels.json"
+    }
+
+    /**
+     * Helper to JSON-escape a string.
+     */
+    private fun escapeJson(s: String): String = buildString(s.length + 16) {
+        for (ch in s) when (ch) {
+            '"' -> append("\\\"")
+            '\\' -> append("\\\\")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> {
+                if (ch.code < 0x20) append(String.format("\\u%04x", ch.code)) else append(ch)
+            }
+        }
+    }
+
+    /**
+     * Ensure a JSON file exists at Download/EinkArcade/levels.txt via MediaStore.
+     * If absent, seeds it from the given asset file (default: default_levels.json).
+     * Returns the content Uri if present/created.
+     */
+    private fun ensureJsonFromAssetsIfMissing(context: Context, assetPath: String = DEFAULT_LEVELS_ASSET): Uri? {
+        val cr = context.contentResolver
+
+        // Look for an existing file in our subfolder
+        val projection = arrayOf(
+            MediaStore.Downloads._ID,
+            MediaStore.Downloads.DISPLAY_NAME,
+            MediaStore.Downloads.RELATIVE_PATH
+        )
+        val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
+        val selectionArgs = arrayOf(LEVELS_JSON_NAME, LEVELS_DIR_RELATIVE_PATH)
+        cr.query(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+            if (cursor.moveToFirst()) {
+                val id = cursor.getLong(idCol)
+                return Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
+            }
+        }
+
+        // Not found: create new and seed from assets/default_levels.json
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, LEVELS_JSON_NAME)
+            put(MediaStore.Downloads.RELATIVE_PATH, LEVELS_DIR_RELATIVE_PATH)
+            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+        }
+        val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+        val seed = context.assets.open(assetPath).bufferedReader().use { it.readText() }
+        cr.openOutputStream(uri, "w")?.use { os ->
+            os.write(seed.toByteArray())
+            os.flush()
+        }
+        return uri
+    }
+
+    /**
+     * Export the Classic set from assets into TXT (JSON content).
+     */
+    private fun exportClassicLevels(context: Context, target: Uri) {
+        // Read assets/levels/classic/*.xsb and build a minimal JSON as text
+        val assetDir = "levels/classic"
+        val files = (context.assets.list(assetDir)?.sorted()) ?: emptyList()
+
+        val json = StringBuilder()
+        json.append('{')
+        json.append("\"sets\":[{")
+        json.append("\"id\":\"classic\",")
+        json.append("\"name\":\"Classic\",")
+        json.append("\"rating\":0,")
+        json.append("\"levels\":[")
+
+        var first = true
+        for ((idx, filename) in files.withIndex()) {
+            if (!filename.endsWith(".xsb")) continue
+            val ascii = context.assets.open("$assetDir/$filename").bufferedReader().use { it.readText() }
+            val levelNum = idx + 1
+            val id = String.format("classic-%02d", levelNum)
+            val name = String.format("%02d", levelNum)
+            if (!first) json.append(',') else first = false
+            json.append('{')
+            json.append("\"id\":\"").append(id).append('\"').append(',')
+            json.append("\"name\":\"").append(name).append('\"').append(',')
+            json.append("\"ascii\":\"").append(escapeJson(ascii)).append('\"').append(',')
+            json.append("\"rating\":0,")
+            json.append("\"completedAt\":null")
+            json.append('}')
+        }
+
+        json.append("]}]}")
+
+        // Write to the MediaStore Uri (truncate & write)
+        contentResolver.openOutputStream(target, "w")?.use { os ->
+            val payload = json.toString()
+            os.write(payload.toByteArray())
+            os.flush()
+            Log.d("Export", "levels.txt bytes=" + payload.length + ", tail=" + payload.takeLast(16))
+        }
     }
 
     private lateinit var gameController: GameController
@@ -299,6 +460,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // On startup: use Downloads copy if present; otherwise seed it from assets/default_levels.json
+        ensureJsonFromAssetsIfMissing(this)
+
         gameController = GameController(this, testLevels)
         updateUiState()
         enableEdgeToEdge()
