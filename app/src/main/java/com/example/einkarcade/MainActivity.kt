@@ -9,7 +9,6 @@ import android.content.ContentValues
 import android.net.Uri
 import android.provider.MediaStore
 import org.json.JSONObject
-import org.json.JSONArray
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -45,103 +44,83 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.focusProperties
 import com.example.einkarcade.sokoban.BoxMover
 import com.example.einkarcade.sokoban.Direction
-import com.example.einkarcade.sokoban.Pathfinder
+import com.example.einkarcade.sokoban.GameEngine
+import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
 
-data class Level(
-    val name: String,
-    val grid: List<List<Tile>>,
-    val playerStart: Position,
-    val boxPositions: Set<Position>
-) {
-    companion object {
-        fun fromAscii(name: String, ascii: String): Level {
-            val lines = ascii.lines().dropLastWhile { it.isBlank() }
-            val maxWidth = lines.maxOfOrNull { it.length } ?: 0
-            var playerStart: Position? = null
-            val boxes = mutableSetOf<Position>()
-            val grid = lines.mapIndexed { rowIndex, line ->
-                line.padEnd(maxWidth).mapIndexed { colIndex, char ->
-                    val position = Position(rowIndex, colIndex)
-                    when (char) {
-                        '#' -> Tile.WALL
-                        '.' -> Tile.TARGET
-                        '$' -> {
-                            boxes.add(position)
-                            Tile.EMPTY
-                        }
-                        '*' -> {
-                            boxes.add(position)
-                            Tile.TARGET
-                        }
-                        '@' -> {
-                            playerStart = position
-                            Tile.EMPTY
-                        }
-                        '+' -> {
-                            playerStart = position
-                            Tile.TARGET
-                        }
-                        else -> Tile.EMPTY
-                    }
-                }
-            }
-            requireNotNull(playerStart) { "Player start '@' not found in level" }
-            return Level(name, grid, playerStart!!, boxes)
-        }
-    }
-
-    fun isWall(position: Position): Boolean {
-        return grid.getOrNull(position.row)?.getOrNull(position.col) == Tile.WALL
-    }
-
-    fun isTarget(position: Position): Boolean {
-        return grid.getOrNull(position.row)?.getOrNull(position.col) == Tile.TARGET
-    }
-
-    fun isPassable(position: Position): Boolean {
-        return isInBounds(position) && !isWall(position)
-    }
-
-    private fun isInBounds(position: Position): Boolean {
-        return position.row in grid.indices && position.col in grid[0].indices
-    }
-}
-
 data class GameUiState(val playerPosition: Position, val levelName: String)
 
-data class GameState(
-    var playerPosition: Position,
-    val boxPositions: MutableSet<Position>
-) {
-    companion object {
-        fun fromLevel(level: Level): GameState {
-            return GameState(
-                playerPosition = level.playerStart,
-                boxPositions = level.boxPositions.toMutableSet()
-            )
+/** Minimal JSON store: find/read/write and focused mutations in Downloads/EinkArcade/levels.txt */
+private class JsonStore(private val context: Context) {
+    private val cr get() = context.contentResolver
+    private val projection = arrayOf(
+        MediaStore.Downloads._ID,
+        MediaStore.Downloads.DISPLAY_NAME,
+        MediaStore.Downloads.RELATIVE_PATH
+    )
+    private fun findUri(): Uri? {
+        val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
+        val args = arrayOf(MainActivity.LEVELS_JSON_NAME, MainActivity.LEVELS_DIR_RELATIVE_PATH)
+        return cr.query(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            args,
+            null
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+            if (cursor.moveToFirst()) {
+                val id = cursor.getLong(idCol)
+                Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
+            } else null
         }
     }
-
-    fun moveBox(from: Position, to: Position) {
-        if (!boxPositions.contains(from)) {
-            error("No box at position $from")
+    fun readText(): String? {
+        val uri = findUri() ?: return null
+        return cr.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+    }
+    fun writeText(text: String): Boolean {
+        val uri = findUri() ?: return false
+        return try {
+            cr.openOutputStream(uri, "w")?.use { os ->
+                os.write(text.toByteArray())
+                os.flush()
+            }
+            true
+        } catch (t: Throwable) {
+            Log.e("JsonStore", "write failed", t)
+            false
         }
-        boxPositions.remove(from)
-        boxPositions.add(to)
     }
-
-    fun movePlayer(to: Position) {
-        playerPosition = to
-    }
-
-    fun deepCopy(): GameState {
-        return GameState(
-            playerPosition = playerPosition,
-            boxPositions = boxPositions.toMutableSet()
-        )
+    fun updateLevelRating(setName: String, levelName: String, rating: Int): Boolean {
+        val raw = readText() ?: return false
+        return try {
+            val root = JSONObject(raw)
+            val sets = root.getJSONArray("sets")
+            var updated = false
+            for (i in 0 until sets.length()) {
+                val setObj = sets.getJSONObject(i)
+                val sName = setObj.optString("name", setObj.optString("id"))
+                if (sName != setName && setObj.optString("id") != setName) continue
+                val levels = setObj.getJSONArray("levels")
+                for (j in 0 until levels.length()) {
+                    val lvl = levels.getJSONObject(j)
+                    val lName = lvl.optString("name", lvl.optString("id"))
+                    if (lName == levelName || lvl.optString("id") == levelName) {
+                        lvl.put("rating", rating)
+                        updated = true
+                        break
+                    }
+                }
+                if (updated) break
+            }
+            if (updated) writeText(root.toString()) else false
+        } catch (t: Throwable) {
+            Log.e("JsonStore", "updateLevelRating failed", t)
+            false
+        }
     }
 }
 
@@ -151,6 +130,8 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         private const val DL_RELATIVE_PATH = "Download/EinkArcade/"
         private const val DL_FILE_NAME = "levels.txt"
     }
+
+    private val jsonStore = JsonStore(context)
 
     private fun loadLevelSetsFromDownloads(context: Context): Map<String, List<Level>>? {
         val cr = context.contentResolver
@@ -193,6 +174,29 @@ class GameController(context: Context, testLevels: List<String>? = null) {
             out[setName] = levels
         }
         return out
+    }
+
+    private fun loadRatingsFromDownloads(context: Context) {
+        val text = jsonStore.readText() ?: return
+        try {
+            val root = JSONObject(text)
+            val setsArr = root.getJSONArray("sets")
+            for (i in 0 until setsArr.length()) {
+                val setObj = setsArr.getJSONObject(i)
+                val setName = setObj.optString("name", setObj.optString("id", ""))
+                val levelsArr = setObj.getJSONArray("levels")
+                for (j in 0 until levelsArr.length()) {
+                    val lvl = levelsArr.getJSONObject(j)
+                    val levelName = lvl.optString("name", lvl.optString("id", ""))
+                    val rating = lvl.optInt("rating", 0)
+                    if (setName.isNotEmpty() && levelName.isNotEmpty()) {
+                        ratings["$setName::$levelName"] = rating
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e("GameController", "loadRatingsFromDownloads failed", t)
+        }
     }
 
     private val levelSets: Map<String, List<Level>> = testLevels?.let {
@@ -240,12 +244,21 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     val availableSets: List<String>
         get() = levelSets.keys.toList()
 
-    fun selectSet(setName: String) {
-        if (!levelSets.containsKey(setName)) return
-        currentSet = setName
-        currentLevelIndex = 0
-        level = levelsInCurrentSet[currentLevelIndex]
-        gameEngine = GameEngine(level)
+    // --- Minimal in-memory ratings (-1, 0, 1) for the current session ---
+    private val ratings: MutableMap<String, Int> = mutableMapOf()
+    private fun ratingKey(set: String, levelName: String) = "$set::$levelName"
+    fun getCurrentRating(): Int = ratings.getOrDefault(ratingKey(currentSet, level.name), 0)
+    fun toggleThumbUp() {
+        val k = ratingKey(currentSet, level.name)
+        val newRating = if (ratings[k] == 1) 0 else 1
+        ratings[k] = newRating
+        Thread { jsonStore.updateLevelRating(currentSet, level.name, newRating) }.start()
+    }
+    fun toggleThumbDown() {
+        val k = ratingKey(currentSet, level.name)
+        val newRating = if (ratings[k] == -1) 0 else -1
+        ratings[k] = newRating
+        Thread { jsonStore.updateLevelRating(currentSet, level.name, newRating) }.start()
     }
 
     private var currentSet: String = levelSets.keys.first()
@@ -260,6 +273,13 @@ class GameController(context: Context, testLevels: List<String>? = null) {
 
     val availableLevels: List<String>
         get() = levelsInCurrentSet.map { it.name }
+    fun selectSet(setName: String) {
+        if (!levelSets.containsKey(setName)) return
+        currentSet = setName
+        currentLevelIndex = 0
+        level = levelsInCurrentSet[currentLevelIndex]
+        gameEngine = GameEngine(level)
+    }
     fun selectLevel(name: String) {
         val index = levelsInCurrentSet.indexOfFirst { it.name == name }
         if (index != -1) {
@@ -272,6 +292,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     init {
         level = levelsInCurrentSet[currentLevelIndex]
         gameEngine = GameEngine(level)
+        loadRatingsFromDownloads(context)
     }
 
 
@@ -344,8 +365,8 @@ class MainActivity : ComponentActivity() {
         // Test-only override for injecting test levels
         var testLevels: List<String>? = null
 
-        private const val LEVELS_DIR_RELATIVE_PATH = "Download/EinkArcade/"
-        private const val LEVELS_JSON_NAME = "levels.txt"
+        internal const val LEVELS_DIR_RELATIVE_PATH = "Download/EinkArcade/"
+        internal const val LEVELS_JSON_NAME = "levels.txt"
         private const val DEFAULT_LEVELS_ASSET = "default_levels.json"
     }
 
@@ -410,49 +431,6 @@ class MainActivity : ComponentActivity() {
         return uri
     }
 
-    /**
-     * Export the Classic set from assets into TXT (JSON content).
-     */
-    private fun exportClassicLevels(context: Context, target: Uri) {
-        // Read assets/levels/classic/*.xsb and build a minimal JSON as text
-        val assetDir = "levels/classic"
-        val files = (context.assets.list(assetDir)?.sorted()) ?: emptyList()
-
-        val json = StringBuilder()
-        json.append('{')
-        json.append("\"sets\":[{")
-        json.append("\"id\":\"classic\",")
-        json.append("\"name\":\"Classic\",")
-        json.append("\"rating\":0,")
-        json.append("\"levels\":[")
-
-        var first = true
-        for ((idx, filename) in files.withIndex()) {
-            if (!filename.endsWith(".xsb")) continue
-            val ascii = context.assets.open("$assetDir/$filename").bufferedReader().use { it.readText() }
-            val levelNum = idx + 1
-            val id = String.format("classic-%02d", levelNum)
-            val name = String.format("%02d", levelNum)
-            if (!first) json.append(',') else first = false
-            json.append('{')
-            json.append("\"id\":\"").append(id).append('\"').append(',')
-            json.append("\"name\":\"").append(name).append('\"').append(',')
-            json.append("\"ascii\":\"").append(escapeJson(ascii)).append('\"').append(',')
-            json.append("\"rating\":0,")
-            json.append("\"completedAt\":null")
-            json.append('}')
-        }
-
-        json.append("]}]}")
-
-        // Write to the MediaStore Uri (truncate & write)
-        contentResolver.openOutputStream(target, "w")?.use { os ->
-            val payload = json.toString()
-            os.write(payload.toByteArray())
-            os.flush()
-            Log.d("Export", "levels.txt bytes=" + payload.length + ", tail=" + payload.takeLast(16))
-        }
-    }
 
     private lateinit var gameController: GameController
     private val uiState = mutableStateOf(GameUiState(Position(0, 0), ""))
@@ -725,6 +703,31 @@ fun GameScreen(
                 ) {
                     Text("Next")
                 }
+                // Rating buttons (minimal): 👎 and 👍 with a check when selected
+                // Local tick to trigger recomposition when rating changes; key it by set/level
+                val ratingTick = remember(gameController.currentSetName, selectedLevel.value) { mutableStateOf(0) }
+                // Read tick so Compose observes it, but do NOT add it to the rating value
+                val _force = ratingTick.value
+                val currentRating = gameController.getCurrentRating()
+
+                Button(
+                    onClick = { gameController.toggleThumbDown(); ratingTick.value += 1; onStateUpdated() },
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .focusProperties { canFocus = false }
+                ) {
+                    val selected = currentRating == -1
+                    Text(if (selected) "👎✓" else "👎")
+                }
+                Button(
+                    onClick = { gameController.toggleThumbUp(); ratingTick.value += 1; onStateUpdated() },
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .focusProperties { canFocus = false }
+                ) {
+                    val selected = currentRating == 1
+                    Text(if (selected) "👍✓" else "👍")
+                }
             }
         }
 
@@ -753,100 +756,6 @@ fun GameScreen(
 }
 
 
-class GameEngine(private val level: Level) {
-    private var gameState = GameState.fromLevel(level)
-    private var lastSavedState: GameState? = null
-
-    val playerPosition: Position
-        get() = gameState.playerPosition
-
-    val boxPositions: Set<Position>
-        get() = gameState.boxPositions
-
-    val isGameWon: Boolean
-        get() = gameState.boxPositions.all { level.isTarget(it) }
-
-    fun move(direction: Direction) {
-        if (isGameWon) return
-
-        val targetPosition = playerPosition.move(direction)
-        if (level.isWall(targetPosition)) return
-
-        if (hasBoxAt(targetPosition)) {
-            if (canPushBox(targetPosition, direction)) {
-                pushBox(targetPosition, direction)
-            }
-        } else {
-            gameState.movePlayer(targetPosition)
-        }
-    }
-
-    private fun canPushBox(boxPosition: Position, direction: Direction): Boolean {
-        val newBoxPosition = boxPosition.move(direction)
-        return level.isPassable(newBoxPosition) && !hasBoxAt(newBoxPosition)
-    }
-
-    private fun pushBox(boxPosition: Position, direction: Direction) {
-        val newBoxPosition = boxPosition.move(direction)
-        lastSavedState = gameState.deepCopy()
-        gameState.moveBox(boxPosition, newBoxPosition)
-        gameState.movePlayer(boxPosition)
-    }
-
-    private fun hasBoxAt(position: Position): Boolean {
-        return gameState.boxPositions.contains(position)
-    }
-
-    fun undo() {
-        val savedState = lastSavedState ?: return
-        gameState = savedState.deepCopy()
-        lastSavedState = null
-    }
-
-    fun moveBoxTo(from: Position, to: Position, playerEnd: Position) {
-        lastSavedState = gameState.deepCopy()
-        gameState.moveBox(from, to)
-        gameState.movePlayer(playerEnd)
-    }
-
-    fun moveTo(position: Position) {
-        if (hasBoxAt(position) && isAdjacent(playerPosition, position)) {
-            val direction = directionTo(playerPosition, position)
-            if (direction != null) {
-                move(direction)
-            }
-        } else {
-            val pathfinder = Pathfinder(walkableGrid)
-            if (pathfinder.canFindPath(playerPosition, position)) {
-                gameState.movePlayer(position)
-            }
-        }
-    }
-
-    private fun isAdjacent(a: Position, b: Position): Boolean {
-        val rowDiff = kotlin.math.abs(a.row - b.row)
-        val colDiff = kotlin.math.abs(a.col - b.col)
-        return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1)
-    }
-
-    private fun directionTo(from: Position, to: Position): Direction? {
-        return when {
-            from.row == to.row && from.col + 1 == to.col -> Direction.RIGHT
-            from.row == to.row && from.col - 1 == to.col -> Direction.LEFT
-            from.row + 1 == to.row && from.col == to.col -> Direction.DOWN
-            from.row - 1 == to.row && from.col == to.col -> Direction.UP
-            else -> null
-        }
-    }
-
-    val walkableGrid: Array<Array<Boolean>>
-        get() = Array(level.grid.size) { row ->
-            Array(level.grid[0].size) { col ->
-                val pos = Position(row, col)
-                level.grid[row][col] != Tile.WALL && !gameState.boxPositions.contains(pos)
-            }
-        }
-}
 private fun Position.toOffset(): Offset {
     return Offset(
         MainActivity.GRID_OFFSET_X + this.col * MainActivity.CELL_SIZE,
