@@ -1,13 +1,44 @@
 package com.example.einkarcade.sokoban
 
 data class Level(
+    val setId: String,
     val name: String,
     val grid: List<List<Tile>>,
     val playerStart: Position,
     val boxPositions: Set<Position>
-) {
+)
+{
+    // -1 = thumbs down, 0 = none, 1 = thumbs up. Not part of equality/hashCode.
+    var rating: Int = 0
+        private set
+
+    // Change tracking
+    private fun currentProps(): Map<String, Any> = mapOf("rating" to rating)
+    private var baselineProps: Map<String, Any> = currentProps()
+
+    fun setRating(value: Int) {
+        rating = value
+    }
+
+    fun toggleThumbUp(): Int {
+        rating = if (rating == 1) 0 else 1
+        return rating
+    }
+
+    fun toggleThumbDown(): Int {
+        rating = if (rating == -1) 0 else -1
+        return rating
+    }
+
+    fun changedProperties(): Map<String, Any> =
+        currentProps().filter { (k, v) -> baselineProps[k] != v }
+
+    fun markClean() {
+        baselineProps = currentProps()
+    }
+
     companion object {
-        fun fromAscii(name: String, ascii: String): Level {
+        fun fromAscii(setId: String, name: String, ascii: String): Level {
             val lines = ascii.lines().dropLastWhile { it.isBlank() }
             val maxWidth = lines.maxOfOrNull { it.length } ?: 0
             var playerStart: Position? = null
@@ -39,7 +70,7 @@ data class Level(
                 }
             }
             requireNotNull(playerStart) { "Player start '@' not found in level" }
-            return Level(name, grid, playerStart!!, boxes)
+            return Level(setId, name, grid, playerStart!!, boxes)
         }
     }
 

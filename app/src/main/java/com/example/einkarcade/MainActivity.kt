@@ -50,9 +50,11 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
 
+
 data class GameUiState(val playerPosition: Position, val levelName: String)
 
-/** Minimal JSON store: find/read/write and focused mutations in Downloads/EinkArcade/levels.txt */
+
+// JSON store for Downloads/EinkArcade/levels.txt.
 private class JsonStore(private val context: Context) {
     private val cr get() = context.contentResolver
     private val projection = arrayOf(
@@ -94,7 +96,7 @@ private class JsonStore(private val context: Context) {
             false
         }
     }
-    fun updateLevelRating(setName: String, levelName: String, rating: Int): Boolean {
+    fun updateLevel(setId: String, levelName: String, properties: Map<String, Any>): Boolean {
         val raw = readText() ?: return false
         return try {
             val root = JSONObject(raw)
@@ -102,14 +104,14 @@ private class JsonStore(private val context: Context) {
             var updated = false
             for (i in 0 until sets.length()) {
                 val setObj = sets.getJSONObject(i)
-                val sName = setObj.optString("name", setObj.optString("id"))
-                if (sName != setName && setObj.optString("id") != setName) continue
+                if (setObj.getString("id") != setId) continue
                 val levels = setObj.getJSONArray("levels")
                 for (j in 0 until levels.length()) {
                     val lvl = levels.getJSONObject(j)
-                    val lName = lvl.optString("name", lvl.optString("id"))
-                    if (lName == levelName || lvl.optString("id") == levelName) {
-                        lvl.put("rating", rating)
+                    if (lvl.optString("name") == levelName) {
+                        for ((k, v) in properties) {
+                            lvl.put(k, v)
+                        }
                         updated = true
                         break
                     }
@@ -118,7 +120,7 @@ private class JsonStore(private val context: Context) {
             }
             if (updated) writeText(root.toString()) else false
         } catch (t: Throwable) {
-            Log.e("JsonStore", "updateLevelRating failed", t)
+            Log.e("JsonStore", "updateLevel failed", t)
             false
         }
     }
@@ -132,6 +134,14 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     }
 
     private val jsonStore = JsonStore(context)
+
+    private fun persistLevelChanges() {
+        val changes = level.changedProperties()
+        Log.d("GameController", "persistLevelChanges: $changes")
+        if (changes.isEmpty()) return
+        Thread { jsonStore.updateLevel(level.setId, level.name, changes) }.start()
+        level.markClean()
+    }
 
     private fun loadLevelSetsFromDownloads(context: Context): Map<String, List<Level>>? {
         val cr = context.contentResolver
@@ -162,46 +172,26 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         val out = mutableMapOf<String, List<Level>>()
         for (i in 0 until setsArr.length()) {
             val setObj = setsArr.getJSONObject(i)
-            val setName = (if (setObj.has("name")) setObj.getString("name") else setObj.optString("id", "Set${i+1}"))
+            val setId = setObj.getString("id")
+            val setName = setObj.getString("name")
             val levelsArr = setObj.getJSONArray("levels")
             val levels = mutableListOf<Level>()
             for (j in 0 until levelsArr.length()) {
                 val lvl = levelsArr.getJSONObject(j)
                 val name = lvl.optString("name", lvl.optString("id", "${j+1}"))
                 val ascii = lvl.getString("ascii")
-                levels.add(Level.fromAscii(name, ascii))
+                val level = Level.fromAscii(setId, name, ascii)
+                level.setRating(lvl.optInt("rating", 0))
+                level.markClean() // baseline = persisted values
+                levels.add(level)
             }
             out[setName] = levels
         }
         return out
     }
-
-    private fun loadRatingsFromDownloads(context: Context) {
-        val text = jsonStore.readText() ?: return
-        try {
-            val root = JSONObject(text)
-            val setsArr = root.getJSONArray("sets")
-            for (i in 0 until setsArr.length()) {
-                val setObj = setsArr.getJSONObject(i)
-                val setName = setObj.optString("name", setObj.optString("id", ""))
-                val levelsArr = setObj.getJSONArray("levels")
-                for (j in 0 until levelsArr.length()) {
-                    val lvl = levelsArr.getJSONObject(j)
-                    val levelName = lvl.optString("name", lvl.optString("id", ""))
-                    val rating = lvl.optInt("rating", 0)
-                    if (setName.isNotEmpty() && levelName.isNotEmpty()) {
-                        ratings["$setName::$levelName"] = rating
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e("GameController", "loadRatingsFromDownloads failed", t)
-        }
-    }
-
     private val levelSets: Map<String, List<Level>> = testLevels?.let {
         mapOf("test" to it.mapIndexed { index, content ->
-            Level.fromAscii("TestLevel$index", content)
+            Level.fromAscii("test", "TestLevel$index", content)
         })
     } ?: run {
         // 1) Prefer the Downloads JSON if present
@@ -216,22 +206,30 @@ class GameController(context: Context, testLevels: List<String>? = null) {
                     val setName = entry.removeSuffix(".txt")
                         .replace('_', ' ')
                         .replaceFirstChar { it.uppercaseChar() }
+                    val setId = entry.removeSuffix(".txt")
+                        .lowercase()
+                        .replace(Regex("[^a-z0-9]+"), "-")
+                        .trim('-')
                     val levels = mutableListOf<Level>()
                     val buffer = mutableListOf<String>()
                     raw.lineSequence().forEach { line ->
                         if (line.startsWith("Title:")) {
                             val name = line.removePrefix("Title:").trim()
                             val ascii = buffer.joinToString("\n").trimEnd()
-                            if (ascii.isNotEmpty()) levels.add(Level.fromAscii(name, ascii))
+                            if (ascii.isNotEmpty()) levels.add(Level.fromAscii(setId, name, ascii))
                             buffer.clear()
                         } else buffer.add(line)
                     }
                     sets[setName] = levels
                 } else {
+                    val setId = entry
+                        .lowercase()
+                        .replace(Regex("[^a-z0-9]+"), "-")
+                        .trim('-')
                     val files = context.assets.list(fullPath)?.sorted() ?: continue
                     val levels = files.map { filename ->
                         val content = context.assets.open("$fullPath/$filename").bufferedReader().use { it.readText() }
-                        Level.fromAscii(filename.removeSuffix(".xsb"), content)
+                        Level.fromAscii(setId, filename.removeSuffix(".xsb"), content)
                     }
                     val setName = entry.replaceFirstChar { it.uppercaseChar() }
                     sets[setName] = levels
@@ -244,21 +242,17 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     val availableSets: List<String>
         get() = levelSets.keys.toList()
 
-    // --- Minimal in-memory ratings (-1, 0, 1) for the current session ---
-    private val ratings: MutableMap<String, Int> = mutableMapOf()
-    private fun ratingKey(set: String, levelName: String) = "$set::$levelName"
-    fun getCurrentRating(): Int = ratings.getOrDefault(ratingKey(currentSet, level.name), 0)
+    // Levels for current set.
+    fun levels(): List<Level> = levelsInCurrentSet
+
+    fun getCurrentRating(): Int = level.rating
     fun toggleThumbUp() {
-        val k = ratingKey(currentSet, level.name)
-        val newRating = if (ratings[k] == 1) 0 else 1
-        ratings[k] = newRating
-        Thread { jsonStore.updateLevelRating(currentSet, level.name, newRating) }.start()
+        level.toggleThumbUp()
+        persistLevelChanges()
     }
     fun toggleThumbDown() {
-        val k = ratingKey(currentSet, level.name)
-        val newRating = if (ratings[k] == -1) 0 else -1
-        ratings[k] = newRating
-        Thread { jsonStore.updateLevelRating(currentSet, level.name, newRating) }.start()
+        level.toggleThumbDown()
+        persistLevelChanges()
     }
 
     private var currentSet: String = levelSets.keys.first()
@@ -292,7 +286,6 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     init {
         level = levelsInCurrentSet[currentLevelIndex]
         gameEngine = GameEngine(level)
-        loadRatingsFromDownloads(context)
     }
 
 
@@ -370,9 +363,7 @@ class MainActivity : ComponentActivity() {
         private const val DEFAULT_LEVELS_ASSET = "default_levels.json"
     }
 
-    /**
-     * Helper to JSON-escape a string.
-     */
+    // JSON-escape helper.
     private fun escapeJson(s: String): String = buildString(s.length + 16) {
         for (ch in s) when (ch) {
             '"' -> append("\\\"")
@@ -386,15 +377,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Ensure a JSON file exists at Download/EinkArcade/levels.txt via MediaStore.
-     * If absent, seeds it from the given asset file (default: default_levels.json).
-     * Returns the content Uri if present/created.
-     */
+    // Ensure Downloads/EinkArcade/levels.txt exists; seed from assets if missing.
     private fun ensureJsonFromAssetsIfMissing(context: Context, assetPath: String = DEFAULT_LEVELS_ASSET): Uri? {
         val cr = context.contentResolver
 
-        // Look for an existing file in our subfolder
+        // Find existing file
         val projection = arrayOf(
             MediaStore.Downloads._ID,
             MediaStore.Downloads.DISPLAY_NAME,
@@ -416,7 +403,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Not found: create new and seed from assets/default_levels.json
+        // Create and seed from asset
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, LEVELS_JSON_NAME)
             put(MediaStore.Downloads.RELATIVE_PATH, LEVELS_DIR_RELATIVE_PATH)
@@ -504,6 +491,8 @@ fun GameScreen(
     val playerPosition = uiState.value.playerPosition
     val selectedLevel = remember { mutableStateOf(uiState.value.levelName) }
     selectedLevel.value = uiState.value.levelName
+    // Tick to force recomposition on rating change.
+    val ratingTick = remember(gameController.currentSetName, selectedLevel.value) { mutableStateOf(0) }
 
     Box(modifier = modifier.fillMaxSize()) {
         fun handleTap(tappedPosition: Position) {
@@ -567,7 +556,9 @@ fun GameScreen(
             }
 
             val levelExpanded = remember { mutableStateOf(false) }
-            val levels = gameController.availableLevels
+            // Levels for dropdown with ratings
+            val levels = gameController.levels()
+            val _forceLevels = ratingTick.value
 
             Box(
                 modifier = Modifier
@@ -579,12 +570,13 @@ fun GameScreen(
                     expanded = levelExpanded.value,
                     onDismissRequest = { levelExpanded.value = false }
                 ) {
-                    levels.forEach { level ->
+                    levels.forEach { lvl ->
+                        val badge = when (lvl.rating) { 1 -> " 👍"; -1 -> " 👎"; else -> "" }
                         DropdownMenuItem(
-                            text = { Text(level) },
+                            text = { Text(lvl.name + badge) },
                             onClick = {
-                                gameController.selectLevel(level)
-                                selectedLevel.value = level
+                                gameController.selectLevel(lvl.name)
+                                selectedLevel.value = lvl.name
                                 levelExpanded.value = false
                                 onStateUpdated()
                             }
@@ -703,10 +695,8 @@ fun GameScreen(
                 ) {
                     Text("Next")
                 }
-                // Rating buttons (minimal): 👎 and 👍 with a check when selected
-                // Local tick to trigger recomposition when rating changes; key it by set/level
-                val ratingTick = remember(gameController.currentSetName, selectedLevel.value) { mutableStateOf(0) }
-                // Read tick so Compose observes it, but do NOT add it to the rating value
+                // Rating buttons with check when selected.
+                // Read tick to trigger recomposition
                 val _force = ratingTick.value
                 val currentRating = gameController.getCurrentRating()
 
