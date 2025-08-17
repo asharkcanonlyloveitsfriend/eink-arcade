@@ -146,29 +146,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     }
 
     private fun loadLevelSetsFromDownloads(context: Context): Map<String, List<Level>>? {
-        val cr = context.contentResolver
-        val projection = arrayOf(
-            MediaStore.Downloads._ID,
-            MediaStore.Downloads.DISPLAY_NAME,
-            MediaStore.Downloads.RELATIVE_PATH
-        )
-        val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
-        val args = arrayOf(MainActivity.LEVELS_JSON_NAME, MainActivity.LEVELS_DIR_RELATIVE_PATH)
-        val uri = cr.query(
-            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-            projection,
-            selection,
-            args,
-            null
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
-            if (cursor.moveToFirst()) {
-                val id = cursor.getLong(idCol)
-                Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
-            } else null
-        } ?: return null
-
-        val jsonText = cr.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: return null
+        val jsonText = jsonStore.readText() ?: return null
         val root = JSONObject(jsonText)
         val setsArr = root.getJSONArray("sets")
         val out = mutableMapOf<String, List<Level>>()
