@@ -1,8 +1,8 @@
 package com.example.einkarcade.sokoban
 
 data class Level(
-    val setId: String,
     val name: String,
+    val ascii: String,
     val grid: List<List<Tile>>,
     val playerStart: Position,
     val boxPositions: Set<Position>
@@ -17,12 +17,6 @@ data class Level(
     val isCompleted: Boolean
         get() = completedAt > 0L
 
-    // Change tracking
-    private fun currentProps(): Map<String, Any> = mapOf(
-        "rating" to rating,
-        "completedAt" to completedAt
-    )
-    private var baselineProps: Map<String, Any> = currentProps()
 
     fun setRating(value: Int) {
         rating = value
@@ -46,15 +40,9 @@ data class Level(
         return rating
     }
 
-    fun changedProperties(): Map<String, Any> =
-        currentProps().filter { (k, v) -> baselineProps[k] != v }
-
-    fun markClean() {
-        baselineProps = currentProps()
-    }
 
     companion object {
-        fun fromAscii(setId: String, name: String, ascii: String): Level {
+        fun fromAscii(name: String, ascii: String): Level {
             val lines = ascii.lines().dropLastWhile { it.isBlank() }
             val maxWidth = lines.maxOfOrNull { it.length } ?: 0
             var playerStart: Position? = null
@@ -86,7 +74,7 @@ data class Level(
                 }
             }
             requireNotNull(playerStart) { "Player start '@' not found in level" }
-            return Level(setId, name, grid, playerStart!!, boxes)
+            return Level(name, ascii, grid, playerStart!!, boxes)
         }
     }
 

@@ -1,20 +1,20 @@
 package com.example.einkarcade
 
 
+import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.view.KeyEvent
-import android.content.ContentValues
-import android.net.Uri
-import android.provider.MediaStore
-import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -35,13 +34,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.focus.focusProperties
 import com.example.einkarcade.sokoban.BoxMover
 import com.example.einkarcade.sokoban.Direction
 import com.example.einkarcade.sokoban.GameEngine
@@ -49,6 +48,8 @@ import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
+import org.json.JSONArray
+import org.json.JSONObject
 
 
 data class GameUiState(val playerPosition: Position, val levelName: String)
@@ -96,31 +97,69 @@ private class JsonStore(private val context: Context) {
             false
         }
     }
-    fun updateLevel(setId: String, levelName: String, properties: Map<String, Any>): Boolean {
-        val raw = readText() ?: return false
-        return try {
-            val root = JSONObject(raw)
-            val sets = root.getJSONArray("sets")
-            var updated = false
-            for (i in 0 until sets.length()) {
-                val setObj = sets.getJSONObject(i)
-                if (setObj.getString("id") != setId) continue
-                val levels = setObj.getJSONArray("levels")
-                for (j in 0 until levels.length()) {
-                    val lvl = levels.getJSONObject(j)
-                    if (lvl.optString("name") == levelName) {
-                        for ((k, v) in properties) {
-                            lvl.put(k, v)
-                        }
-                        updated = true
-                        break
-                    }
-                }
-                if (updated) break
+}
+
+// Central repository for loading and saving level sets as a whole.
+private class LevelsRepository(context: Context) {
+    private val jsonStore = JsonStore(context)
+    private val setIdByName = mutableMapOf<String, String>()
+
+    fun load(): Map<String, List<Level>>? {
+        val jsonText = jsonStore.readText() ?: return null
+        val root = JSONObject(jsonText)
+        val setsArr = root.getJSONArray("sets")
+        val out = mutableMapOf<String, List<Level>>()
+        for (i in 0 until setsArr.length()) {
+            val setObj = setsArr.getJSONObject(i)
+            val setId = setObj.getString("id")
+            val setName = setObj.getString("name")
+            setIdByName[setName] = setId
+            val levelsArr = setObj.getJSONArray("levels")
+            val levels = mutableListOf<Level>()
+            for (j in 0 until levelsArr.length()) {
+                val lvl = levelsArr.getJSONObject(j)
+                val name = lvl.getString("name")
+                val ascii = lvl.getString("ascii")
+                val level = Level.fromAscii(name, ascii)
+                level.setRating(lvl.optInt("rating", 0))
+                level.setCompletedAt(lvl.optLong("completedAt", 0L))
+                levels.add(level)
             }
-            if (updated) writeText(root.toString()) else false
+            out[setName] = levels
+        }
+        return out
+    }
+
+
+    // Build full JSON from the in-memory model using Level.ascii.
+    fun saveAllFromMemory(levelSets: Map<String, List<Level>>): Boolean {
+        return try {
+            val outRoot = JSONObject()
+            val outSets = JSONArray()
+            for ((setName, levels) in levelSets) {
+                if (levels.isEmpty()) continue
+                val setId = setIdByName[setName]
+                val outSet = JSONObject()
+                outSet.put("id", setId)
+                outSet.put("name", setName)
+
+                val outLevels = JSONArray()
+                levels.forEach { lvl ->
+                    val obj = JSONObject()
+                    obj.put("name", lvl.name)
+                    obj.put("ascii", lvl.ascii)
+                    obj.put("rating", lvl.rating)
+                    obj.put("completedAt", lvl.completedAt)
+                    outLevels.put(obj)
+                }
+                outSet.put("levels", outLevels)
+                outSets.put(outSet)
+            }
+            outRoot.put("sets", outSets)
+
+            jsonStore.writeText(outRoot.toString())
         } catch (t: Throwable) {
-            Log.e("JsonStore", "updateLevel failed", t)
+            Log.e("LevelsRepository", "saveAllFromMemory failed", t)
             false
         }
     }
@@ -128,14 +167,10 @@ private class JsonStore(private val context: Context) {
 
 class GameController(context: Context, testLevels: List<String>? = null) {
 
-
-    private val jsonStore = JsonStore(context)
+    private val repository = LevelsRepository(context)
 
     private fun persistLevelChanges() {
-        val changes = level.changedProperties()
-        if (changes.isEmpty()) return
-        Thread { jsonStore.updateLevel(level.setId, level.name, changes) }.start()
-        level.markClean()
+        Thread { repository.saveAllFromMemory(levelSets) }.start()
     }
 
     private fun recordCompletionIfWon() {
@@ -145,36 +180,12 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         }
     }
 
-    private fun loadLevelSetsFromDownloads(context: Context): Map<String, List<Level>>? {
-        val jsonText = jsonStore.readText() ?: return null
-        val root = JSONObject(jsonText)
-        val setsArr = root.getJSONArray("sets")
-        val out = mutableMapOf<String, List<Level>>()
-        for (i in 0 until setsArr.length()) {
-            val setObj = setsArr.getJSONObject(i)
-            val setId = setObj.getString("id")
-            val setName = setObj.getString("name")
-            val levelsArr = setObj.getJSONArray("levels")
-            val levels = mutableListOf<Level>()
-            for (j in 0 until levelsArr.length()) {
-                val lvl = levelsArr.getJSONObject(j)
-                val name = lvl.optString("name", lvl.optString("id", "${j+1}"))
-                val ascii = lvl.getString("ascii")
-                val level = Level.fromAscii(setId, name, ascii)
-                level.setRating(lvl.optInt("rating", 0))
-                level.setCompletedAt(lvl.optLong("completedAt", 0L))
-                level.markClean() // baseline = persisted values
-                levels.add(level)
-            }
-            out[setName] = levels
-        }
-        return out
-    }
+    private fun loadLevelSets(context: Context): Map<String, List<Level>>? = repository.load()
     private val levelSets: Map<String, List<Level>> = testLevels?.let {
         mapOf("test" to it.mapIndexed { index, content ->
-            Level.fromAscii("test", "TestLevel$index", content)
+            Level.fromAscii("TestLevel$index", content)
         })
-    } ?: (loadLevelSetsFromDownloads(context) ?: emptyMap())
+    } ?: (loadLevelSets(context) ?: emptyMap())
 
     val availableSets: List<String>
         get() = levelSets.keys.toList()
@@ -224,7 +235,6 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         level = levelsInCurrentSet[currentLevelIndex]
         gameEngine = GameEngine(level)
     }
-
 
 
     val playerPosition: Position
