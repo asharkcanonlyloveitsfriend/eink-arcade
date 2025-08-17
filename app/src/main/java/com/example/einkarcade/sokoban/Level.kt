@@ -11,13 +11,29 @@ data class Level(
     // -1 = thumbs down, 0 = none, 1 = thumbs up. Not part of equality/hashCode.
     var rating: Int = 0
         private set
+    var completedAt: Long = 0L
+        private set
+
+    val isCompleted: Boolean
+        get() = completedAt > 0L
 
     // Change tracking
-    private fun currentProps(): Map<String, Any> = mapOf("rating" to rating)
+    private fun currentProps(): Map<String, Any> = mapOf(
+        "rating" to rating,
+        "completedAt" to completedAt
+    )
     private var baselineProps: Map<String, Any> = currentProps()
 
     fun setRating(value: Int) {
         rating = value
+    }
+
+    fun setCompletedAt(value: Long) {
+        completedAt = value
+    }
+
+    fun markCompleted() {
+        completedAt = System.currentTimeMillis()
     }
 
     fun toggleThumbUp(): Int {

@@ -137,10 +137,16 @@ class GameController(context: Context, testLevels: List<String>? = null) {
 
     private fun persistLevelChanges() {
         val changes = level.changedProperties()
-        Log.d("GameController", "persistLevelChanges: $changes")
         if (changes.isEmpty()) return
         Thread { jsonStore.updateLevel(level.setId, level.name, changes) }.start()
         level.markClean()
+    }
+
+    private fun recordCompletionIfWon() {
+        if (gameEngine.isGameWon) {
+            level.markCompleted()
+            persistLevelChanges()
+        }
     }
 
     private fun loadLevelSetsFromDownloads(context: Context): Map<String, List<Level>>? {
@@ -182,6 +188,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
                 val ascii = lvl.getString("ascii")
                 val level = Level.fromAscii(setId, name, ascii)
                 level.setRating(lvl.optInt("rating", 0))
+                level.setCompletedAt(lvl.optLong("completedAt", 0L))
                 level.markClean() // baseline = persisted values
                 levels.add(level)
             }
@@ -315,6 +322,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
 
     fun handleDirectionInput(direction: Direction) {
         gameEngine.move(direction)
+        recordCompletionIfWon()
     }
 
     fun nextLevel() {
@@ -341,6 +349,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
 
     fun moveBoxTo(from: Position, to: Position, playerEnd: Position) {
         gameEngine.moveBoxTo(from, to, playerEnd)
+        recordCompletionIfWon()
     }
 
     val walkableGrid: Array<Array<Boolean>>
@@ -571,9 +580,10 @@ fun GameScreen(
                     onDismissRequest = { levelExpanded.value = false }
                 ) {
                     levels.forEach { lvl ->
-                        val badge = when (lvl.rating) { 1 -> " 👍"; -1 -> " 👎"; else -> "" }
+                        val completedMark = if (lvl.isCompleted) " ✓" else ""
+                        val ratingBadge = when (lvl.rating) { 1 -> " 👍"; -1 -> " 👎"; else -> "" }
                         DropdownMenuItem(
-                            text = { Text(lvl.name + badge) },
+                            text = { Text(lvl.name + completedMark + ratingBadge) },
                             onClick = {
                                 gameController.selectLevel(lvl.name)
                                 selectedLevel.value = lvl.name
