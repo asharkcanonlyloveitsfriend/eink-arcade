@@ -52,7 +52,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 
+
 data class GameUiState(val playerPosition: Position, val levelName: String)
+
+data class LevelSet(
+    val id: String,
+    val name: String,
+    val levels: List<Level>
+)
 
 
 // JSON store for Downloads/EinkArcade/levels.txt.
@@ -102,18 +109,17 @@ private class JsonStore(private val context: Context) {
 // Central repository for loading and saving level sets as a whole.
 private class LevelsRepository(context: Context) {
     private val jsonStore = JsonStore(context)
-    private val setIdByName = mutableMapOf<String, String>()
 
-    fun load(): Map<String, List<Level>>? {
+    fun loadSets(): List<LevelSet>? {
         val jsonText = jsonStore.readText() ?: return null
         val root = JSONObject(jsonText)
         val setsArr = root.getJSONArray("sets")
-        val out = mutableMapOf<String, List<Level>>()
+        val out = mutableListOf<LevelSet>()
         for (i in 0 until setsArr.length()) {
             val setObj = setsArr.getJSONObject(i)
             val setId = setObj.getString("id")
             val setName = setObj.getString("name")
-            setIdByName[setName] = setId
+
             val levelsArr = setObj.getJSONArray("levels")
             val levels = mutableListOf<Level>()
             for (j in 0 until levelsArr.length()) {
@@ -125,26 +131,25 @@ private class LevelsRepository(context: Context) {
                 level.setCompletedAt(lvl.optLong("completedAt", 0L))
                 levels.add(level)
             }
-            out[setName] = levels
+            out.add(LevelSet(id = setId, name = setName, levels = levels))
         }
         return out
     }
 
 
     // Build full JSON from the in-memory model using Level.ascii.
-    fun saveAllFromMemory(levelSets: Map<String, List<Level>>): Boolean {
+    fun saveAllFromSets(sets: List<LevelSet>): Boolean {
         return try {
             val outRoot = JSONObject()
             val outSets = JSONArray()
-            for ((setName, levels) in levelSets) {
-                if (levels.isEmpty()) continue
-                val setId = setIdByName[setName]
+            for (set in sets) {
+                if (set.levels.isEmpty()) continue
                 val outSet = JSONObject()
-                outSet.put("id", setId)
-                outSet.put("name", setName)
+                outSet.put("id", set.id)
+                outSet.put("name", set.name)
 
                 val outLevels = JSONArray()
-                levels.forEach { lvl ->
+                set.levels.forEach { lvl ->
                     val obj = JSONObject()
                     obj.put("name", lvl.name)
                     obj.put("ascii", lvl.ascii)
@@ -156,10 +161,9 @@ private class LevelsRepository(context: Context) {
                 outSets.put(outSet)
             }
             outRoot.put("sets", outSets)
-
             jsonStore.writeText(outRoot.toString())
         } catch (t: Throwable) {
-            Log.e("LevelsRepository", "saveAllFromMemory failed", t)
+            Log.e("LevelsRepository", "saveAllFromSets failed", t)
             false
         }
     }
@@ -170,7 +174,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     private val repository = LevelsRepository(context)
 
     private fun persistLevelChanges() {
-        Thread { repository.saveAllFromMemory(levelSets) }.start()
+        Thread { repository.saveAllFromSets(levelSets) }.start()
     }
 
     private fun recordCompletionIfWon() {
@@ -180,15 +184,23 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         }
     }
 
-    private fun loadLevelSets(context: Context): Map<String, List<Level>>? = repository.load()
-    private val levelSets: Map<String, List<Level>> = testLevels?.let {
-        mapOf("test" to it.mapIndexed { index, content ->
-            Level.fromAscii("TestLevel$index", content)
-        })
-    } ?: (loadLevelSets(context) ?: emptyMap())
+    private fun loadLevelSets(context: Context): List<LevelSet>? = repository.loadSets()
+
+    private val levelSets: List<LevelSet> = testLevels?.let {
+        listOf(
+            LevelSet(
+                id = "test",
+                name = "test",
+                levels = it.mapIndexed { index, content ->
+                    Level.fromAscii("TestLevel$index", content)
+                }
+            )
+        )
+    } ?: (loadLevelSets(context) ?: emptyList())
+
 
     val availableSets: List<String>
-        get() = levelSets.keys.toList()
+        get() = levelSets.map { it.name }
 
     // Levels for current set.
     fun levels(): List<Level> = levelsInCurrentSet
@@ -203,21 +215,23 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         persistLevelChanges()
     }
 
-    private var currentSet: String = levelSets.keys.first()
+    private var currentSetIndex: Int = 0
     private var currentLevelIndex = 0
     private var level: Level
     private var gameEngine: GameEngine
     val currentSetName: String
-        get() = currentSet
+        get() = levelSets[currentSetIndex].name
 
     private val levelsInCurrentSet: List<Level>
-        get() = levelSets[currentSet]!!
+        get() = levelSets[currentSetIndex].levels
 
     val availableLevels: List<String>
         get() = levelsInCurrentSet.map { it.name }
     fun selectSet(setName: String) {
-        if (!levelSets.containsKey(setName)) return
-        currentSet = setName
+        if (!levelSets.any { it.name == setName }) return
+        val idx = levelSets.indexOfFirst { it.name == setName }
+        if (idx == -1) return
+        currentSetIndex = idx
         currentLevelIndex = 0
         level = levelsInCurrentSet[currentLevelIndex]
         gameEngine = GameEngine(level)
