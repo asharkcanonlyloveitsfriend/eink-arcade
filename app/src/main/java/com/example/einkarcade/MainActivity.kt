@@ -128,10 +128,6 @@ private class JsonStore(private val context: Context) {
 
 class GameController(context: Context, testLevels: List<String>? = null) {
 
-    private companion object {
-        private const val DL_RELATIVE_PATH = "Download/EinkArcade/"
-        private const val DL_FILE_NAME = "levels.txt"
-    }
 
     private val jsonStore = JsonStore(context)
 
@@ -157,7 +153,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
             MediaStore.Downloads.RELATIVE_PATH
         )
         val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
-        val args = arrayOf(DL_FILE_NAME, DL_RELATIVE_PATH)
+        val args = arrayOf(MainActivity.LEVELS_JSON_NAME, MainActivity.LEVELS_DIR_RELATIVE_PATH)
         val uri = cr.query(
             MediaStore.Downloads.EXTERNAL_CONTENT_URI,
             projection,
@@ -173,7 +169,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         } ?: return null
 
         val jsonText = cr.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: return null
-        val root = org.json.JSONObject(jsonText)
+        val root = JSONObject(jsonText)
         val setsArr = root.getJSONArray("sets")
         val out = mutableMapOf<String, List<Level>>()
         for (i in 0 until setsArr.length()) {
@@ -200,51 +196,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         mapOf("test" to it.mapIndexed { index, content ->
             Level.fromAscii("test", "TestLevel$index", content)
         })
-    } ?: run {
-        // 1) Prefer the Downloads JSON if present
-        loadLevelSetsFromDownloads(context) ?: run {
-            // 2) Fallback: existing assets scan (kept for importer)
-            val sets = mutableMapOf<String, List<Level>>()
-            val levelEntries = context.assets.list("levels")?.sorted() ?: emptyList()
-            for (entry in levelEntries) {
-                val fullPath = "levels/$entry"
-                if (entry.endsWith(".txt")) {
-                    val raw = context.assets.open(fullPath).bufferedReader().use { it.readText() }
-                    val setName = entry.removeSuffix(".txt")
-                        .replace('_', ' ')
-                        .replaceFirstChar { it.uppercaseChar() }
-                    val setId = entry.removeSuffix(".txt")
-                        .lowercase()
-                        .replace(Regex("[^a-z0-9]+"), "-")
-                        .trim('-')
-                    val levels = mutableListOf<Level>()
-                    val buffer = mutableListOf<String>()
-                    raw.lineSequence().forEach { line ->
-                        if (line.startsWith("Title:")) {
-                            val name = line.removePrefix("Title:").trim()
-                            val ascii = buffer.joinToString("\n").trimEnd()
-                            if (ascii.isNotEmpty()) levels.add(Level.fromAscii(setId, name, ascii))
-                            buffer.clear()
-                        } else buffer.add(line)
-                    }
-                    sets[setName] = levels
-                } else {
-                    val setId = entry
-                        .lowercase()
-                        .replace(Regex("[^a-z0-9]+"), "-")
-                        .trim('-')
-                    val files = context.assets.list(fullPath)?.sorted() ?: continue
-                    val levels = files.map { filename ->
-                        val content = context.assets.open("$fullPath/$filename").bufferedReader().use { it.readText() }
-                        Level.fromAscii(setId, filename.removeSuffix(".xsb"), content)
-                    }
-                    val setName = entry.replaceFirstChar { it.uppercaseChar() }
-                    sets[setName] = levels
-                }
-            }
-            sets
-        }
-    }
+    } ?: (loadLevelSetsFromDownloads(context) ?: emptyMap())
 
     val availableSets: List<String>
         get() = levelSets.keys.toList()
@@ -370,20 +322,6 @@ class MainActivity : ComponentActivity() {
         internal const val LEVELS_DIR_RELATIVE_PATH = "Download/EinkArcade/"
         internal const val LEVELS_JSON_NAME = "levels.txt"
         private const val DEFAULT_LEVELS_ASSET = "default_levels.json"
-    }
-
-    // JSON-escape helper.
-    private fun escapeJson(s: String): String = buildString(s.length + 16) {
-        for (ch in s) when (ch) {
-            '"' -> append("\\\"")
-            '\\' -> append("\\\\")
-            '\n' -> append("\\n")
-            '\r' -> append("\\r")
-            '\t' -> append("\\t")
-            else -> {
-                if (ch.code < 0x20) append(String.format("\\u%04x", ch.code)) else append(ch)
-            }
-        }
     }
 
     // Ensure Downloads/EinkArcade/levels.txt exists; seed from assets if missing.
