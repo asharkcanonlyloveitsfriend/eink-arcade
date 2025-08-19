@@ -61,6 +61,11 @@ data class LevelSet(
     val levels: List<Level>
 )
 
+data class SetOption(
+    val id: String,
+    val name: String
+)
+
 
 // JSON store for Downloads/EinkArcade/levels.txt.
 private class JsonStore(private val context: Context) {
@@ -70,6 +75,7 @@ private class JsonStore(private val context: Context) {
         MediaStore.Downloads.DISPLAY_NAME,
         MediaStore.Downloads.RELATIVE_PATH
     )
+    private var cachedUri: Uri? = null
     private fun findUri(): Uri? {
         val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
         val args = arrayOf(MainActivity.LEVELS_JSON_NAME, MainActivity.LEVELS_DIR_RELATIVE_PATH)
@@ -87,12 +93,18 @@ private class JsonStore(private val context: Context) {
             } else null
         }
     }
+    private fun resolveUri(): Uri? {
+        cachedUri?.let { return it }
+        val uri = findUri()
+        cachedUri = uri
+        return uri
+    }
     fun readText(): String? {
-        val uri = findUri() ?: return null
+        val uri = resolveUri() ?: return null
         return cr.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
     }
     fun writeText(text: String): Boolean {
-        val uri = findUri() ?: return false
+        val uri = resolveUri() ?: return false
         return try {
             cr.openOutputStream(uri, "w")?.use { os ->
                 os.write(text.toByteArray())
@@ -184,7 +196,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
         }
     }
 
-    private fun loadLevelSets(context: Context): List<LevelSet>? = repository.loadSets()
+    private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
     private val levelSets: List<LevelSet> = testLevels?.let {
         listOf(
@@ -196,11 +208,20 @@ class GameController(context: Context, testLevels: List<String>? = null) {
                 }
             )
         )
-    } ?: (loadLevelSets(context) ?: emptyList())
+    } ?: (loadLevelSets() ?: emptyList())
 
 
-    val availableSets: List<String>
-        get() = levelSets.map { it.name }
+    val availableSetOptions: List<SetOption>
+        get() = levelSets.map { SetOption(it.id, it.name) }
+
+    fun selectSetById(setId: String) {
+        val idx = levelSets.indexOfFirst { it.id == setId }
+        if (idx == -1) return
+        currentSetIndex = idx
+        currentLevelIndex = 0
+        level = levelsInCurrentSet[currentLevelIndex]
+        gameEngine = GameEngine(level)
+    }
 
     // Levels for current set.
     fun levels(): List<Level> = levelsInCurrentSet
@@ -225,17 +246,6 @@ class GameController(context: Context, testLevels: List<String>? = null) {
     private val levelsInCurrentSet: List<Level>
         get() = levelSets[currentSetIndex].levels
 
-    val availableLevels: List<String>
-        get() = levelsInCurrentSet.map { it.name }
-    fun selectSet(setName: String) {
-        if (!levelSets.any { it.name == setName }) return
-        val idx = levelSets.indexOfFirst { it.name == setName }
-        if (idx == -1) return
-        currentSetIndex = idx
-        currentLevelIndex = 0
-        level = levelsInCurrentSet[currentLevelIndex]
-        gameEngine = GameEngine(level)
-    }
     fun selectLevel(name: String) {
         val index = levelsInCurrentSet.indexOfFirst { it.name == name }
         if (index != -1) {
@@ -438,10 +448,8 @@ fun GameScreen(
     onStateUpdated: () -> Unit
 ) {
     val playerPosition = uiState.value.playerPosition
-    val selectedLevel = remember { mutableStateOf(uiState.value.levelName) }
-    selectedLevel.value = uiState.value.levelName
     // Tick to force recomposition on rating change.
-    val ratingTick = remember(gameController.currentSetName, selectedLevel.value) { mutableStateOf(0) }
+    val ratingTick = remember(gameController.currentSetName, uiState.value.levelName) { mutableStateOf(0) }
 
     Box(modifier = modifier.fillMaxSize()) {
         fun handleTap(tappedPosition: Position) {
@@ -475,26 +483,23 @@ fun GameScreen(
 
         Column(modifier = Modifier.fillMaxSize()) {
             val setExpanded = remember { mutableStateOf(false) }
-            val selectedSet = remember { mutableStateOf(gameController.currentSetName) }
-            val sets = gameController.availableSets.toList()
+            val setOptions = gameController.availableSetOptions
 
             Box(
                 modifier = Modifier
                     .padding(16.dp)
                     .clickable { setExpanded.value = true }
             ) {
-                Text("Set: ${selectedSet.value}", fontSize = 24.sp)
+                Text("Set: ${gameController.currentSetName}", fontSize = 24.sp)
                 DropdownMenu(
                     expanded = setExpanded.value,
                     onDismissRequest = { setExpanded.value = false }
                 ) {
-                    sets.forEach { setName ->
+                    setOptions.forEach { opt ->
                         DropdownMenuItem(
-                            text = { Text(setName) },
+                            text = { Text(opt.name) },
                             onClick = {
-                                gameController.selectSet(setName)
-                                selectedSet.value = setName
-                                selectedLevel.value = gameController.availableLevels.firstOrNull() ?: ""
+                                gameController.selectSetById(opt.id)
                                 setExpanded.value = false
                                 onStateUpdated()
                             },
@@ -514,7 +519,7 @@ fun GameScreen(
                     .padding(start = 16.dp, bottom = 8.dp)
                     .clickable { levelExpanded.value = true }
             ) {
-                Text("Level: ${selectedLevel.value}", fontSize = 24.sp)
+                Text("Level: ${uiState.value.levelName}", fontSize = 24.sp)
                 DropdownMenu(
                     expanded = levelExpanded.value,
                     onDismissRequest = { levelExpanded.value = false }
@@ -526,7 +531,6 @@ fun GameScreen(
                             text = { Text(lvl.name + completedMark + ratingBadge) },
                             onClick = {
                                 gameController.selectLevel(lvl.name)
-                                selectedLevel.value = lvl.name
                                 levelExpanded.value = false
                                 onStateUpdated()
                             }
