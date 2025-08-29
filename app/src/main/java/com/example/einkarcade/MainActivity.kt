@@ -181,7 +181,7 @@ private class LevelsRepository(context: Context) {
     }
 }
 
-class GameController(context: Context, testLevels: List<String>? = null) {
+class GameController(context: Context, injectedSets: List<LevelSet>? = null) {
 
     private val repository = LevelsRepository(context)
 
@@ -198,17 +198,7 @@ class GameController(context: Context, testLevels: List<String>? = null) {
 
     private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
-    private val levelSets: List<LevelSet> = testLevels?.let {
-        listOf(
-            LevelSet(
-                id = "test",
-                name = "test",
-                levels = it.mapIndexed { index, content ->
-                    Level.fromAscii("TestLevel$index", content)
-                }
-            )
-        )
-    } ?: (loadLevelSets() ?: emptyList())
+    private val levelSets: List<LevelSet> = injectedSets ?: (loadLevelSets() ?: emptyList())
 
 
     val availableSetOptions: List<SetOption>
@@ -328,8 +318,8 @@ class MainActivity : ComponentActivity() {
         internal const val GRID_OFFSET_X = 50f
         internal const val GRID_OFFSET_Y = 50f
 
-        // Test-only override for injecting test levels
-        var testLevels: List<String>? = null
+        // Optional factory for injecting a custom GameController (used by tests)
+        var gameControllerFactory: ((Context) -> GameController)? = null
 
         internal const val LEVELS_DIR_RELATIVE_PATH = "Download/EinkArcade/"
         internal const val LEVELS_JSON_NAME = "levels.txt"
@@ -387,7 +377,7 @@ class MainActivity : ComponentActivity() {
         // On startup: use Downloads copy if present; otherwise seed it from assets/default_levels.json
         ensureJsonFromAssetsIfMissing(this)
 
-        gameController = GameController(this, testLevels)
+        gameController = (gameControllerFactory?.invoke(this)) ?: GameController(this, null)
         updateUiState()
         enableEdgeToEdge()
         setContent {

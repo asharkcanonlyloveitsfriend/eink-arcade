@@ -4,6 +4,8 @@ import android.view.KeyEvent
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import com.example.einkarcade.sokoban.Level
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 
@@ -11,19 +13,40 @@ class MainActivityTest {
 
     companion object {
         init {
-            MainActivity.testLevels = listOf(
-                """
-                ####
-                #@$.#
-                ####
-                """.trimIndent(),
-                """
-                #####
-                #@ $.#
-                #####
-                """.trimIndent()
-            )
+            MainActivity.gameControllerFactory = { ctx ->
+                GameController(
+                    ctx,
+                    listOf(
+                        LevelSet(
+                            id = "training",
+                            name = "Training",
+                            levels = listOf(
+                                Level.fromAscii(
+                                    "Level 1",
+                                    """
+                                    ####
+                                    #@$.#
+                                    ####
+                                    """.trimIndent()
+                                ),
+                                Level.fromAscii(
+                                    "Level 2",
+                                    """
+                                    #####
+                                    #@ $.#
+                                    #####
+                                    """.trimIndent()
+                                )
+                            )
+                        )
+                    )
+                )
+            }
         }
+    }
+    @After
+    fun tearDown() {
+        MainActivity.gameControllerFactory = null
     }
 
     @get:Rule
@@ -32,7 +55,7 @@ class MainActivityTest {
     @Test
     fun playerSolvesLevelAndAdvancesToNextLevel() {
         composeTestRule
-            .onNodeWithText("Level 1")
+            .onNodeWithText("Level 1", substring = true)
             .assertIsDisplayed()
 
         composeTestRule.activityRule.scenario.onActivity { activity ->
@@ -48,7 +71,7 @@ class MainActivityTest {
         }
 
         composeTestRule
-            .onNodeWithText("Level 2")
+            .onNodeWithText("Level 2", substring = true)
             .assertIsDisplayed()
     }
 }
