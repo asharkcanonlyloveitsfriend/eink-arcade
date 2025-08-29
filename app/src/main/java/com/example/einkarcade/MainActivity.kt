@@ -11,6 +11,8 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +24,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +46,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import org.json.JSONException
 import com.example.einkarcade.sokoban.BoxMover
 import com.example.einkarcade.sokoban.Direction
 import com.example.einkarcade.sokoban.GameEngine
@@ -198,11 +206,36 @@ class GameController(context: Context, injectedSets: List<LevelSet>? = null) {
 
     private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
-    private val levelSets: List<LevelSet> = injectedSets ?: (loadLevelSets() ?: emptyList())
+    private val levelSets: MutableList<LevelSet> =
+        (injectedSets ?: loadLevelSets() ?: emptyList()).toMutableList()
 
 
     val availableSetOptions: List<SetOption>
         get() = levelSets.map { SetOption(it.id, it.name) }
+
+    /**
+     * Merge new LevelSets into the in-memory list and persist to repository.
+     * Skips any set whose id already exists. Returns Pair(addedCount, skippedCount).
+     */
+    fun mergeSets(newSets: List<LevelSet>): Pair<Int, Int> {
+        if (newSets.isEmpty()) return 0 to 0
+        val existingIds = levelSets.map { it.id }.toMutableSet()
+        var added = 0
+        var skipped = 0
+        newSets.forEach { s ->
+            if (existingIds.contains(s.id)) {
+                skipped += 1
+            } else {
+                levelSets.add(s)
+                existingIds.add(s.id)
+                added += 1
+            }
+        }
+        if (added > 0) {
+            persistLevelChanges() // writes the whole list asynchronously
+        }
+        return added to skipped
+    }
 
     fun selectSetById(setId: String) {
         val idx = levelSets.indexOfFirst { it.id == setId }
@@ -436,6 +469,142 @@ fun GameScreen(
     selectedBoxPosition: MutableState<Position?>,
     onStateUpdated: () -> Unit
 ) {
+    val context = LocalContext.current
+    // Import file picker launcher
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) {
+            Toast.makeText(context, "No file selected", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            if (text.isNullOrEmpty()) {
+                Toast.makeText(context, "Empty or unreadable file", Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
+
+            // Parse root and basic schema
+            val root = try {
+                JSONObject(text)
+            } catch (e: JSONException) {
+                Toast.makeText(context, "Invalid JSON", Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
+            if (!root.has("sets") || root.optJSONArray("sets") == null) {
+                Toast.makeText(context, "Invalid format: expected a JSON object with a 'sets' array", Toast.LENGTH_LONG).show()
+                return@rememberLauncherForActivityResult
+            }
+
+            val existingIds = gameController.availableSetOptions.map { it.id }.toSet()
+            val setsArr = root.getJSONArray("sets")
+
+            var totalSets = 0
+            var totalLevels = 0
+            var duplicateIds = 0
+            val errors = mutableListOf<String>()
+
+            // Dry-run: build LevelSet objects and count; do not mutate repository
+            for (i in 0 until setsArr.length()) {
+                totalSets += 1
+                val setObj = setsArr.getJSONObject(i)
+                val setId = setObj.optString("id", "")
+                val setName = setObj.optString("name", "")
+                if (setId.isBlank()) {
+                    errors.add("Set[$i]: missing id")
+                }
+                if (setName.isBlank()) {
+                    errors.add("Set[$i]: missing name")
+                }
+                if (existingIds.contains(setId)) {
+                    duplicateIds += 1
+                }
+                val levelsArr = setObj.optJSONArray("levels")
+                if (levelsArr == null) {
+                    errors.add("Set[$i]: missing levels")
+                    continue
+                }
+                for (j in 0 until levelsArr.length()) {
+                    val lvlObj = levelsArr.optJSONObject(j)
+                    if (lvlObj == null) {
+                        errors.add("Set[$i] Level[$j]: invalid object")
+                        continue
+                    }
+                    val name = lvlObj.optString("name", "")
+                    val ascii = lvlObj.optString("ascii", "")
+                    if (name.isBlank()) errors.add("Set[$i] Level[$j]: missing name")
+                    if (ascii.isBlank()) errors.add("Set[$i] Level[$j]: missing ascii")
+                    // Try constructing a Level to catch format errors
+                    try {
+                        val level = Level.fromAscii(name.ifBlank { "Unnamed" }, ascii)
+                        // Optional fields
+                        level.setRating(lvlObj.optInt("rating", 0))
+                        level.setCompletedAt(lvlObj.optLong("completedAt", 0L))
+                        totalLevels += 1
+                    } catch (t: Throwable) {
+                        errors.add("Set[$i] Level[$j]: invalid ascii/grid (${t.message})")
+                    }
+                }
+            }
+
+            // Second pass: build concrete LevelSet objects to merge (skip duplicates and invalid sets)
+            val setsToMerge = mutableListOf<LevelSet>()
+            for (i in 0 until setsArr.length()) {
+                val setObj = setsArr.getJSONObject(i)
+                val setId = setObj.optString("id", "")
+                val setName = setObj.optString("name", "")
+                if (setId.isBlank() || setName.isBlank()) continue
+                if (existingIds.contains(setId)) continue
+                val levelsArr = setObj.optJSONArray("levels") ?: continue
+                val levels = mutableListOf<Level>()
+                var bad = false
+                for (j in 0 until levelsArr.length()) {
+                    val lvlObj = levelsArr.optJSONObject(j)
+                    if (lvlObj == null) { bad = true; break }
+                    val name = lvlObj.optString("name", "")
+                    val ascii = lvlObj.optString("ascii", "")
+                    if (name.isBlank() || ascii.isBlank()) { bad = true; break }
+                    try {
+                        val level = Level.fromAscii(name, ascii)
+                        level.setRating(lvlObj.optInt("rating", 0))
+                        level.setCompletedAt(lvlObj.optLong("completedAt", 0L))
+                        levels.add(level)
+                    } catch (t: Throwable) {
+                        bad = true
+                        break
+                    }
+                }
+                if (!bad && levels.isNotEmpty()) {
+                    setsToMerge.add(LevelSet(id = setId, name = setName, levels = levels))
+                }
+            }
+
+            val newSets = totalSets - duplicateIds
+            val summary = buildString {
+                append("Loaded: $totalSets set(s), $totalLevels level(s). ")
+                append("$newSets new, $duplicateIds duplicate id(s).")
+                if (errors.isNotEmpty()) {
+                    append(" Issues: ")
+                    append(errors.take(3).joinToString("; "))
+                    if (errors.size > 3) append(" (+${errors.size - 3} more)")
+                }
+            }
+            Log.i("Import", "Dry-run summary: $summary")
+
+            // Merge into repository via GameController and refresh UI
+            val (addedCount, skippedCount) = gameController.mergeSets(setsToMerge)
+            if (addedCount > 0) {
+                Toast.makeText(context, "Imported $addedCount set(s).", Toast.LENGTH_LONG).show()
+                onStateUpdated()
+            } else {
+                Toast.makeText(context, if (skippedCount > 0) "Nothing to import (all duplicates)." else "No valid sets found.", Toast.LENGTH_LONG).show()
+            }
+        } catch (t: Throwable) {
+            Log.e("Import", "Failed to read selected file", t)
+            Toast.makeText(context, "Failed to read file", Toast.LENGTH_SHORT).show()
+        }
+    }
     val playerPosition = uiState.value.playerPosition
     // Tick to force recomposition on rating change.
     val ratingTick = remember(gameController.currentSetName, uiState.value.levelName) { mutableStateOf(0) }
@@ -660,6 +829,16 @@ fun GameScreen(
                 ) {
                     val selected = currentRating == 1
                     Text(if (selected) "👍✓" else "👍")
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Button(
+                    onClick = {
+                        importLauncher.launch(arrayOf("application/json", "text/plain"))
+                    },
+                    modifier = Modifier
+                        .focusProperties { canFocus = false }
+                ) {
+                    Text("Import")
                 }
             }
         }
