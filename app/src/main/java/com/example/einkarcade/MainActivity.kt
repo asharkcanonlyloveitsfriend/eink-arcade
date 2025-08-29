@@ -370,9 +370,8 @@ class MainActivity : ComponentActivity() {
         }
         val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
         val seed = context.assets.open(assetPath).bufferedReader().use { it.readText() }
-        cr.openOutputStream(uri, "w")?.use { os ->
+        cr.openOutputStream(uri, "wt")?.use { os ->
             os.write(seed.toByteArray())
-            os.flush()
         }
         return uri
     }
