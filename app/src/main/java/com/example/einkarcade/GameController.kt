@@ -6,7 +6,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import com.example.einkarcade.appstate.LastSelectionStore
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.data.LevelsRepository
-import com.example.einkarcade.sokoban.Direction
 import com.example.einkarcade.sokoban.GameEngine
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
@@ -19,6 +18,11 @@ class GameController(
 ) {
 
     private val repository = LevelsRepository(context)
+    private val fallbackLevelSet = LevelSet(
+        id = "fallback",
+        name = "No Levels",
+        levels = listOf(Level.fromAscii("No Levels", "@"))
+    )
 
     private val revisionState = mutableLongStateOf(0L)
     val revision: State<Long>
@@ -29,6 +33,7 @@ class GameController(
     }
 
     private fun persistLevelChanges() {
+        if (usingFallbackLevelSet) return
         Thread { repository.saveAllFromSets(levelSets) }.start()
     }
 
@@ -41,7 +46,17 @@ class GameController(
 
     private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
-    private val levelSets: List<LevelSet> = injectedSets ?: (loadLevelSets() ?: emptyList())
+    private val levelSets: List<LevelSet> = run {
+        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
+        val nonEmpty = sets.filter { it.levels.isNotEmpty() }
+        if (nonEmpty.isEmpty()) listOf(fallbackLevelSet) else nonEmpty
+    }
+    private val usingFallbackLevelSet: Boolean = levelSets.size == 1 && levelSets[0].id == fallbackLevelSet.id
+
+    private fun persistSelection() {
+        if (usingFallbackLevelSet) return
+        lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
+    }
 
     val availableSetOptions: List<Pair<String, String>>
         get() = levelSets.map { it.id to it.name }
@@ -53,7 +68,7 @@ class GameController(
         currentLevelIndex = 0
         level = levelsInCurrentSet[currentLevelIndex]
         gameEngine = GameEngine(level)
-        lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
+        persistSelection()
         markChanged()
     }
 
@@ -88,7 +103,7 @@ class GameController(
             currentLevelIndex = index
             level = levelsInCurrentSet[currentLevelIndex]
             gameEngine = GameEngine(level)
-            lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
+            persistSelection()
             markChanged()
         }
     }
@@ -110,7 +125,7 @@ class GameController(
             }
             gameEngine = GameEngine(level)
             // Persist selection once the controller is constructed.
-            lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
+            persistSelection()
         }
     }
 
@@ -138,20 +153,12 @@ class GameController(
         markChanged()
     }
 
-    fun step(direction: Direction): Boolean {
-        val changed = gameEngine.step(direction)
-        if (!changed) return false
-        recordCompletionIfWon()
-        markChanged()
-        return true
-    }
-
     fun nextLevel() {
         val levels = levelsInCurrentSet
         currentLevelIndex = (currentLevelIndex + 1) % levels.size
         level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
-        lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
+        persistSelection()
         markChanged()
     }
 
@@ -160,7 +167,7 @@ class GameController(
         currentLevelIndex = if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
         level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
-        lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
+        persistSelection()
         markChanged()
     }
 

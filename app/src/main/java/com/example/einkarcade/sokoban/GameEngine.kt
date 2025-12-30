@@ -13,34 +13,6 @@ class GameEngine(private val level: Level) {
     val isGameWon: Boolean
         get() = gameState.boxPositions.all { level.isTarget(it) }
 
-    fun step(direction: Direction): Boolean {
-        if (isGameWon) return false
-
-        val targetPosition = playerPosition.move(direction)
-        if (level.isWall(targetPosition)) return false
-
-        if (hasBoxAt(targetPosition)) {
-            if (!canPushBox(targetPosition, direction)) return false
-            pushBox(targetPosition, direction)
-            return true
-        }
-
-        gameState.movePlayer(targetPosition)
-        return true
-    }
-
-    private fun canPushBox(boxPosition: Position, direction: Direction): Boolean {
-        val newBoxPosition = boxPosition.move(direction)
-        return level.isPassable(newBoxPosition) && !hasBoxAt(newBoxPosition)
-    }
-
-    private fun pushBox(boxPosition: Position, direction: Direction) {
-        val newBoxPosition = boxPosition.move(direction)
-        lastSavedState = gameState.deepCopy()
-        gameState.moveBox(boxPosition, newBoxPosition)
-        gameState.movePlayer(boxPosition)
-    }
-
     private fun hasBoxAt(position: Position): Boolean {
         return gameState.boxPositions.contains(position)
     }
@@ -74,33 +46,12 @@ class GameEngine(private val level: Level) {
     fun movePlayerTo(position: Position): Boolean {
         if (isGameWon) return false
 
-        if (hasBoxAt(position) && isAdjacent(playerPosition, position)) {
-            val direction = directionTo(playerPosition, position) ?: return false
-            return step(direction)
-        }
-
         val pathfinder = Pathfinder(walkableGrid)
         if (!pathfinder.canFindPath(playerPosition, position)) return false
         if (position == playerPosition) return false
 
         gameState.movePlayer(position)
         return true
-    }
-
-    private fun isAdjacent(a: Position, b: Position): Boolean {
-        val rowDiff = kotlin.math.abs(a.row - b.row)
-        val colDiff = kotlin.math.abs(a.col - b.col)
-        return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1)
-    }
-
-    private fun directionTo(from: Position, to: Position): Direction? {
-        return when {
-            from.row == to.row && from.col + 1 == to.col -> Direction.RIGHT
-            from.row == to.row && from.col - 1 == to.col -> Direction.LEFT
-            from.row + 1 == to.row && from.col == to.col -> Direction.DOWN
-            from.row - 1 == to.row && from.col == to.col -> Direction.UP
-            else -> null
-        }
     }
 
     private val walkableGrid: Array<Array<Boolean>>

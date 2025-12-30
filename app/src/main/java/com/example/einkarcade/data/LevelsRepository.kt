@@ -4,16 +4,17 @@ import android.content.Context
 import android.util.Log
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.sokoban.Level
+import com.example.einkarcade.storage.DEFAULT_LEVELS_ASSET
 import com.example.einkarcade.storage.JsonStore
 import org.json.JSONArray
 import org.json.JSONObject
 
 // Repository for loading/saving level sets.
-class LevelsRepository(context: Context) {
+class LevelsRepository(private val context: Context) {
     private val jsonStore = JsonStore(context)
 
     fun loadSets(): List<LevelSet>? {
-        val jsonText = jsonStore.readText() ?: return null
+        val jsonText = jsonStore.readText() ?: readAsset(DEFAULT_LEVELS_ASSET) ?: return null
         val root = JSONObject(jsonText)
         val setsArr = root.getJSONArray("sets")
         val out = mutableListOf<LevelSet>()
@@ -36,6 +37,15 @@ class LevelsRepository(context: Context) {
             out.add(LevelSet(id = setId, name = setName, levels = levels))
         }
         return out
+    }
+
+    private fun readAsset(assetPath: String): String? {
+        return try {
+            context.assets.open(assetPath).bufferedReader().use { it.readText() }
+        } catch (t: Throwable) {
+            Log.e("LevelsRepository", "readAsset failed: $assetPath", t)
+            null
+        }
     }
 
     // Build full JSON from the in-memory model.

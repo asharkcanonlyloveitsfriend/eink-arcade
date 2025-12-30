@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.einkarcade.GameController
@@ -163,6 +164,7 @@ fun GameScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .testTag("gameCanvas")
                     .pointerInput(Unit) {
                         detectTapGestures { offset ->
                             val col = ((offset.x - MainActivity.GRID_OFFSET_X) / MainActivity.CELL_SIZE).toInt()

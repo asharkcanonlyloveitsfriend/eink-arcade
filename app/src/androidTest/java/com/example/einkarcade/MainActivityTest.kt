@@ -1,9 +1,13 @@
 package com.example.einkarcade
 
-import android.view.KeyEvent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.sokoban.Level
 import org.junit.After
 import org.junit.Rule
@@ -58,17 +62,18 @@ class MainActivityTest {
             .onNodeWithText("Level 1", substring = true)
             .assertIsDisplayed()
 
-        composeTestRule.activityRule.scenario.onActivity { activity ->
-            simulateKeyPress(activity, KeyEvent.KEYCODE_DPAD_RIGHT)
+        val boxOffset = gridOffset(row = 1, col = 2)
+        val targetOffset = gridOffset(row = 1, col = 3)
+        composeTestRule.onNodeWithTag("gameCanvas").performTouchInput {
+            click(boxOffset)
+            click(targetOffset)
         }
 
         composeTestRule
             .onNodeWithText("You win!")
             .assertIsDisplayed()
 
-        composeTestRule.activityRule.scenario.onActivity { activity ->
-            simulateKeyPress(activity, KeyEvent.KEYCODE_BUTTON_X)
-        }
+        composeTestRule.onNodeWithText("Restart").performTouchInput { click() }
 
         composeTestRule
             .onNodeWithText("Level 2", substring = true)
@@ -76,7 +81,9 @@ class MainActivityTest {
     }
 }
 
-private fun simulateKeyPress(activity: MainActivity, keyCode: Int) {
-    activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-    activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+private fun gridOffset(row: Int, col: Int): Offset {
+    return Offset(
+        MainActivity.GRID_OFFSET_X + MainActivity.CELL_SIZE * (col + 0.5f),
+        MainActivity.GRID_OFFSET_Y + MainActivity.CELL_SIZE * (row + 0.5f)
+    )
 }
