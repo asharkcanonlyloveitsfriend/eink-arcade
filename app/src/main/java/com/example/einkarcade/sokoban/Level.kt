@@ -45,16 +45,30 @@ data class Level(
 
     companion object {
         fun fromAscii(name: String, ascii: String, puzzleId: Int = -1): Level {
+            val parsed = parseAscii(ascii)
+            val exterior = findExteriorWalkableCells(parsed.initialGrid)
+            val finalGrid = applyExteriorMask(parsed.initialGrid, exterior)
+            return Level(name, ascii, finalGrid, parsed.playerStart, parsed.boxes, puzzleId)
+        }
+
+        private data class ParsedAscii(
+            val initialGrid: List<List<Tile>>,
+            val playerStart: Position,
+            val boxes: Set<Position>
+        )
+
+        /** Parses Sokoban ASCII into a base grid (WALL/FLOOR/GOAL) and extracts player + boxes. */
+        private fun parseAscii(ascii: String): ParsedAscii {
             val lines = ascii.lines().dropLastWhile { it.isBlank() }
             val maxWidth = lines.maxOfOrNull { it.length } ?: 0
+
             var playerStart: Position? = null
             val boxes = mutableSetOf<Position>()
 
-            // Initial parse: replace interior walkable spaces with FLOOR
-            val initialGrid = lines.mapIndexed { rowIndex, line ->
-                line.padEnd(maxWidth).mapIndexed { colIndex, char ->
+            val grid = lines.mapIndexed { rowIndex, line ->
+                line.padEnd(maxWidth).mapIndexed { colIndex, ch ->
                     val position = Position(rowIndex, colIndex)
-                    when (char) {
+                    when (ch) {
                         '#' -> Tile.WALL
                         '.' -> Tile.GOAL
                         '$' -> {
@@ -73,76 +87,72 @@ data class Level(
                             playerStart = position
                             Tile.GOAL
                         }
-                        ' ' -> Tile.FLOOR
                         else -> Tile.FLOOR
                     }
                 }
             }
 
-            requireNotNull(playerStart) { "Player start '@' not found in level" }
+            val start = requireNotNull(playerStart) { "Player start '@' not found in level" }
+            return ParsedAscii(grid, start, boxes)
+        }
 
-            // Flood-fill to distinguish exterior EMPTY from interior FLOOR
-            val numRows = initialGrid.size
-            val numCols = if (numRows > 0) initialGrid[0].size else 0
-            val visited = Array(numRows) { BooleanArray(numCols) { false } }
-            val queue = ArrayDeque<Position>()
+        /** Marks exterior walkable cells by flood-filling from the boundary across floor tiles. */
+        private fun findExteriorWalkableCells(grid: List<List<Tile>>): Array<BooleanArray> {
+            val numRows = grid.size
+            val numCols = grid.firstOrNull()?.size ?: 0
+            val visited = Array(numRows) { BooleanArray(numCols) }
+            if (numRows == 0 || numCols == 0) return visited
 
-            // Enqueue all boundary cells that are not WALL
+            val queue = ArrayDeque<Int>()
+
+            fun enqueue(row: Int, col: Int) {
+                if (!visited[row][col] && grid[row][col] == Tile.FLOOR) {
+                    visited[row][col] = true
+                    queue.add(row * numCols + col)
+                }
+            }
+
+            // Seed BFS from all boundary walkable cells.
             for (col in 0 until numCols) {
-                if (initialGrid[0][col] != Tile.WALL) {
-                    queue.add(Position(0, col))
-                    visited[0][col] = true
-                }
-                if (numRows > 1 && initialGrid[numRows - 1][col] != Tile.WALL) {
-                    queue.add(Position(numRows - 1, col))
-                    visited[numRows - 1][col] = true
-                }
+                enqueue(0, col)
+                if (numRows > 1) enqueue(numRows - 1, col)
             }
             for (row in 1 until numRows - 1) {
-                if (initialGrid[row][0] != Tile.WALL) {
-                    queue.add(Position(row, 0))
-                    visited[row][0] = true
-                }
-                if (numCols > 1 && initialGrid[row][numCols - 1] != Tile.WALL) {
-                    queue.add(Position(row, numCols - 1))
-                    visited[row][numCols - 1] = true
-                }
+                enqueue(row, 0)
+                if (numCols > 1) enqueue(row, numCols - 1)
             }
 
-            // Directions for BFS
-            val directions = listOf(
-                Position(-1, 0),
-                Position(1, 0),
-                Position(0, -1),
-                Position(0, 1)
-            )
+            val dr = intArrayOf(-1, 1, 0, 0)
+            val dc = intArrayOf(0, 0, -1, 1)
 
             while (queue.isNotEmpty()) {
-                val pos = queue.removeFirst()
-                for (dir in directions) {
-                    val newRow = pos.row + dir.row
-                    val newCol = pos.col + dir.col
-                    if (newRow in 0 until numRows && newCol in 0 until numCols) {
-                        if (!visited[newRow][newCol] && initialGrid[newRow][newCol] != Tile.WALL) {
-                            visited[newRow][newCol] = true
-                            queue.add(Position(newRow, newCol))
-                        }
+                val packed = queue.removeFirst()
+                val row = packed / numCols
+                val col = packed % numCols
+
+                for (i in 0..3) {
+                    val nr = row + dr[i]
+                    val nc = col + dc[i]
+                    if (nr in 0 until numRows && nc in 0 until numCols) {
+                        enqueue(nr, nc)
                     }
                 }
             }
 
-            // Build final grid: convert visited exterior cells to EMPTY, others remain the same
-            val finalGrid = List(numRows) { row ->
+            return visited
+        }
+
+        private fun applyExteriorMask(
+            grid: List<List<Tile>>,
+            exterior: Array<BooleanArray>
+        ): List<List<Tile>> {
+            val numRows = grid.size
+            val numCols = grid.firstOrNull()?.size ?: 0
+            return List(numRows) { row ->
                 List(numCols) { col ->
-                    if (visited[row][col]) {
-                        Tile.EMPTY
-                    } else {
-                        initialGrid[row][col]
-                    }
+                    if (exterior[row][col]) Tile.EMPTY else grid[row][col]
                 }
             }
-
-            return Level(name, ascii, finalGrid, playerStart, boxes, puzzleId)
         }
     }
 
