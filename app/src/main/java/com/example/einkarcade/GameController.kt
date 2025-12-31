@@ -18,11 +18,6 @@ class GameController(
 ) {
 
     private val repository = LevelsRepository(context)
-    private val fallbackLevelSet = LevelSet(
-        id = "fallback",
-        name = "No Levels",
-        levels = listOf(Level.fromAscii("No Levels", "@"))
-    )
 
     private val revisionState = mutableLongStateOf(0L)
     val revision: State<Long>
@@ -32,29 +27,18 @@ class GameController(
         revisionState.value = revisionState.value + 1L
     }
 
-    private fun persistLevelChanges() {
-        if (usingFallbackLevelSet) return
-        Thread { repository.saveAllFromSets(levelSets) }.start()
-    }
-
     private fun recordCompletionIfWon() {
         if (gameEngine.isGameWon) {
-            level.markCompleted()
-            persistLevelChanges()
+            val timestamp = repository.updateLastCompletedAt(level)
+            level.markCompleted(timestamp)
         }
     }
 
     private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
-    private val levelSets: List<LevelSet> = run {
-        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
-        val nonEmpty = sets.filter { it.levels.isNotEmpty() }
-        if (nonEmpty.isEmpty()) listOf(fallbackLevelSet) else nonEmpty
-    }
-    private val usingFallbackLevelSet: Boolean = levelSets.size == 1 && levelSets[0].id == fallbackLevelSet.id
+    private var levelSets: List<LevelSet> = emptyList()
 
     private fun persistSelection() {
-        if (usingFallbackLevelSet) return
         lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
     }
 
@@ -78,12 +62,19 @@ class GameController(
     fun getCurrentRating(): Int = level.rating
     fun toggleThumbUp() {
         level.toggleThumbUp()
-        persistLevelChanges()
+        repository.updateRating(level)
         markChanged()
     }
     fun toggleThumbDown() {
         level.toggleThumbDown()
-        persistLevelChanges()
+        repository.updateRating(level)
+        markChanged()
+    }
+
+    fun syncWithServer() {
+        repository.syncWithServer()
+        val sets = loadLevelSets() ?: emptyList()
+        rebuildState(sets)
         markChanged()
     }
 
@@ -109,24 +100,8 @@ class GameController(
     }
 
     init {
-        // Default to first set/level, then restore last selection if present.
-        if (levelSets.isNotEmpty() && levelSets[0].levels.isNotEmpty()) {
-            level = levelsInCurrentSet[currentLevelIndex]
-            lastSelectionStore.load()?.let { (savedSetId, savedLevelName) ->
-                val setIdx = levelSets.indexOfFirst { it.id == savedSetId }
-                if (setIdx != -1) {
-                    currentSetIndex = setIdx
-                }
-                val levelIdx = levelsInCurrentSet.indexOfFirst { it.name == savedLevelName }
-                if (levelIdx != -1) {
-                    currentLevelIndex = levelIdx
-                }
-                level = levelsInCurrentSet[currentLevelIndex]
-            }
-            gameEngine = GameEngine(level)
-            // Persist selection once the controller is constructed.
-            persistSelection()
-        }
+        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
+        rebuildState(sets)
     }
 
     val playerPosition: Position
@@ -192,5 +167,27 @@ class GameController(
         recordCompletionIfWon()
         markChanged()
         return true
+    }
+
+    private fun rebuildState(sets: List<LevelSet>) {
+        val nonEmpty = sets.filter { it.levels.isNotEmpty() }
+        levelSets = nonEmpty
+        currentSetIndex = 0
+        currentLevelIndex = 0
+        if (levelSets.isEmpty()) return
+        level = levelsInCurrentSet[currentLevelIndex]
+        lastSelectionStore.load()?.let { (savedSetId, savedLevelName) ->
+            val setIdx = levelSets.indexOfFirst { it.id == savedSetId }
+            if (setIdx != -1) {
+                currentSetIndex = setIdx
+            }
+            val levelIdx = levelsInCurrentSet.indexOfFirst { it.name == savedLevelName }
+            if (levelIdx != -1) {
+                currentLevelIndex = levelIdx
+            }
+            level = levelsInCurrentSet[currentLevelIndex]
+        }
+        gameEngine = GameEngine(level)
+        persistSelection()
     }
 }

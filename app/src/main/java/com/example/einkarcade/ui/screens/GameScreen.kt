@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +25,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.Alignment
@@ -56,6 +59,7 @@ fun GameScreen(
 ) {
     gameController.revision.value
     val playerPosition = gameController.playerPosition
+    val syncError = remember { mutableStateOf<String?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
         fun handleTap(tappedPosition: Position) {
@@ -292,6 +296,35 @@ fun GameScreen(
                     val selected = currentRating == 1
                     Text(if (selected) "👍✓" else "👍")
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                Button(
+                    onClick = {
+                        syncError.value = null
+                        val handler = Handler(Looper.getMainLooper())
+                        Thread {
+                            try {
+                                gameController.syncWithServer()
+                            } catch (t: Throwable) {
+                                handler.post {
+                                    syncError.value = "Sync failed."
+                                }
+                            }
+                        }.start()
+                    },
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .focusProperties { canFocus = false }
+                ) {
+                    Text("Sync")
+                }
+            }
+            if (syncError.value != null) {
+                Text(
+                    text = syncError.value ?: "",
+                    color = Color.Black,
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                )
             }
         }
 

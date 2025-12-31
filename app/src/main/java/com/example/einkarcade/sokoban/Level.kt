@@ -5,29 +5,31 @@ data class Level(
     val ascii: String,
     val grid: List<List<Tile>>,
     val playerStart: Position,
-    val boxPositions: Set<Position>
+    val boxPositions: Set<Position>,
+    val puzzleId: Int = -1
 )
 {
     // -1 = thumbs down, 0 = none, 1 = thumbs up. Not part of equality/hashCode.
     var rating: Int = 0
         private set
-    var completedAt: Long = 0L
+    var completedAt: String? = null
         private set
 
     val isCompleted: Boolean
-        get() = completedAt > 0L
+        get() = completedAt != null
 
 
     fun setRating(value: Int) {
         rating = value
     }
 
-    fun setCompletedAt(value: Long) {
-        completedAt = value
+
+    fun markCompleted(timestamp: String) {
+        completedAt = timestamp
     }
 
-    fun markCompleted() {
-        completedAt = System.currentTimeMillis()
+    fun setCompletedAt(value: String?) {
+        completedAt = value
     }
 
     fun toggleThumbUp(): Int {
@@ -42,7 +44,7 @@ data class Level(
 
 
     companion object {
-        fun fromAscii(name: String, ascii: String): Level {
+        fun fromAscii(name: String, ascii: String, puzzleId: Int = -1): Level {
             val lines = ascii.lines().dropLastWhile { it.isBlank() }
             val maxWidth = lines.maxOfOrNull { it.length } ?: 0
             var playerStart: Position? = null
@@ -74,7 +76,7 @@ data class Level(
                 }
             }
             requireNotNull(playerStart) { "Player start '@' not found in level" }
-            return Level(name, ascii, grid, playerStart!!, boxes)
+            return Level(name, ascii, grid, playerStart!!, boxes, puzzleId)
         }
     }
 
