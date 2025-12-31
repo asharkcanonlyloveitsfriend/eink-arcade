@@ -40,9 +40,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.einkarcade.GameController
-import com.example.einkarcade.MainActivity
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
+
+private const val CELL_SIZE = 100f
+private const val GRID_OFFSET_X = 50f
+private const val GRID_OFFSET_Y = 50f
 
 private fun drawGameObject(
     position: Position,
@@ -171,8 +174,8 @@ fun GameScreen(
                     .testTag("gameCanvas")
                     .pointerInput(Unit) {
                         detectTapGestures { offset ->
-                            val col = ((offset.x - MainActivity.GRID_OFFSET_X) / MainActivity.CELL_SIZE).toInt()
-                            val row = ((offset.y - MainActivity.GRID_OFFSET_Y) / MainActivity.CELL_SIZE).toInt()
+                            val col = ((offset.x - GRID_OFFSET_X) / CELL_SIZE).toInt()
+                            val row = ((offset.y - GRID_OFFSET_Y) / CELL_SIZE).toInt()
                             if (!gameController.isGameWon &&
                                 row in gameController.tiles.indices &&
                                 col in gameController.tiles[0].indices
@@ -191,8 +194,8 @@ fun GameScreen(
                                         color = Color.Black,
                                         topLeft = offset,
                                         size = Size(
-                                            MainActivity.CELL_SIZE,
-                                            MainActivity.CELL_SIZE
+                                            CELL_SIZE,
+                                            CELL_SIZE
                                         )
                                     )
                                 }
@@ -203,8 +206,8 @@ fun GameScreen(
                                         color = Color.LightGray,
                                         topLeft = offset,
                                         size = Size(
-                                            MainActivity.CELL_SIZE,
-                                            MainActivity.CELL_SIZE
+                                            CELL_SIZE,
+                                            CELL_SIZE
                                         )
                                     )
                                 }
@@ -215,15 +218,15 @@ fun GameScreen(
                 }
 
                 for (position in gameController.boxPositions) {
-                    val padding = MainActivity.CELL_SIZE * 0.2f
+                    val padding = CELL_SIZE * 0.2f
                     val color = if (position == selectedBoxPosition.value) Color.Black else Color.Gray
                     drawGameObject(position) { offset ->
                         drawRect(
                             color = color,
                             topLeft = Offset(offset.x + padding, offset.y + padding),
                             size = Size(
-                                MainActivity.CELL_SIZE - 2 * padding,
-                                MainActivity.CELL_SIZE - 2 * padding
+                                CELL_SIZE - 2 * padding,
+                                CELL_SIZE - 2 * padding
                             )
                         )
                     }
@@ -232,10 +235,10 @@ fun GameScreen(
                 drawGameObject(playerPosition) { offset ->
                     drawCircle(
                         color = Color.Gray,
-                        radius = MainActivity.CELL_SIZE * 0.4f,
+                        radius = CELL_SIZE * 0.4f,
                         center = Offset(
-                            offset.x + MainActivity.CELL_SIZE / 2,
-                            offset.y + MainActivity.CELL_SIZE / 2
+                            offset.x + CELL_SIZE / 2,
+                            offset.y + CELL_SIZE / 2
                         )
                     )
                 }
@@ -354,7 +357,7 @@ fun GameScreen(
 
 private fun Position.toOffset(): Offset {
     return Offset(
-        MainActivity.GRID_OFFSET_X + this.col * MainActivity.CELL_SIZE,
-        MainActivity.GRID_OFFSET_Y + this.row * MainActivity.CELL_SIZE
+        GRID_OFFSET_X + this.col * CELL_SIZE,
+        GRID_OFFSET_Y + this.row * CELL_SIZE
     )
 }

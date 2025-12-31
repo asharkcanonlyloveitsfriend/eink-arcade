@@ -18,10 +18,6 @@ import com.example.einkarcade.ui.theme.EinkArcadeTheme
 class MainActivity : ComponentActivity() {
 
     companion object {
-        internal const val CELL_SIZE = 100f
-        internal const val GRID_OFFSET_X = 50f
-        internal const val GRID_OFFSET_Y = 50f
-
         // Optional factory for injecting a custom GameController (tests)
         var gameControllerFactory: ((Context) -> GameController)? = null
     }
