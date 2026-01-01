@@ -15,13 +15,16 @@ const val GRID_OFFSET_Y = 50f
 
 fun DrawScope.drawGameObject(
     position: Position,
+    cellSize: Float,
+    offsetX: Float,
+    offsetY: Float,
     draw: DrawScope.(Offset) -> Unit
 ) {
-    this.draw(position.toOffset())
+    this.draw(position.toOffset(cellSize, offsetX, offsetY))
 }
 
 fun DrawScope.drawWall(position: Position) {
-    drawGameObject(position) { offset ->
+    drawGameObject(position, CELL_SIZE, GRID_OFFSET_X, GRID_OFFSET_Y) { offset ->
         // Solid black background
         drawRect(
             color = Color.Black,
@@ -78,43 +81,50 @@ fun DrawScope.drawWall(position: Position) {
     }
 }
 
-fun DrawScope.drawFloor(position: Position) {
-    drawGameObject(position) { offset ->
+fun DrawScope.drawFloor(position: Position, cellSize: Float, offsetX: Float, offsetY: Float) {
+    drawGameObject(position, cellSize, offsetX, offsetY) { offset ->
         drawRect(
             color = Color.White,
             topLeft = offset,
-            size = Size(CELL_SIZE, CELL_SIZE)
+            size = Size(cellSize, cellSize)
         )
         drawRect(
             color = Color(0xFFF0F0F0),
             topLeft = offset,
-            size = Size(CELL_SIZE, CELL_SIZE),
+            size = Size(cellSize, cellSize),
             style = Stroke(width = 2f)
         )
     }
 }
 
-fun DrawScope.drawGoal(position: Position) {
-    drawGameObject(position) { offset ->
+fun DrawScope.drawGoal(position: Position, cellSize: Float, offsetX: Float, offsetY: Float) {
+    drawGameObject(position, cellSize, offsetX, offsetY) { offset ->
         drawRect(
             color = Color(0xFFE0E0E0),
             topLeft = offset,
-            size = Size(CELL_SIZE, CELL_SIZE)
+            size = Size(cellSize, cellSize)
         )
         drawRect(
             color = Color.White,
             topLeft = offset,
-            size = Size(CELL_SIZE, CELL_SIZE),
+            size = Size(cellSize, cellSize),
             style = Stroke(width = 2f)
         )
     }
 }
 
-fun DrawScope.drawBox(position: Position, painter: Painter, selected: Boolean) {
-    val offset = position.toOffset()
-    val targetSize = CELL_SIZE * 0.90f
-    val left = offset.x + (CELL_SIZE - targetSize) / 2
-    val top = offset.y + (CELL_SIZE - targetSize) / 2
+fun DrawScope.drawBox(
+    position: Position,
+    painter: Painter,
+    selected: Boolean,
+    cellSize: Float,
+    offsetX: Float,
+    offsetY: Float
+) {
+    val offset = position.toOffset(cellSize, offsetX, offsetY)
+    val targetSize = cellSize * 0.90f
+    val left = offset.x + (cellSize - targetSize) / 2
+    val top = offset.y + (cellSize - targetSize) / 2
 
     // Draw box SVG
     withTransform({
@@ -163,11 +173,17 @@ fun DrawScope.drawBox(position: Position, painter: Painter, selected: Boolean) {
     }
 }
 
-fun DrawScope.drawPlayer(position: Position, painter: Painter) {
-    val offset = position.toOffset()
-    val targetSize = CELL_SIZE * 0.8f
-    val left = offset.x + (CELL_SIZE - targetSize) / 2
-    val top = offset.y + (CELL_SIZE - targetSize) / 2
+fun DrawScope.drawPlayer(
+    position: Position,
+    painter: Painter,
+    cellSize: Float,
+    offsetX: Float,
+    offsetY: Float
+) {
+    val offset = position.toOffset(cellSize, offsetX, offsetY)
+    val targetSize = cellSize * 0.8f
+    val left = offset.x + (cellSize - targetSize) / 2
+    val top = offset.y + (cellSize - targetSize) / 2
 
     withTransform({
         translate(left, top)
@@ -178,9 +194,13 @@ fun DrawScope.drawPlayer(position: Position, painter: Painter) {
     }
 }
 
-fun Position.toOffset(): Offset {
+fun Position.toOffset(
+    cellSize: Float = CELL_SIZE,
+    offsetX: Float = GRID_OFFSET_X,
+    offsetY: Float = GRID_OFFSET_Y
+): Offset {
     return Offset(
-        GRID_OFFSET_X + this.col * CELL_SIZE,
-        GRID_OFFSET_Y + this.row * CELL_SIZE
+        offsetX + this.col * cellSize,
+        offsetY + this.row * cellSize
     )
 }

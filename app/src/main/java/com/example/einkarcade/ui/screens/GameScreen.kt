@@ -1,5 +1,7 @@
+
 package com.example.einkarcade.ui.screens
 
+import kotlin.math.min
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -174,8 +176,22 @@ fun GameScreen(
                     .testTag("gameCanvas")
                     .pointerInput(Unit) {
                         detectTapGestures { offset ->
-                            val col = ((offset.x - GRID_OFFSET_X) / CELL_SIZE).toInt()
-                            val row = ((offset.y - GRID_OFFSET_Y) / CELL_SIZE).toInt()
+                            val rows = gameController.tiles.size
+                            val cols = gameController.tiles.firstOrNull()?.size ?: 0
+                            if (rows == 0 || cols == 0) return@detectTapGestures
+
+                            val tileSizeByWidth = size.width / cols
+                            val tileSizeByHeight = size.height / rows
+                            val cellSize = min(tileSizeByWidth, tileSizeByHeight)
+
+                            val renderedWidth = cellSize * cols
+                            val renderedHeight = cellSize * rows
+
+                            val offsetX = (size.width - renderedWidth) / 2f
+                            val offsetY = (size.height - renderedHeight) / 2f
+
+                            val col = ((offset.x - offsetX) / cellSize).toInt()
+                            val row = ((offset.y - offsetY) / cellSize).toInt()
                             if (!gameController.isGameWon &&
                                 row in gameController.tiles.indices &&
                                 col in gameController.tiles[0].indices
@@ -185,21 +201,36 @@ fun GameScreen(
                         }
                     }
             ) {
+                val rows = gameController.tiles.size
+                val cols = gameController.tiles.firstOrNull()?.size ?: 0
+
+                if (rows == 0 || cols == 0) return@Canvas
+
+                val tileSizeByWidth = size.width / cols
+                val tileSizeByHeight = size.height / rows
+                val cellSize = min(tileSizeByWidth, tileSizeByHeight)
+
+                val renderedWidth = cellSize * cols
+                val renderedHeight = cellSize * rows
+
+                val offsetX = (size.width - renderedWidth) / 2f
+                val offsetY = (size.height - renderedHeight) / 2f
+
                 for ((rowIndex, row) in gameController.tiles.withIndex()) {
                     for ((colIndex, tile) in row.withIndex()) {
                         when (tile) {
-                            Tile.GOAL -> drawGoal(Position(rowIndex, colIndex))
-                            Tile.FLOOR -> drawFloor(Position(rowIndex, colIndex))
+                            Tile.GOAL -> drawGoal(Position(rowIndex, colIndex), cellSize, offsetX, offsetY)
+                            Tile.FLOOR -> drawFloor(Position(rowIndex, colIndex), cellSize, offsetX, offsetY)
                             Tile.WALL, Tile.EMPTY -> {}
                         }
                     }
                 }
 
                 for (position in gameController.boxPositions) {
-                    drawBox(position, boxPainter, position == selectedBoxPosition.value)
+                    drawBox(position, boxPainter, position == selectedBoxPosition.value, cellSize, offsetX, offsetY)
                 }
 
-                drawPlayer(playerPosition, playerPainter)
+                drawPlayer(playerPosition, playerPainter, cellSize, offsetX, offsetY)
             }
 
             Row(
