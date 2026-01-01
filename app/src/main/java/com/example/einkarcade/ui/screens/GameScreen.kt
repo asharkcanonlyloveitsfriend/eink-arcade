@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,6 +59,12 @@ fun GameScreen(
     val playerPainter = painterResource(id = R.drawable.player_slime)
 
     Box(modifier = modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.bg_space),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
         fun handleTap(tappedPosition: Position) {
             val selectedBox = selectedBoxPosition.value
 
@@ -180,10 +188,9 @@ fun GameScreen(
                 for ((rowIndex, row) in gameController.tiles.withIndex()) {
                     for ((colIndex, tile) in row.withIndex()) {
                         when (tile) {
-                            Tile.WALL -> drawWall(Position(rowIndex, colIndex))
                             Tile.GOAL -> drawGoal(Position(rowIndex, colIndex))
                             Tile.FLOOR -> drawFloor(Position(rowIndex, colIndex))
-                            Tile.EMPTY -> {}
+                            Tile.WALL, Tile.EMPTY -> {}
                         }
                     }
                 }
