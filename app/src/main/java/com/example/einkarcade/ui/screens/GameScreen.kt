@@ -1,4 +1,3 @@
-
 package com.example.einkarcade.ui.screens
 
 import kotlin.math.min
@@ -176,8 +175,8 @@ fun GameScreen(
                     .testTag("gameCanvas")
                     .pointerInput(Unit) {
                         detectTapGestures { offset ->
-                            val rows = gameController.tiles.size
-                            val cols = gameController.tiles.firstOrNull()?.size ?: 0
+                            val rows = gameController.tiles.size + 2
+                            val cols = (gameController.tiles.firstOrNull()?.size ?: 0) + 2
                             if (rows == 0 || cols == 0) return@detectTapGestures
 
                             val tileSizeByWidth = size.width / cols
@@ -192,17 +191,19 @@ fun GameScreen(
 
                             val col = ((offset.x - offsetX) / cellSize).toInt()
                             val row = ((offset.y - offsetY) / cellSize).toInt()
+                            val innerRow = row - 1
+                            val innerCol = col - 1
                             if (!gameController.isGameWon &&
-                                row in gameController.tiles.indices &&
-                                col in gameController.tiles[0].indices
+                                innerRow in gameController.tiles.indices &&
+                                innerCol in gameController.tiles[0].indices
                             ) {
-                                handleTap(Position(row, col))
+                                handleTap(Position(innerRow, innerCol))
                             }
                         }
                     }
             ) {
-                val rows = gameController.tiles.size
-                val cols = gameController.tiles.firstOrNull()?.size ?: 0
+                val rows = gameController.tiles.size + 2
+                val cols = (gameController.tiles.firstOrNull()?.size ?: 0) + 2
 
                 if (rows == 0 || cols == 0) return@Canvas
 
@@ -218,19 +219,21 @@ fun GameScreen(
 
                 for ((rowIndex, row) in gameController.tiles.withIndex()) {
                     for ((colIndex, tile) in row.withIndex()) {
+                        val paddedRow = rowIndex + 1
+                        val paddedCol = colIndex + 1
                         when (tile) {
-                            Tile.GOAL -> drawGoal(Position(rowIndex, colIndex), cellSize, offsetX, offsetY)
-                            Tile.FLOOR -> drawFloor(Position(rowIndex, colIndex), cellSize, offsetX, offsetY)
-                            Tile.WALL, Tile.EMPTY -> {}
+                            Tile.GOAL -> drawGoal(Position(paddedRow, paddedCol), cellSize, offsetX, offsetY)
+                            Tile.FLOOR -> drawFloor(Position(paddedRow, paddedCol), cellSize, offsetX, offsetY)
+                            Tile.WALL -> {}
                         }
                     }
                 }
 
                 for (position in gameController.boxPositions) {
-                    drawBox(position, boxPainter, position == selectedBoxPosition.value, cellSize, offsetX, offsetY)
+                    drawBox(Position(position.row + 1, position.col + 1), boxPainter, position == selectedBoxPosition.value, cellSize, offsetX, offsetY)
                 }
 
-                drawPlayer(playerPosition, playerPainter, cellSize, offsetX, offsetY)
+                drawPlayer(Position(playerPosition.row + 1, playerPosition.col + 1), playerPainter, cellSize, offsetX, offsetY)
             }
 
             Row(

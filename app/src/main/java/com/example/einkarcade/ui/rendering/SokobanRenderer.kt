@@ -15,11 +15,8 @@ const val CELL_SIZE = 100f
 const val GRID_OFFSET_X = 50f
 const val GRID_OFFSET_Y = 50f
 
-/**
- * Snap drawing coordinates to whole pixels to avoid subpixel
- * artifacts (especially visible on e-ink displays).
- */
-private fun snap(px: Float): Float =
+// E-ink renders subpixel edges poorly.
+private fun snapToWholePixel(px: Float): Float =
     px.roundToInt().toFloat()
 
 fun DrawScope.drawGameObject(
@@ -73,9 +70,9 @@ fun DrawScope.drawBox(
     offsetY: Float
 ) {
     val offset = position.toOffset(cellSize, offsetX, offsetY)
-    val targetSize = snap(cellSize * 0.90f)
-    val left = snap(offset.x + (cellSize - targetSize) / 2)
-    val top = snap(offset.y + (cellSize - targetSize) / 2)
+    val targetSize = snapToWholePixel(cellSize * 0.90f)
+    val left = snapToWholePixel(offset.x + (cellSize - targetSize) / 2)
+    val top = snapToWholePixel(offset.y + (cellSize - targetSize) / 2)
 
     // Draw box SVG
     withTransform({
@@ -132,9 +129,9 @@ fun DrawScope.drawPlayer(
     offsetY: Float
 ) {
     val offset = position.toOffset(cellSize, offsetX, offsetY)
-    val targetSize = snap(cellSize * 0.8f)
-    val left = snap(offset.x + (cellSize - targetSize) / 2)
-    val top = snap(offset.y + (cellSize - targetSize) / 2)
+    val targetSize = snapToWholePixel(cellSize * 0.8f)
+    val left = snapToWholePixel(offset.x + (cellSize - targetSize) / 2)
+    val top = snapToWholePixel(offset.y + (cellSize - targetSize) / 2)
 
     withTransform({
         translate(left, top)
