@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import com.example.einkarcade.sokoban.Position
@@ -21,11 +22,59 @@ fun DrawScope.drawGameObject(
 
 fun DrawScope.drawWall(position: Position) {
     drawGameObject(position) { offset ->
+        // Solid black background
         drawRect(
             color = Color.Black,
             topLeft = offset,
             size = Size(CELL_SIZE, CELL_SIZE)
         )
+        val seed = position.row * 73856093 xor position.col * 19349663
+
+        // Star density: roughly ~2× previous, but still sparse
+        val starCount = when ((seed and 0x7) % 5) {
+            0 -> 1
+            1 -> 2
+            2 -> 3
+            3 -> 4
+            else -> 0
+        }
+
+        // Cap: never draw more than 1 large star per tile
+        var largeStarUsed = false
+
+        for (i in 0 until starCount) {
+            // Deterministic pseudo-random offsets (spread, not linear)
+            val rx = ((seed shr (i * 3)) and 0xF) / 16f
+            val ry = ((seed shr (i * 5)) and 0xF) / 16f
+
+            val x = offset.x + CELL_SIZE * (0.15f + rx * 0.7f)
+            val y = offset.y + CELL_SIZE * (0.12f + ry * 0.7f)
+
+            // Star size: mostly small, occasional medium, rare large
+            val size = when {
+                !largeStarUsed && (seed shr (i * 7) and 0x3F) == 0 -> {
+                    largeStarUsed = true
+                    4f               // rare large star
+                }
+                (seed shr (i * 4) and 0x3) == 0 -> 3f   // medium stars more common
+                else -> 2f                              // small stars
+            }
+
+            val color =
+                if (size == 2f && (seed shr (i * 6) and 0x1) == 0) {
+                    Color.White          // small bright stars
+                } else if ((seed shr (i * 6) and 0x3) == 0) {
+                    Color.White          // some medium bright stars
+                } else {
+                    Color(0xFFDDDDDD)    // dim stars
+                }
+
+            drawRect(
+                color = color,
+                topLeft = Offset(x, y),
+                size = Size(size, size)
+            )
+        }
     }
 }
 
@@ -36,15 +85,27 @@ fun DrawScope.drawFloor(position: Position) {
             topLeft = offset,
             size = Size(CELL_SIZE, CELL_SIZE)
         )
+        drawRect(
+            color = Color(0xFFF0F0F0),
+            topLeft = offset,
+            size = Size(CELL_SIZE, CELL_SIZE),
+            style = Stroke(width = 2f)
+        )
     }
 }
 
 fun DrawScope.drawGoal(position: Position) {
     drawGameObject(position) { offset ->
         drawRect(
-            color = Color.LightGray,
+            color = Color(0xFFE0E0E0),
             topLeft = offset,
             size = Size(CELL_SIZE, CELL_SIZE)
+        )
+        drawRect(
+            color = Color.White,
+            topLeft = offset,
+            size = Size(CELL_SIZE, CELL_SIZE),
+            style = Stroke(width = 2f)
         )
     }
 }
