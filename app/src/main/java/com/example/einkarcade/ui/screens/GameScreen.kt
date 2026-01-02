@@ -51,6 +51,10 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled._360
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -338,13 +342,36 @@ fun GameScreen(
 
                 val currentRating = gameController.getCurrentRating()
 
+                // --- X (dislike) ---
+                BottomIconButton(
+                    onClick = {
+                        syncSuccess.value = false
+                        syncError.value = null
+                        gameController.toggleThumbDown()
+                    },
+                    icon = if (currentRating == -1) Icons.Filled.Close else Icons.Outlined.Close,
+                    contentDescription = "Dislike level"
+                )
+
+                // --- Heart (like) ---
                 BottomIconButton(
                     onClick = {
                         syncSuccess.value = false
                         syncError.value = null
                         gameController.toggleThumbUp()
                     },
-                    icon = if (currentRating == 1) Icons.Filled.Star else Icons.Outlined.Star,
+                    icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = "Like level"
+                )
+
+                // --- Star (no-op for now) ---
+                BottomIconButton(
+                    onClick = {
+                        // no-op for now (UI only)
+                        syncSuccess.value = false
+                        syncError.value = null
+                    },
+                    icon = Icons.Outlined.Star,
                     contentDescription = "Star level"
                 )
 
