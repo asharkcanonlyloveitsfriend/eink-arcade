@@ -1,39 +1,38 @@
 package com.example.einkarcade.ui.screens
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.focusable
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
-
-import kotlin.math.min
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled._360
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -43,37 +42,33 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import android.os.Handler
-import android.os.Looper
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled._360
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.example.einkarcade.R
 import com.example.einkarcade.GameController
+import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.*
+import kotlin.math.min
 
 
 @Composable
@@ -395,7 +390,6 @@ fun GameScreen(
                     icon = Icons.Filled.ChevronRight,
                     contentDescription = "Next level"
                 )
-
                 val currentRating = gameController.getCurrentRating()
 
                 // --- X (dislike) ---
@@ -405,7 +399,9 @@ fun GameScreen(
                         syncError.value = null
                         gameController.toggleThumbDown()
                     },
-                    icon = if (currentRating == -1) Icons.Filled.Close else Icons.Outlined.Close,
+                    icon = ImageVector.vectorResource(
+                        if (currentRating == -1) R.drawable.ic_dislike_filled else R.drawable.ic_dislike_outline
+                    ),
                     contentDescription = "Dislike level"
                 )
 
@@ -420,16 +416,6 @@ fun GameScreen(
                     contentDescription = "Like level"
                 )
 
-                // --- Star (no-op for now) ---
-                BottomIconButton(
-                    onClick = {
-                        // no-op for now (UI only)
-                        syncSuccess.value = false
-                        syncError.value = null
-                    },
-                    icon = Icons.Outlined.Star,
-                    contentDescription = "Star level"
-                )
 
                 Spacer(modifier = Modifier.weight(1f))
 
