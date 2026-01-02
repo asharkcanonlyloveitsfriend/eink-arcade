@@ -49,8 +49,12 @@ class GameController(
         val idx = levelSets.indexOfFirst { it.id == setId }
         if (idx == -1) return
         currentSetIndex = idx
-        currentLevelIndex = 0
-        level = levelsInCurrentSet[currentLevelIndex]
+
+        val levels = levelsInCurrentSet
+        val firstIncompleteIndex = levels.indexOfFirst { !it.isCompleted }
+        currentLevelIndex = if (firstIncompleteIndex != -1) firstIncompleteIndex else 0
+
+        level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
         persistSelection()
         markChanged()
