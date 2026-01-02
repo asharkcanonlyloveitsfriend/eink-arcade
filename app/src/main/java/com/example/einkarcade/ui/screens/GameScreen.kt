@@ -140,20 +140,24 @@ fun GameScreen(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        val VANISH_STEP_DELAY_MS = 400L
+        val VANISH_BASE_DELAY_MS = 170L
         val WHITE_FLASH_DELAY_MS = 100L
         val INVISIBLE_DELAY_MS = 100L
 
         fun advanceVanish(step: Int, position: Position) {
             val delay = when (step) {
-                0, 1, 2, 3 -> VANISH_STEP_DELAY_MS
-                4 -> INVISIBLE_DELAY_MS
+                0 -> VANISH_BASE_DELAY_MS
+                1 -> (VANISH_BASE_DELAY_MS * 0.75f).toLong()
+                2 -> (VANISH_BASE_DELAY_MS * 0.5f).toLong()
+                3 -> (VANISH_BASE_DELAY_MS * 0.36f).toLong()
+                4 -> (VANISH_BASE_DELAY_MS * 0.2f).toLong()
+                5 -> INVISIBLE_DELAY_MS
                 else -> WHITE_FLASH_DELAY_MS
             }
 
             Handler(Looper.getMainLooper()).postDelayed({
                 val nextStep = step + 1
-                if (nextStep >= 6) {
+                if (nextStep >= 7) {
                     vanishingTile.value = null
                     return@postDelayed
                 }
@@ -369,7 +373,7 @@ fun GameScreen(
                                 val vanish = vanishingTile.value
                                 if (vanish != null && vanish.position == Position(rowIndex, colIndex)) {
                                     when (vanish.step) {
-                                        0, 1, 2, 3 -> {
+                                        0, 1, 2, 3, 4 -> {
                                             val tileLeft = offsetX + paddedCol * cellSize
                                             val tileTop = offsetY + paddedRow * cellSize
                                             val baseSize =
@@ -380,7 +384,8 @@ fun GameScreen(
                                                 0 -> 1.0f
                                                 1 -> 0.75f
                                                 2 -> 0.5f
-                                                else -> 0.3f
+                                                3 -> 0.3f
+                                                else -> 0.18f
                                             }
                                             val size = baseSize * scale
                                             val left = baseLeft + (baseSize - size) / 2
@@ -395,20 +400,31 @@ fun GameScreen(
                                                 else -> Color(0xFF58616C)
                                             }
 
-                                            drawRoundRect(
-                                                color = shade,
-                                                topLeft = androidx.compose.ui.geometry.Offset(
-                                                    left,
-                                                    top
-                                                ),
-                                                size = androidx.compose.ui.geometry.Size(size, size),
-                                                cornerRadius = CornerRadius(innerRadius, innerRadius)
-                                            )
-                                        }
-                                        4 -> {
-                                            // Invisible pause before flash.
+                                            if (vanish.step == 0) {
+                                                drawBox(
+                                                    Position(paddedRow, paddedCol),
+                                                    boxPainter,
+                                                    false,
+                                                    cellSize,
+                                                    offsetX,
+                                                    offsetY
+                                                )
+                                            } else {
+                                                drawRoundRect(
+                                                    color = shade,
+                                                    topLeft = androidx.compose.ui.geometry.Offset(
+                                                        left,
+                                                        top
+                                                    ),
+                                                    size = androidx.compose.ui.geometry.Size(size, size),
+                                                    cornerRadius = CornerRadius(innerRadius, innerRadius)
+                                                )
+                                            }
                                         }
                                         5 -> {
+                                            // Invisible pause before flash.
+                                        }
+                                        6 -> {
                                             // full-tile white flash (not the box)
                                             drawRect(
                                                 color = Color.White,
