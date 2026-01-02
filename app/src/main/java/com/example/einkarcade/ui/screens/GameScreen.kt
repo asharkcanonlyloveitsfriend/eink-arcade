@@ -315,10 +315,7 @@ fun GameScreen(
                     Icon(
                         imageVector = icon,
                         contentDescription = contentDescription,
-                        tint = when (contentDescription) {
-                            "Sync" -> if (syncSuccess.value) Color.White else Color.LightGray
-                            else -> Color.LightGray
-                        }
+                        tint = Color.LightGray
                     )
                 }
             }
@@ -342,7 +339,11 @@ fun GameScreen(
                 val currentRating = gameController.getCurrentRating()
 
                 BottomIconButton(
-                    onClick = { gameController.toggleThumbUp() },
+                    onClick = {
+                        syncSuccess.value = false
+                        syncError.value = null
+                        gameController.toggleThumbUp()
+                    },
                     icon = if (currentRating == 1) Icons.Filled.Star else Icons.Outlined.Star,
                     contentDescription = "Star level"
                 )
