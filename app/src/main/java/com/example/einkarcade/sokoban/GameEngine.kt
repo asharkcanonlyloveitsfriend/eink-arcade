@@ -35,7 +35,11 @@ class GameEngine(private val level: Level) {
 
         val boxMover = BoxMover(gridCopy)
         val boxPath = boxMover.canMoveBox(from, to, playerPosition) ?: return null
-        val finalPlayerPosition = boxPath.last()
+        val finalPlayerPosition = if (boxPath.size >= 2) {
+            boxPath[boxPath.size - 2]
+        } else {
+            boxPath.last()
+        }
 
         // Apply the planned move.
         lastSavedState = gameState.deepCopy()

@@ -63,7 +63,7 @@ class BoxMover(
 
     private fun buildBoxPath(parents: Map<State, State?>, endState: State): List<Position> {
         val reversed = mutableListOf<Position>()
-        var current: State? = parents[endState]
+        var current: State? = endState
         while (current != null) {
             reversed.add(current.box)
             current = parents[current]

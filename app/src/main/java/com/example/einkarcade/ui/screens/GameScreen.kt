@@ -92,11 +92,12 @@ fun GameScreen(
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
     val backDownTime = remember { mutableStateOf<Long?>(null) }
-    val testLineProgress = remember { mutableStateOf(0f) }
-    val testLineShrink = remember { mutableStateOf(0f) }
-    val testLineFade = remember { mutableStateOf(0f) }
-    val testLineActive = remember { mutableStateOf(false) }
-    val testLineTrigger = remember { mutableStateOf(0) }
+    val boxPathProgress = remember { mutableStateOf(0f) }
+    val boxPathShrink = remember { mutableStateOf(0f) }
+    val boxPathFade = remember { mutableStateOf(0f) }
+    val boxPathActive = remember { mutableStateOf(false) }
+    val boxPathTrigger = remember { mutableStateOf(0) }
+    val boxPathPositions = remember { mutableStateOf<List<Position>>(emptyList()) }
     val boxPainter = painterResource(id = R.drawable.box)
     val selectedBoxPainter = painterResource(id = R.drawable.box_selected)
     val playerPainter = painterResource(id = R.drawable.player_slime)
@@ -112,28 +113,28 @@ fun GameScreen(
         focusRequester.requestFocus()
     }
 
-    LaunchedEffect(testLineTrigger.value) {
+    LaunchedEffect(boxPathTrigger.value) {
         val durationMs = 200L
         val stepMs = 10L
         val steps = (durationMs / stepMs).coerceAtLeast(1)
-        testLineActive.value = true
-        testLineProgress.value = 0f
-        testLineShrink.value = 0f
-        testLineFade.value = 0f
+        boxPathActive.value = true
+        boxPathProgress.value = 0f
+        boxPathShrink.value = 0f
+        boxPathFade.value = 0f
         val stepIncrement = 2f / steps.toFloat()
         for (i in 1..steps) {
             delay(stepMs)
-            testLineProgress.value = min(1f, i.toFloat() * stepIncrement)
+            boxPathProgress.value = min(1f, i.toFloat() * stepIncrement)
         }
         for (i in 1..steps) {
             delay(stepMs)
-            testLineShrink.value = min(1f, i.toFloat() / steps.toFloat())
+            boxPathShrink.value = min(1f, i.toFloat() / steps.toFloat())
         }
         for (i in 1..steps) {
             delay(stepMs)
-            testLineFade.value = min(1f, i.toFloat() / steps.toFloat())
+            boxPathFade.value = min(1f, i.toFloat() / steps.toFloat())
         }
-        testLineActive.value = false
+        boxPathActive.value = false
     }
 
     Box(
@@ -221,10 +222,25 @@ fun GameScreen(
                 }
             } else if (selectedBox != null) {
                 selectedBoxPosition.value = null
-                gameController.moveBoxTo(selectedBox, tappedPosition)
+                val boxPath = gameController.moveBoxTo(selectedBox, tappedPosition)
+                if (boxPath != null) {
+                    boxPathPositions.value = boxPath
+                    boxPathTrigger.value += 1
+                }
             } else {
                 gameController.movePlayerTo(tappedPosition)
             }
+        }
+
+        fun buildTestPath(): List<Position> {
+            val lineColIndex = 3
+            val maxRowIndex = gameController.tiles.size - 1
+            val colCount = gameController.tiles.firstOrNull()?.size ?: 0
+            if (lineColIndex !in 0 until colCount || maxRowIndex < 0) {
+                return emptyList()
+            }
+            val endRow = min(6, maxRowIndex)
+            return (0..endRow).map { Position(it, lineColIndex) }
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
@@ -483,23 +499,12 @@ fun GameScreen(
                     }
                 }
 
-                val testLinePath = run {
-                    val lineColIndex = 3
-                    val maxRowIndex = gameController.tiles.size - 1
-                    val colCount = gameController.tiles.firstOrNull()?.size ?: 0
-                    if (lineColIndex !in 0 until colCount || maxRowIndex < 0) {
-                        emptyList()
-                    } else {
-                        val endRow = min(6, maxRowIndex)
-                        (0..endRow).map { Position(it, lineColIndex) }
-                    }
-                }
                 drawBoxPathLine(
-                    isActive = testLineActive.value,
-                    progress = testLineProgress.value,
-                    shrink = testLineShrink.value,
-                    fade = testLineFade.value,
-                    path = testLinePath,
+                    isActive = boxPathActive.value,
+                    progress = boxPathProgress.value,
+                    shrink = boxPathShrink.value,
+                    fade = boxPathFade.value,
+                    path = boxPathPositions.value,
                     cellSize = cellSize,
                     offsetX = offsetX,
                     offsetY = offsetY
@@ -595,7 +600,13 @@ fun GameScreen(
                 Spacer(modifier = Modifier.weight(1f))
 
                 BottomIconButton(
-                    onClick = { testLineTrigger.value += 1 },
+                    onClick = {
+                        val path = buildTestPath()
+                        if (path.isNotEmpty()) {
+                            boxPathPositions.value = path
+                            boxPathTrigger.value += 1
+                        }
+                    },
                     icon = Icons.Filled.Info,
                     contentDescription = "Test animation"
                 )
