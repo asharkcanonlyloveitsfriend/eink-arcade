@@ -47,8 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -69,6 +69,7 @@ import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.*
+import kotlin.math.roundToInt
 import kotlin.math.min
 
 
@@ -139,24 +140,26 @@ fun GameScreen(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        val VANISH_STEP_DELAY_MS = 350L
+        val VANISH_STEP_DELAY_MS = 400L
         val WHITE_FLASH_DELAY_MS = 100L
+        val INVISIBLE_DELAY_MS = 100L
 
         fun advanceVanish(step: Int, position: Position) {
-            if (step >= 4) {
-                vanishingTile.value = null
-                return
+            val delay = when (step) {
+                0, 1, 2, 3 -> VANISH_STEP_DELAY_MS
+                4 -> INVISIBLE_DELAY_MS
+                else -> WHITE_FLASH_DELAY_MS
             }
 
-            val nextStep = step + 1
-            vanishingTile.value = VanishState(position, nextStep)
-
-            val delay = if (nextStep == 3) WHITE_FLASH_DELAY_MS else VANISH_STEP_DELAY_MS
-
-            Handler(Looper.getMainLooper()).postDelayed(
-                { advanceVanish(nextStep, position) },
-                delay
-            )
+            Handler(Looper.getMainLooper()).postDelayed({
+                val nextStep = step + 1
+                if (nextStep >= 6) {
+                    vanishingTile.value = null
+                    return@postDelayed
+                }
+                vanishingTile.value = VanishState(position, nextStep)
+                advanceVanish(nextStep, position)
+            }, delay)
         }
 
         fun handleTap(tappedPosition: Position) {
@@ -366,26 +369,44 @@ fun GameScreen(
                                 val vanish = vanishingTile.value
                                 if (vanish != null && vanish.position == Position(rowIndex, colIndex)) {
                                     when (vanish.step) {
-                                        0, 1, 2 -> {
+                                        0, 1, 2, 3 -> {
+                                            val tileLeft = offsetX + paddedCol * cellSize
+                                            val tileTop = offsetY + paddedRow * cellSize
+                                            val baseSize =
+                                                (cellSize * 0.90f * 0.72f).roundToInt().toFloat()
+                                            val baseLeft = (tileLeft + (cellSize - baseSize) / 2).roundToInt().toFloat()
+                                            val baseTop = (tileTop + (cellSize - baseSize) / 2).roundToInt().toFloat()
                                             val scale = when (vanish.step) {
                                                 0 -> 1.0f
                                                 1 -> 0.75f
-                                                else -> 0.5f
+                                                2 -> 0.5f
+                                                else -> 0.3f
+                                            }
+                                            val size = baseSize * scale
+                                            val left = baseLeft + (baseSize - size) / 2
+                                            val top = baseTop + (baseSize - size) / 2
+                                            val radius = size * (14f / 72f)
+                                            val shade = when (vanish.step) {
+                                                0 -> Color(0xFF6B7280)
+                                                1 -> Color(0xFF646C79)
+                                                2 -> Color(0xFF5E6672)
+                                                else -> Color(0xFF58616C)
                                             }
 
-                                            val size = cellSize * scale
-                                            val left = offsetX + paddedCol * cellSize + (cellSize - size) / 2f
-                                            val top = offsetY + paddedRow * cellSize + (cellSize - size) / 2f
-
-                                            withTransform({
-                                                translate(left, top)
-                                            }) {
-                                                with(boxPainter) {
-                                                    draw(size = androidx.compose.ui.geometry.Size(size, size))
-                                                }
-                                            }
+                                            drawRoundRect(
+                                                color = shade,
+                                                topLeft = androidx.compose.ui.geometry.Offset(
+                                                    left,
+                                                    top
+                                                ),
+                                                size = androidx.compose.ui.geometry.Size(size, size),
+                                                cornerRadius = CornerRadius(radius, radius)
+                                            )
                                         }
-                                        3 -> {
+                                        4 -> {
+                                            // Invisible pause before flash.
+                                        }
+                                        5 -> {
                                             // full-tile white flash (not the box)
                                             drawRect(
                                                 color = Color.White,
