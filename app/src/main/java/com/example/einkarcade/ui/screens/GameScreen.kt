@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
@@ -50,6 +51,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled._360
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.einkarcade.R
 import com.example.einkarcade.GameController
@@ -67,6 +70,7 @@ fun GameScreen(
     gameController.revision.value
     val playerPosition = gameController.playerPosition
     val syncError = remember { mutableStateOf<String?>(null) }
+    val syncSuccess = remember { mutableStateOf(false) }
     val boxPainter = painterResource(id = R.drawable.box)
     val playerPainter = painterResource(id = R.drawable.player_slime)
 
@@ -95,101 +99,124 @@ fun GameScreen(
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            val setExpanded = remember { mutableStateOf(false) }
-            val setOptions = gameController.availableSetOptions
-
-            Box(
+            Row(
                 modifier = Modifier
-                    .padding(16.dp)
-                    .clickable { setExpanded.value = true }
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = gameController.currentSetName,
-                    fontSize = 16.sp,
-                    color = Color.LightGray,
+                // --- Set (top-left) ---
+                val setExpanded = remember { mutableStateOf(false) }
+                val setOptions = gameController.availableSetOptions
+
+                Box(
                     modifier = Modifier
-                        .background(Color.Black, shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-                DropdownMenu(
-                    expanded = setExpanded.value,
-                    onDismissRequest = { setExpanded.value = false }
+                        .clickable { setExpanded.value = true }
                 ) {
-                    Column(
-                        modifier = Modifier.heightIn(max = 800.dp)
-                    ) {
-                        setOptions.forEach { (id, name) ->
-                            val isSelected = name == gameController.currentSetName
-                            DropdownMenuItem(
-                                text = { Text(name) },
-                                onClick = {
-                                    gameController.selectSetById(id)
-                                    setExpanded.value = false
-                                },
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(if (isSelected) Color.LightGray else Color.Transparent)
+                    Text(
+                        text = gameController.currentSetName,
+                        fontSize = 16.sp,
+                        color = Color.LightGray,
+                        modifier = Modifier
+                            .background(
+                                Color.Black,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
                             )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+
+                    DropdownMenu(
+                        expanded = setExpanded.value,
+                        onDismissRequest = { setExpanded.value = false }
+                    ) {
+                        Column(
+                            modifier = Modifier.heightIn(max = 800.dp)
+                        ) {
+                            setOptions.forEach { (id, name) ->
+                                val isSelected = name == gameController.currentSetName
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        gameController.selectSetById(id)
+                                        setExpanded.value = false
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            if (isSelected) Color.LightGray else Color.Transparent
+                                        )
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.padding(bottom = 2.dp))
+                Spacer(modifier = Modifier.weight(1f))
 
-            val levelExpanded = remember { mutableStateOf(false) }
-            val levels = gameController.levels()
-            val currentLevelName = gameController.levelName
-            val selectedLevelIndex = levels.indexOfFirst { it.name == currentLevelName }
-            val levelScrollState = rememberScrollState()
-            val density = LocalDensity.current
-            val itemHeight: Dp = 40.dp
+                // --- Level (top-right, right-aligned) ---
+                val levelExpanded = remember { mutableStateOf(false) }
+                val levels = gameController.levels()
+                val currentLevelName = gameController.levelName
+                val selectedLevelIndex = levels.indexOfFirst { it.name == currentLevelName }
+                val levelScrollState = rememberScrollState()
+                val density = LocalDensity.current
+                val itemHeight: Dp = 40.dp
 
-            Box(
-                modifier = Modifier
-                    .padding(start = 16.dp, bottom = 8.dp)
-                    .clickable { levelExpanded.value = true }
-            ) {
-                Text(
-                    text = gameController.levelName,
-                    fontSize = 16.sp,
-                    color = Color.LightGray,
+                Box(
                     modifier = Modifier
-                        .background(Color.Black, shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-                DropdownMenu(
-                    expanded = levelExpanded.value,
-                    onDismissRequest = { levelExpanded.value = false }
+                        .clickable { levelExpanded.value = true }
                 ) {
-                    LaunchedEffect(levelExpanded.value, selectedLevelIndex) {
-                        if (levelExpanded.value && selectedLevelIndex >= 0) {
-                            val targetIndex = (selectedLevelIndex - 2).coerceAtLeast(0)
-                            val targetOffset = with(density) { (itemHeight * targetIndex).roundToPx() }
-                            levelScrollState.scrollTo(targetOffset)
-                        }
-                    }
-                    Column(
+                    Text(
+                        text = gameController.levelName,
+                        fontSize = 16.sp,
+                        color = Color.LightGray,
                         modifier = Modifier
-                            .heightIn(max = 800.dp)
-                            .verticalScroll(levelScrollState)
-                    ) {
-                        levels.forEach { lvl ->
-                            val completedMark = if (lvl.isCompleted) " ✓" else ""
-                            val ratingBadge = when (lvl.rating) { 1 -> " 👍"; -1 -> " 👎"; else -> "" }
-                            val isSelected = lvl.name == currentLevelName
-                            DropdownMenuItem(
-                                text = { Text(lvl.name + completedMark + ratingBadge) },
-                                onClick = {
-                                    gameController.selectLevel(lvl.name)
-                                    levelExpanded.value = false
-                                },
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(if (isSelected) Color.LightGray else Color.Transparent)
+                            .background(
+                                Color.Black,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
                             )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+
+                    DropdownMenu(
+                        expanded = levelExpanded.value,
+                        onDismissRequest = { levelExpanded.value = false }
+                    ) {
+                        LaunchedEffect(levelExpanded.value, selectedLevelIndex) {
+                            if (levelExpanded.value && selectedLevelIndex >= 0) {
+                                val targetIndex = (selectedLevelIndex - 2).coerceAtLeast(0)
+                                val targetOffset =
+                                    with(density) { (itemHeight * targetIndex).roundToPx() }
+                                levelScrollState.scrollTo(targetOffset)
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 800.dp)
+                                .verticalScroll(levelScrollState)
+                        ) {
+                            levels.forEach { lvl ->
+                                val completedMark = if (lvl.isCompleted) " ✓" else ""
+                                val ratingBadge =
+                                    when (lvl.rating) { 1 -> " 👍"; -1 -> " 👎"; else -> "" }
+                                val isSelected = lvl.name == currentLevelName
+
+                                DropdownMenuItem(
+                                    text = { Text(lvl.name + completedMark + ratingBadge) },
+                                    onClick = {
+                                        gameController.selectLevel(lvl.name)
+                                        levelExpanded.value = false
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            if (isSelected) Color.LightGray else Color.Transparent
+                                        )
+                                )
+                            }
                         }
                     }
                 }
@@ -274,20 +301,24 @@ fun GameScreen(
 
                 Box(
                     modifier = Modifier
+                        .height(48.dp)
                         .background(if (isPressed.value) Color.DarkGray else Color.Black)
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
                             onClick = onClick
                         )
-                        .padding(12.dp)
+                        .padding(horizontal = 12.dp)
                         .focusProperties { canFocus = false },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = contentDescription,
-                        tint = Color.LightGray
+                        tint = when (contentDescription) {
+                            "Sync" -> if (syncSuccess.value) Color.White else Color.LightGray
+                            else -> Color.LightGray
+                        }
                     )
                 }
             }
@@ -321,27 +352,28 @@ fun GameScreen(
                 BottomIconButton(
                     onClick = {
                         syncError.value = null
+                        syncSuccess.value = false
                         val handler = Handler(Looper.getMainLooper())
                         Thread {
                             try {
                                 gameController.syncWithServer()
+                                handler.post {
+                                    syncSuccess.value = true
+                                }
                             } catch (t: Throwable) {
                                 handler.post {
                                     syncError.value = "Sync failed."
+                                    syncSuccess.value = false
                                 }
                             }
                         }.start()
                     },
-                    icon = Icons.Filled.Sync,
+                    icon = when {
+                        syncSuccess.value -> Icons.Filled._360
+                        syncError.value != null -> Icons.Filled.Android
+                        else -> Icons.Filled.Sync
+                    },
                     contentDescription = "Sync"
-                )
-            }
-            if (syncError.value != null) {
-                Text(
-                    text = syncError.value ?: "",
-                    color = Color.Black,
-                    fontSize = 18.sp,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
                 )
             }
         }
