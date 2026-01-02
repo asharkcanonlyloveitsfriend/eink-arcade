@@ -48,14 +48,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -395,66 +388,22 @@ fun GameScreen(
                                             val baseRadius = baseSize * (14f / 72f)
                                             val innerRadius = size * (14f / 72f)
 
-                                            if (vanish.step == 0) {
-                                                drawRoundRect(
-                                                    color = Color(0xFF6B7280),
-                                                    topLeft = androidx.compose.ui.geometry.Offset(
-                                                        baseLeft,
-                                                        baseTop
-                                                    ),
-                                                    size = androidx.compose.ui.geometry.Size(baseSize, baseSize),
-                                                    cornerRadius = CornerRadius(baseRadius, baseRadius)
-                                                )
-                                            } else {
-                                                val mask = Path().apply {
-                                                    fillType = PathFillType.EvenOdd
-                                                    addRoundRect(
-                                                        RoundRect(
-                                                            left = baseLeft,
-                                                            top = baseTop,
-                                                            right = baseLeft + baseSize,
-                                                            bottom = baseTop + baseSize,
-                                                            cornerRadius = CornerRadius(baseRadius, baseRadius)
-                                                        )
-                                                    )
-                                                    addRoundRect(
-                                                        RoundRect(
-                                                            left = left,
-                                                            top = top,
-                                                            right = left + size,
-                                                            bottom = top + size,
-                                                            cornerRadius = CornerRadius(innerRadius, innerRadius)
-                                                        )
-                                                    )
-                                                }
-
-                                                drawIntoCanvas { canvas ->
-                                                    val layerRect = Rect(
-                                                        baseLeft,
-                                                        baseTop,
-                                                        baseLeft + baseSize,
-                                                        baseTop + baseSize
-                                                    )
-                                                    canvas.saveLayer(layerRect, Paint())
-                                                    val boxPaint = Paint().apply {
-                                                        color = Color(0xFF6B7280)
-                                                    }
-                                                    canvas.drawRoundRect(
-                                                        layerRect.left,
-                                                        layerRect.top,
-                                                        layerRect.right,
-                                                        layerRect.bottom,
-                                                        baseRadius,
-                                                        baseRadius,
-                                                        boxPaint
-                                                    )
-                                                    val clearPaint = Paint().apply {
-                                                        blendMode = BlendMode.Clear
-                                                    }
-                                                    canvas.drawPath(mask, clearPaint)
-                                                    canvas.restore()
-                                                }
+                                            val shade = when (vanish.step) {
+                                                0 -> Color(0xFF6B7280)
+                                                1 -> Color(0xFF646C79)
+                                                2 -> Color(0xFF5E6672)
+                                                else -> Color(0xFF58616C)
                                             }
+
+                                            drawRoundRect(
+                                                color = shade,
+                                                topLeft = androidx.compose.ui.geometry.Offset(
+                                                    left,
+                                                    top
+                                                ),
+                                                size = androidx.compose.ui.geometry.Size(size, size),
+                                                cornerRadius = CornerRadius(innerRadius, innerRadius)
+                                            )
                                         }
                                         4 -> {
                                             // Invisible pause before flash.
