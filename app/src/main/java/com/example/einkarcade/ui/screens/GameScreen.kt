@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
@@ -84,6 +85,7 @@ fun GameScreen(
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
     val backDownTime = remember { mutableStateOf<Long?>(null) }
+    val showTestLine = remember { mutableStateOf(false) }
     val boxPainter = painterResource(id = R.drawable.box)
     val playerPainter = painterResource(id = R.drawable.player_slime)
     val focusRequester = remember { FocusRequester() }
@@ -444,6 +446,25 @@ fun GameScreen(
                     }
                 }
 
+                if (showTestLine.value) {
+                    val lineColIndex = 3
+                    val maxRowIndex = (gameController.tiles.size) - 1
+                    if (lineColIndex in (gameController.tiles.firstOrNull()?.indices ?: 0..-1) && maxRowIndex >= 0) {
+                        val startRow = 0
+                        val endRow = min(6, maxRowIndex)
+                        val x = offsetX + (lineColIndex + 1) * cellSize + cellSize / 2
+                        val yStart = offsetY + (startRow + 1) * cellSize + cellSize / 2
+                        val yEnd = offsetY + (endRow + 1) * cellSize + cellSize / 2
+                        drawLine(
+                            color = Color.LightGray,
+                            start = androidx.compose.ui.geometry.Offset(x, yStart),
+                            end = androidx.compose.ui.geometry.Offset(x, yEnd),
+                            strokeWidth = cellSize * 0.2f,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
+                }
+
                 for (position in gameController.boxPositions) {
                     drawBox(Position(position.row + 1, position.col + 1), boxPainter, position == selectedBoxPosition.value, cellSize, offsetX, offsetY)
                 }
@@ -524,6 +545,12 @@ fun GameScreen(
 
 
                 Spacer(modifier = Modifier.weight(1f))
+
+                BottomIconButton(
+                    onClick = { showTestLine.value = !showTestLine.value },
+                    icon = Icons.Filled.BugReport,
+                    contentDescription = "Test animation"
+                )
 
                 BottomIconButton(
                     onClick = {
