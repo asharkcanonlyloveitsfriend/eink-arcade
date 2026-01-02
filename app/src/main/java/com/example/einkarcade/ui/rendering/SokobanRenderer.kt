@@ -64,6 +64,7 @@ fun DrawScope.drawGoal(position: Position, cellSize: Float, offsetX: Float, offs
 fun DrawScope.drawBox(
     position: Position,
     painter: Painter,
+    selectedPainter: Painter,
     selected: Boolean,
     cellSize: Float,
     offsetX: Float,
@@ -73,51 +74,15 @@ fun DrawScope.drawBox(
     val targetSize = snapToWholePixel(cellSize * 0.90f)
     val left = snapToWholePixel(offset.x + (cellSize - targetSize) / 2)
     val top = snapToWholePixel(offset.y + (cellSize - targetSize) / 2)
+    val activePainter = if (selected) selectedPainter else painter
 
     // Draw box SVG
     withTransform({
         translate(left, top)
     }) {
-        with(painter) {
+        with(activePainter) {
             draw(size = Size(targetSize, targetSize))
         }
-    }
-
-    if (selected) {
-        val bracketLength = targetSize * 0.24f
-        val strokeWidth = targetSize * 0.065f
-        val inset = targetSize * 0.075f
-
-        val x0 = left + inset
-        val y0 = top + inset
-        val x1 = left + targetSize - inset - bracketLength
-        val y1 = top + targetSize - inset - bracketLength
-
-        val color = Color.Black
-
-        // Top-left
-        drawRect(color, Offset(x0, y0), Size(bracketLength, strokeWidth))
-        drawRect(color, Offset(x0, y0), Size(strokeWidth, bracketLength))
-
-        // Top-right
-        drawRect(color, Offset(x1, y0), Size(bracketLength, strokeWidth))
-        drawRect(color, Offset(x1 + bracketLength - strokeWidth, y0), Size(strokeWidth, bracketLength))
-
-        // Bottom-left
-        drawRect(color, Offset(x0, y1 + bracketLength - strokeWidth), Size(bracketLength, strokeWidth))
-        drawRect(color, Offset(x0, y1), Size(strokeWidth, bracketLength))
-
-        // Bottom-right
-        drawRect(
-            color,
-            Offset(x1, y1 + bracketLength - strokeWidth),
-            Size(bracketLength, strokeWidth)
-        )
-        drawRect(
-            color,
-            Offset(x1 + bracketLength - strokeWidth, y1),
-            Size(strokeWidth, bracketLength)
-        )
     }
 }
 

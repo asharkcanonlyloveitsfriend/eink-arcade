@@ -26,13 +26,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled._360
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -50,6 +50,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -69,9 +70,13 @@ import com.example.einkarcade.GameController
 import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
-import com.example.einkarcade.ui.rendering.*
-import kotlin.math.roundToInt
+import com.example.einkarcade.ui.rendering.drawBox
+import com.example.einkarcade.ui.rendering.drawFloor
+import com.example.einkarcade.ui.rendering.drawGoal
+import com.example.einkarcade.ui.rendering.drawPlayer
+import kotlinx.coroutines.delay
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 
 @Composable
@@ -85,8 +90,13 @@ fun GameScreen(
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
     val backDownTime = remember { mutableStateOf<Long?>(null) }
-    val showTestLine = remember { mutableStateOf(false) }
+    val testLineProgress = remember { mutableStateOf(0f) }
+    val testLineShrink = remember { mutableStateOf(0f) }
+    val testLineFade = remember { mutableStateOf(0f) }
+    val testLineActive = remember { mutableStateOf(false) }
+    val testLineTrigger = remember { mutableStateOf(0) }
     val boxPainter = painterResource(id = R.drawable.box)
+    val selectedBoxPainter = painterResource(id = R.drawable.box_selected)
     val playerPainter = painterResource(id = R.drawable.player_slime)
     val focusRequester = remember { FocusRequester() }
     data class VanishState(val position: Position, val step: Int)
@@ -98,6 +108,30 @@ fun GameScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(testLineTrigger.value) {
+        val durationMs = 200L
+        val stepMs = 10L
+        val steps = (durationMs / stepMs).coerceAtLeast(1)
+        testLineActive.value = true
+        testLineProgress.value = 0f
+        testLineShrink.value = 0f
+        testLineFade.value = 0f
+        val stepIncrement = 2f / steps.toFloat()
+        for (i in 1..steps) {
+            delay(stepMs)
+            testLineProgress.value = min(1f, i.toFloat() * stepIncrement)
+        }
+        for (i in 1..steps) {
+            delay(stepMs)
+            testLineShrink.value = min(1f, i.toFloat() / steps.toFloat())
+        }
+        for (i in 1..steps) {
+            delay(stepMs)
+            testLineFade.value = min(1f, i.toFloat() / steps.toFloat())
+        }
+        testLineActive.value = false
     }
 
     Box(
@@ -406,6 +440,7 @@ fun GameScreen(
                                                 drawBox(
                                                     Position(paddedRow, paddedCol),
                                                     boxPainter,
+                                                    selectedBoxPainter,
                                                     false,
                                                     cellSize,
                                                     offsetX,
@@ -446,27 +481,50 @@ fun GameScreen(
                     }
                 }
 
-                if (showTestLine.value) {
+                if (testLineActive.value) {
                     val lineColIndex = 3
                     val maxRowIndex = (gameController.tiles.size) - 1
                     if (lineColIndex in (gameController.tiles.firstOrNull()?.indices ?: 0..-1) && maxRowIndex >= 0) {
                         val startRow = 0
                         val endRow = min(6, maxRowIndex)
                         val x = offsetX + (lineColIndex + 1) * cellSize + cellSize / 2
-                        val yStart = offsetY + (startRow + 1) * cellSize + cellSize / 2
-                        val yEnd = offsetY + (endRow + 1) * cellSize + cellSize / 2
-                        drawLine(
-                            color = Color.LightGray,
-                            start = androidx.compose.ui.geometry.Offset(x, yStart),
-                            end = androidx.compose.ui.geometry.Offset(x, yEnd),
-                            strokeWidth = cellSize * 0.2f,
-                            cap = androidx.compose.ui.graphics.StrokeCap.Round
-                        )
+                        val yStartBase = offsetY + (startRow + 1) * cellSize + cellSize / 2
+                        val yEndFull = offsetY + (endRow + 1) * cellSize + cellSize / 2
+                        val yEnd = yStartBase + (yEndFull - yStartBase) * testLineProgress.value
+                        val yStart = yStartBase + (yEnd - yStartBase) * testLineShrink.value
+                        val strokeWidth = cellSize * 0.2f
+                        if (testLineFade.value < 1f) {
+                            if (yEnd > yStart) {
+                                drawLine(
+                                    color = Color.LightGray,
+                                    start = androidx.compose.ui.geometry.Offset(x, yStart),
+                                    end = androidx.compose.ui.geometry.Offset(x, yEnd),
+                                    strokeWidth = strokeWidth,
+                                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                )
+                            } else {
+                                val fadeColor = lerp(Color.LightGray, Color.White, testLineFade.value)
+                                    .copy(alpha = 1f - testLineFade.value)
+                                drawCircle(
+                                    color = fadeColor,
+                                    radius = strokeWidth / 2,
+                                    center = androidx.compose.ui.geometry.Offset(x, yEnd)
+                                )
+                            }
+                        }
                     }
                 }
 
                 for (position in gameController.boxPositions) {
-                    drawBox(Position(position.row + 1, position.col + 1), boxPainter, position == selectedBoxPosition.value, cellSize, offsetX, offsetY)
+                    drawBox(
+                        Position(position.row + 1, position.col + 1),
+                        boxPainter,
+                        selectedBoxPainter,
+                        position == selectedBoxPosition.value,
+                        cellSize,
+                        offsetX,
+                        offsetY
+                    )
                 }
 
                 drawPlayer(Position(playerPosition.row + 1, playerPosition.col + 1), playerPainter, cellSize, offsetX, offsetY)
@@ -508,13 +566,13 @@ fun GameScreen(
             ) {
                 BottomIconButton(
                     onClick = { gameController.previousLevel() },
-                    icon = Icons.Filled.ChevronLeft,
+                    icon = Icons.Filled.ArrowBack,
                     contentDescription = "Previous level"
                 )
 
                 BottomIconButton(
                     onClick = { gameController.nextLevel() },
-                    icon = Icons.Filled.ChevronRight,
+                    icon = Icons.Filled.ArrowForward,
                     contentDescription = "Next level"
                 )
                 val currentRating = gameController.getCurrentRating()
@@ -547,8 +605,8 @@ fun GameScreen(
                 Spacer(modifier = Modifier.weight(1f))
 
                 BottomIconButton(
-                    onClick = { showTestLine.value = !showTestLine.value },
-                    icon = Icons.Filled.BugReport,
+                    onClick = { testLineTrigger.value += 1 },
+                    icon = Icons.Filled.Info,
                     contentDescription = "Test animation"
                 )
 
@@ -572,9 +630,9 @@ fun GameScreen(
                         }.start()
                     },
                     icon = when {
-                        syncSuccess.value -> Icons.Filled._360
-                        syncError.value != null -> Icons.Filled.Android
-                        else -> Icons.Filled.Sync
+                        syncSuccess.value -> Icons.Filled.Check
+                        syncError.value != null -> Icons.Filled.Warning
+                        else -> Icons.Filled.Refresh
                     },
                     contentDescription = "Sync"
                 )
