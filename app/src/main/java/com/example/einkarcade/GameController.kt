@@ -165,12 +165,11 @@ class GameController(
         return changed
     }
 
-    fun moveBoxTo(boxFrom: Position, boxTo: Position): Boolean {
-        val changed = gameEngine.moveBoxTo(boxFrom, boxTo)
-        if (!changed) return false
+    fun moveBoxTo(boxFrom: Position, boxTo: Position): List<Position>? {
+        val boxPath = gameEngine.moveBoxTo(boxFrom, boxTo) ?: return null
         recordCompletionIfWon()
         markChanged()
-        return true
+        return boxPath
     }
 
     private fun rebuildState(sets: List<LevelSet>) {

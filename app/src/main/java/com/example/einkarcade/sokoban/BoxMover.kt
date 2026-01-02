@@ -3,18 +3,20 @@ package com.example.einkarcade.sokoban
 class BoxMover(
     private val staticGrid: Array<Array<Boolean>>
 ) {
+    private data class State(val box: Position, val player: Position)
 
-    fun canMoveBox(from: Position, to: Position, playerStart: Position): Position? {
-        if (from == to) return playerStart
+    fun canMoveBox(from: Position, to: Position, playerStart: Position): List<Position>? {
+        if (from == to) return null
         val numRows = staticGrid.size
         val numCols = staticGrid[0].size
 
-        data class State(val box: Position, val player: Position)
-
         val visited = mutableSetOf<Pair<Position, Position>>()
+        val parents = mutableMapOf<State, State?>()
         val queue = ArrayDeque<State>()
-        queue.add(State(from, playerStart))
+        val startState = State(from, playerStart)
+        queue.add(startState)
         visited.add(from to playerStart)
+        parents[startState] = null
 
         val directions = listOf(
             Position(-1, 0), Position(1, 0),
@@ -27,7 +29,9 @@ class BoxMover(
 
         while (queue.isNotEmpty()) {
             val (box, player) = queue.removeFirst()
-            if (box == to) return player
+            if (box == to) {
+                return buildBoxPath(parents, State(box, player))
+            }
 
             for (dir in directions) {
                 val newBox = Position(box.row + dir.row, box.col + dir.col)
@@ -46,6 +50,7 @@ class BoxMover(
                         val newState = State(newBox, newPlayer)
                         if ((newBox to newPlayer) !in visited) {
                             visited.add(newBox to newPlayer)
+                            parents[newState] = State(box, player)
                             queue.add(newState)
                         }
                     }
@@ -54,6 +59,17 @@ class BoxMover(
         }
 
         return null
+    }
+
+    private fun buildBoxPath(parents: Map<State, State?>, endState: State): List<Position> {
+        val reversed = mutableListOf<Position>()
+        var current: State? = parents[endState]
+        while (current != null) {
+            reversed.add(current.box)
+            current = parents[current]
+        }
+        reversed.reverse()
+        return reversed
     }
 
     private fun pathfinderWithBoxAt(box: Position): Pathfinder {

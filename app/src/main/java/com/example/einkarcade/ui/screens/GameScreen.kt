@@ -49,8 +49,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -481,39 +483,27 @@ fun GameScreen(
                     }
                 }
 
-                if (testLineActive.value) {
+                val testLinePath = run {
                     val lineColIndex = 3
-                    val maxRowIndex = (gameController.tiles.size) - 1
-                    if (lineColIndex in (gameController.tiles.firstOrNull()?.indices ?: 0..-1) && maxRowIndex >= 0) {
-                        val startRow = 0
+                    val maxRowIndex = gameController.tiles.size - 1
+                    val colCount = gameController.tiles.firstOrNull()?.size ?: 0
+                    if (lineColIndex !in 0 until colCount || maxRowIndex < 0) {
+                        emptyList()
+                    } else {
                         val endRow = min(6, maxRowIndex)
-                        val x = offsetX + (lineColIndex + 1) * cellSize + cellSize / 2
-                        val yStartBase = offsetY + (startRow + 1) * cellSize + cellSize / 2
-                        val yEndFull = offsetY + (endRow + 1) * cellSize + cellSize / 2
-                        val yEnd = yStartBase + (yEndFull - yStartBase) * testLineProgress.value
-                        val yStart = yStartBase + (yEnd - yStartBase) * testLineShrink.value
-                        val strokeWidth = cellSize * 0.2f
-                        if (testLineFade.value < 1f) {
-                            if (yEnd > yStart) {
-                                drawLine(
-                                    color = Color.LightGray,
-                                    start = androidx.compose.ui.geometry.Offset(x, yStart),
-                                    end = androidx.compose.ui.geometry.Offset(x, yEnd),
-                                    strokeWidth = strokeWidth,
-                                    cap = androidx.compose.ui.graphics.StrokeCap.Round
-                                )
-                            } else {
-                                val fadeColor = lerp(Color.LightGray, Color.White, testLineFade.value)
-                                    .copy(alpha = 1f - testLineFade.value)
-                                drawCircle(
-                                    color = fadeColor,
-                                    radius = strokeWidth / 2,
-                                    center = androidx.compose.ui.geometry.Offset(x, yEnd)
-                                )
-                            }
-                        }
+                        (0..endRow).map { Position(it, lineColIndex) }
                     }
                 }
+                drawBoxPathLine(
+                    isActive = testLineActive.value,
+                    progress = testLineProgress.value,
+                    shrink = testLineShrink.value,
+                    fade = testLineFade.value,
+                    path = testLinePath,
+                    cellSize = cellSize,
+                    offsetX = offsetX,
+                    offsetY = offsetY
+                )
 
                 for (position in gameController.boxPositions) {
                     drawBox(
@@ -666,5 +656,78 @@ fun GameScreen(
                 }
             }
         }
+    }
+}
+
+private fun DrawScope.drawBoxPathLine(
+    isActive: Boolean,
+    progress: Float,
+    shrink: Float,
+    fade: Float,
+    path: List<Position>,
+    cellSize: Float,
+    offsetX: Float,
+    offsetY: Float
+) {
+    if (!isActive) return
+    if (path.size < 2) return
+    if (fade >= 1f) return
+
+    val points = path.map { position ->
+        Offset(
+            offsetX + (position.col + 1) * cellSize + cellSize / 2,
+            offsetY + (position.row + 1) * cellSize + cellSize / 2
+        )
+    }
+
+    val totalSegments = points.size - 1
+    val endT = (progress.coerceIn(0f, 1f) * totalSegments.toFloat())
+    val startT = endT * shrink.coerceIn(0f, 1f)
+    val startSegment = startT.toInt().coerceIn(0, totalSegments - 1)
+    val endSegment = endT.toInt().coerceIn(0, totalSegments)
+    val startFraction = startT - startSegment
+    val endFraction = endT - endSegment
+
+    fun interpolateOffset(start: Offset, end: Offset, t: Float): Offset {
+        return Offset(
+            start.x + (end.x - start.x) * t,
+            start.y + (end.y - start.y) * t
+        )
+    }
+
+    val startPoint = interpolateOffset(points[startSegment], points[startSegment + 1], startFraction)
+    val endPoint = if (endSegment >= totalSegments) {
+        points.last()
+    } else {
+        interpolateOffset(points[endSegment], points[endSegment + 1], endFraction)
+    }
+
+    val strokeWidth = cellSize * 0.2f
+    val drawPoints = mutableListOf(startPoint)
+    for (index in (startSegment + 1)..endSegment) {
+        if (index in points.indices) {
+            drawPoints.add(points[index])
+        }
+    }
+    drawPoints.add(endPoint)
+
+    if (drawPoints.size >= 2) {
+        for (index in 0 until drawPoints.size - 1) {
+            drawLine(
+                color = Color.LightGray,
+                start = drawPoints[index],
+                end = drawPoints[index + 1],
+                strokeWidth = strokeWidth,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        }
+    } else {
+        val fadeColor = lerp(Color.LightGray, Color.White, fade)
+            .copy(alpha = 1f - fade)
+        drawCircle(
+            color = fadeColor,
+            radius = strokeWidth / 2,
+            center = drawPoints.first()
+        )
     }
 }

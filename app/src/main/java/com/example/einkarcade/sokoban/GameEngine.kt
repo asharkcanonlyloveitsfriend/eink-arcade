@@ -24,9 +24,9 @@ class GameEngine(private val level: Level) {
         return true
     }
 
-    fun moveBoxTo(from: Position, to: Position): Boolean {
-        if (isGameWon) return false
-        if (!hasBoxAt(from)) return false
+    fun moveBoxTo(from: Position, to: Position): List<Position>? {
+        if (isGameWon) return null
+        if (!hasBoxAt(from)) return null
 
         // Plan a multi-push move using BoxMover. The walkable grid treats boxes as obstacles,
         // so mark the starting box square walkable for the planning step.
@@ -34,13 +34,14 @@ class GameEngine(private val level: Level) {
         gridCopy[from.row][from.col] = true
 
         val boxMover = BoxMover(gridCopy)
-        val finalPlayerPosition = boxMover.canMoveBox(from, to, playerPosition) ?: return false
+        val boxPath = boxMover.canMoveBox(from, to, playerPosition) ?: return null
+        val finalPlayerPosition = boxPath.last()
 
         // Apply the planned move.
         lastSavedState = gameState.deepCopy()
         gameState.moveBox(from, to)
         gameState.movePlayer(finalPlayerPosition)
-        return true
+        return boxPath
     }
 
     fun movePlayerTo(position: Position): Boolean {
