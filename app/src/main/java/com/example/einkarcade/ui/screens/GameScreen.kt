@@ -1,5 +1,16 @@
 package com.example.einkarcade.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import android.os.SystemClock
+
 import kotlin.math.min
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -75,10 +86,55 @@ fun GameScreen(
     val playerPosition = gameController.playerPosition
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
+    val backDownTime = remember { mutableStateOf<Long?>(null) }
     val boxPainter = painterResource(id = R.drawable.box)
     val playerPainter = painterResource(id = R.drawable.player_slime)
+    val focusRequester = remember { FocusRequester() }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    BackHandler(enabled = true) {
+        // handled manually via key events below
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.key == Key.Back) {
+                    when (event.type) {
+                        KeyEventType.KeyDown -> {
+                            if (backDownTime.value == null) {
+                                backDownTime.value = SystemClock.elapsedRealtime()
+                            }
+                            true
+                        }
+                        KeyEventType.KeyUp -> {
+                            val downTime = backDownTime.value
+                            backDownTime.value = null
+                            if (downTime != null) {
+                                val duration = SystemClock.elapsedRealtime() - downTime
+                                if (duration >= 500) {
+                                    // Long press → Restart
+                                    gameController.restart()
+                                } else {
+                                    // Short press → Undo
+                                    gameController.undo()
+                                }
+                            }
+                            true
+                        }
+                        else -> false
+                    }
+                } else {
+                    false
+                }
+            }
+    ) {
         Image(
             painter = painterResource(id = R.drawable.bg_space),
             contentDescription = null,
