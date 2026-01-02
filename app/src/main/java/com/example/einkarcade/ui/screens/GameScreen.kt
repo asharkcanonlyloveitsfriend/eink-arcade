@@ -85,6 +85,7 @@ fun GameScreen(
     val boxPainter = painterResource(id = R.drawable.box)
     val playerPainter = painterResource(id = R.drawable.player_slime)
     val focusRequester = remember { FocusRequester() }
+    val flashingWall = remember { mutableStateOf<Position?>(null) }
 
     BackHandler(enabled = true) {
         // handled manually via key events below
@@ -137,6 +138,14 @@ fun GameScreen(
             contentScale = ContentScale.Crop
         )
         fun handleTap(tappedPosition: Position) {
+            val tile = gameController.tiles[tappedPosition.row][tappedPosition.col]
+            if (tile == Tile.WALL) {
+                flashingWall.value = tappedPosition
+                Handler(Looper.getMainLooper()).postDelayed({
+                    flashingWall.value = null
+                }, 120)
+                return
+            }
             val selectedBox = selectedBoxPosition.value
 
             if (gameController.boxPositions.contains(tappedPosition)) {
@@ -333,7 +342,21 @@ fun GameScreen(
                         when (tile) {
                             Tile.GOAL -> drawGoal(Position(paddedRow, paddedCol), cellSize, offsetX, offsetY)
                             Tile.FLOOR -> drawFloor(Position(paddedRow, paddedCol), cellSize, offsetX, offsetY)
-                            Tile.WALL -> {}
+                            Tile.WALL -> {
+                                val isFlashing = flashingWall.value == Position(rowIndex, colIndex)
+                                if (isFlashing) {
+                                    drawRect(
+                                        color = Color.White,
+                                        topLeft = androidx.compose.ui.geometry.Offset(
+                                            offsetX + paddedCol * cellSize,
+                                            offsetY + paddedRow * cellSize
+                                        ),
+                                        size = androidx.compose.ui.geometry.Size(cellSize, cellSize)
+                                    )
+                                } else {
+                                    // no-op: walls are invisible; background shows through
+                                }
+                            }
                         }
                     }
                 }
