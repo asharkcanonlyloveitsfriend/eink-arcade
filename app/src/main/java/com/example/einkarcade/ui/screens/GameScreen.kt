@@ -48,6 +48,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -138,17 +139,23 @@ fun GameScreen(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
+        val VANISH_STEP_DELAY_MS = 350L
+        val WHITE_FLASH_DELAY_MS = 100L
+
         fun advanceVanish(step: Int, position: Position) {
             if (step >= 4) {
                 vanishingTile.value = null
                 return
             }
 
-            vanishingTile.value = VanishState(position, step + 1)
+            val nextStep = step + 1
+            vanishingTile.value = VanishState(position, nextStep)
+
+            val delay = if (nextStep == 3) WHITE_FLASH_DELAY_MS else VANISH_STEP_DELAY_MS
 
             Handler(Looper.getMainLooper()).postDelayed(
-                { advanceVanish(step + 1, position) },
-                100
+                { advanceVanish(nextStep, position) },
+                delay
             )
         }
 
@@ -359,48 +366,27 @@ fun GameScreen(
                                 val vanish = vanishingTile.value
                                 if (vanish != null && vanish.position == Position(rowIndex, colIndex)) {
                                     when (vanish.step) {
-                                        0 -> {
-                                            // normal-size dark box
-                                            drawRect(
-                                                color = Color.DarkGray,
-                                                topLeft = androidx.compose.ui.geometry.Offset(
-                                                    offsetX + paddedCol * cellSize + cellSize * 0.1f,
-                                                    offsetY + paddedRow * cellSize + cellSize * 0.1f
-                                                ),
-                                                size = androidx.compose.ui.geometry.Size(
-                                                    cellSize * 0.8f,
-                                                    cellSize * 0.8f
-                                                )
-                                            )
-                                        }
-                                        1 -> {
-                                            drawRect(
-                                                color = Color.DarkGray,
-                                                topLeft = androidx.compose.ui.geometry.Offset(
-                                                    offsetX + paddedCol * cellSize + cellSize * 0.2f,
-                                                    offsetY + paddedRow * cellSize + cellSize * 0.2f
-                                                ),
-                                                size = androidx.compose.ui.geometry.Size(
-                                                    cellSize * 0.6f,
-                                                    cellSize * 0.6f
-                                                )
-                                            )
-                                        }
-                                        2 -> {
-                                            drawRect(
-                                                color = Color.Black,
-                                                topLeft = androidx.compose.ui.geometry.Offset(
-                                                    offsetX + paddedCol * cellSize + cellSize * 0.3f,
-                                                    offsetY + paddedRow * cellSize + cellSize * 0.3f
-                                                ),
-                                                size = androidx.compose.ui.geometry.Size(
-                                                    cellSize * 0.4f,
-                                                    cellSize * 0.4f
-                                                )
-                                            )
+                                        0, 1, 2 -> {
+                                            val scale = when (vanish.step) {
+                                                0 -> 1.0f
+                                                1 -> 0.75f
+                                                else -> 0.5f
+                                            }
+
+                                            val size = cellSize * scale
+                                            val left = offsetX + paddedCol * cellSize + (cellSize - size) / 2f
+                                            val top = offsetY + paddedRow * cellSize + (cellSize - size) / 2f
+
+                                            withTransform({
+                                                translate(left, top)
+                                            }) {
+                                                with(boxPainter) {
+                                                    draw(size = androidx.compose.ui.geometry.Size(size, size))
+                                                }
+                                            }
                                         }
                                         3 -> {
-                                            // full-tile white flash
+                                            // full-tile white flash (not the box)
                                             drawRect(
                                                 color = Color.White,
                                                 topLeft = androidx.compose.ui.geometry.Offset(
