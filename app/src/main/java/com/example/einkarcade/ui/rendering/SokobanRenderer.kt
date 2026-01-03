@@ -89,6 +89,7 @@ fun DrawScope.drawBox(
 fun DrawScope.drawPlayer(
     position: Position,
     painter: Painter,
+    flipX: Boolean,
     cellSize: Float,
     offsetX: Float,
     offsetY: Float
@@ -100,6 +101,9 @@ fun DrawScope.drawPlayer(
 
     withTransform({
         translate(left, top)
+        if (flipX) {
+            scale(-1f, 1f, pivot = Offset(targetSize / 2f, targetSize / 2f))
+        }
     }) {
         with(painter) {
             draw(size = Size(targetSize, targetSize))
