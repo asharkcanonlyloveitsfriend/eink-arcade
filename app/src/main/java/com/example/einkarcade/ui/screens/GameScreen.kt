@@ -73,6 +73,7 @@ import com.example.einkarcade.ui.rendering.drawVanishingBox
 import com.example.einkarcade.ui.rendering.drawFloor
 import com.example.einkarcade.ui.rendering.drawGoal
 import com.example.einkarcade.ui.rendering.drawPlayer
+import kotlinx.coroutines.delay
 import kotlin.math.min
 
 
@@ -95,8 +96,12 @@ fun GameScreen(
     val boxPainter = painterResource(id = R.drawable.box)
     val selectedBoxPainter = painterResource(id = R.drawable.box_selected)
     val playerPainter = painterResource(id = R.drawable.player_slime)
+    val openEyesPainter = painterResource(id = R.drawable.player_eyes_open)
+    val blinkEyesPainter = painterResource(id = R.drawable.player_eyes_blink)
     val focusRequester = remember { FocusRequester() }
     val vanishAnimation = rememberVanishAnimationState()
+
+    val isBlinking = remember { mutableStateOf(false) }
 
     BackHandler(enabled = true) {
         // handled manually via key events below
@@ -104,6 +109,15 @@ fun GameScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1500L)
+            isBlinking.value = true
+            delay(350L)
+            isBlinking.value = false
+        }
     }
 
     Box(
@@ -404,6 +418,13 @@ fun GameScreen(
                 drawPlayer(
                     Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
                     playerPainter,
+                    cellSize,
+                    offsetX,
+                    offsetY
+                )
+                drawPlayer(
+                    Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
+                    if (isBlinking.value) blinkEyesPainter else openEyesPainter,
                     cellSize,
                     offsetX,
                     offsetY

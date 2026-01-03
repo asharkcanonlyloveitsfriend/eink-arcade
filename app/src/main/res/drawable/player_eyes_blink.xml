@@ -4,6 +4,16 @@
     android:viewportWidth="100"
     android:viewportHeight="100">
 
+    <!-- Clear / background fill for left eye region -->
+    <path
+        android:pathData="M31,37h14v10h-14z"
+        android:fillColor="#9ca3af"/>
+
+    <!-- Clear / background fill for right eye region -->
+    <path
+        android:pathData="M55,37h14v10h-14z"
+        android:fillColor="#9ca3af"/>
+
     <!-- Left eye blink -->
     <path
         android:pathData="M31,41h14v3h-14z"
