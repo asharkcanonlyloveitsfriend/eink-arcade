@@ -103,7 +103,7 @@ fun GameScreen(
 
     val isBlinking = remember { mutableStateOf(false) }
     val blinkPulse = remember { mutableStateOf(0) }
-    val lastPushDirection = remember { mutableStateOf(0) }
+    val faceLeft = remember { mutableStateOf(false) }
 
     BackHandler(enabled = true) {
         // handled manually via key events below
@@ -170,22 +170,18 @@ fun GameScreen(
                     blinkPulse.value += 1
                     return
                 }
-                if (boxPath.size >= 2) {
-                    val previous = boxPath[boxPath.size - 2]
-                    val current = boxPath.last()
-                    if (previous.row == current.row) {
-                        val deltaCol = current.col - previous.col
-                        if (deltaCol != 0) {
-                            lastPushDirection.value = if (deltaCol > 0) 1 else -1
-                        }
-                    }
-                }
+                faceLeft.value = false
+                val previous = boxPath[boxPath.size - 2]
+                val current = boxPath.last()
+                val pushLeft = previous.row == current.row && current.col < previous.col
                 val lastPosition = boxPath.last()
                 if (gameController.tiles[lastPosition.row][lastPosition.col] == Tile.WALL) {
                     vanishAnimation.start(lastPosition)
                     blinkPulse.value += 1
                 }
-                boxPathAnimation.start(boxPath, gameController.playerPosition)
+                boxPathAnimation.start(boxPath, gameController.playerPosition) {
+                    faceLeft.value = pushLeft
+                }
             }
 
             val tile = gameController.tiles[tappedPosition.row][tappedPosition.col]
@@ -210,6 +206,7 @@ fun GameScreen(
                 attemptBoxMove(selectedBox)
             } else {
                 gameController.movePlayerTo(tappedPosition)
+                faceLeft.value = false
             }
         }
 
@@ -431,7 +428,7 @@ fun GameScreen(
                 }
 
                 val drawnPlayerPosition = displayedPlayerPosition
-                val flipPlayer = lastPushDirection.value < 0
+                val flipPlayer = faceLeft.value
                 drawPlayer(
                     Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
                     playerPainter,

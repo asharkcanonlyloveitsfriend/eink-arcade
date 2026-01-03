@@ -16,13 +16,15 @@ internal class BoxPathAnimationState(
     private val trigger: MutableState<Int>,
     private val pendingPlayerPosition: MutableState<Position?>,
     private val holdPlayerPosition: MutableState<Boolean>,
-    private val displayedPlayerPosition: MutableState<Position>
+    private val displayedPlayerPosition: MutableState<Position>,
+    private val onArrive: MutableState<(() -> Unit)?>
 ) {
-    fun start(path: List<Position>, pendingPlayer: Position) {
+    fun start(path: List<Position>, pendingPlayer: Position, onArrive: (() -> Unit)? = null) {
         require(path.size >= 2) { "Box path requires at least two points." }
         holdPlayerPosition.value = true
         pendingPlayerPosition.value = pendingPlayer
         this.path.value = path
+        this.onArrive.value = onArrive
         trigger.value += 1
     }
 
@@ -43,6 +45,7 @@ internal fun rememberBoxPathAnimationState(): BoxPathAnimationState {
     val pendingPlayerPosition = remember { mutableStateOf<Position?>(null) }
     val holdPlayerPosition = remember { mutableStateOf(false) }
     val displayedPlayerPosition = remember { mutableStateOf(Position(0, 0)) }
+    val onArrive = remember { mutableStateOf<(() -> Unit)?>(null) }
 
     LaunchedEffect(trigger.value) {
         if (trigger.value == 0) return@LaunchedEffect
@@ -56,6 +59,8 @@ internal fun rememberBoxPathAnimationState(): BoxPathAnimationState {
             shrink.value = min(1f, i.toFloat() / steps.toFloat())
         }
         isActive.value = false
+        onArrive.value?.invoke()
+        onArrive.value = null
         val pending = requireNotNull(pendingPlayerPosition.value) {
             "Box path animation finished without a pending player position."
         }
@@ -71,6 +76,7 @@ internal fun rememberBoxPathAnimationState(): BoxPathAnimationState {
         trigger = trigger,
         pendingPlayerPosition = pendingPlayerPosition,
         holdPlayerPosition = holdPlayerPosition,
-        displayedPlayerPosition = displayedPlayerPosition
+        displayedPlayerPosition = displayedPlayerPosition,
+        onArrive = onArrive
     )
 }
