@@ -90,8 +90,6 @@ fun GameScreen(
     val displayedPlayerPosition = boxPathAnimation.displayedPlayerPosition(playerPosition)
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
-    val lastBackTapTime = remember { mutableStateOf<Long?>(null) }
-    val doubleTapWindowMs = 350L
     val boxPathShrink = boxPathAnimation.shrink
     val boxPathActive = boxPathAnimation.isActive
     val boxPathPositions = boxPathAnimation.path
@@ -102,16 +100,18 @@ fun GameScreen(
     val blinkEyesPainter = painterResource(id = R.drawable.player_eyes_blink)
     val focusRequester = remember { FocusRequester() }
     val vanishAnimation = rememberVanishAnimationState()
+    val ui = remember { GameUiState(selectedBox = selectedBoxPosition.value) }
+    val anim = remember { GameAnimState(boxPathAnimation, vanishAnimation) }
+    val blinkPulseState = remember { mutableStateOf(0) }
 
     val isBlinking = remember { mutableStateOf(false) }
-    val blinkPulse = remember { mutableStateOf(0) }
-    val isFacingLeft = remember { mutableStateOf(false) }
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
 
     fun resetSelectionAndFacing() {
         selectedBoxPosition.value = null
-        isFacingLeft.value = false
+        ui.selectedBox = null
+        ui.isFacingLeft = false
     }
 
     BackHandler(enabled = true) {
@@ -122,8 +122,8 @@ fun GameScreen(
         focusRequester.requestFocus()
     }
 
-    LaunchedEffect(blinkPulse.value) {
-        if (blinkPulse.value == 0) return@LaunchedEffect
+    LaunchedEffect(blinkPulseState.value) {
+        if (blinkPulseState.value == 0) return@LaunchedEffect
         delay(400L)
         isBlinking.value = true
         delay(300L)
@@ -144,17 +144,18 @@ fun GameScreen(
                     when (event.type) {
                         KeyEventType.KeyDown -> true
                         KeyEventType.KeyUp -> {
-                            val now = SystemClock.elapsedRealtime()
-                            val lastTap = lastBackTapTime.value
-                            if (lastTap != null && now - lastTap <= doubleTapWindowMs) {
-                                lastBackTapTime.value = null
-                                resetSelectionAndFacing()
-                                gameController.restart()
-                            } else {
-                                lastBackTapTime.value = now
-                                isFacingLeft.value = false
-                                gameController.undo()
-                            }
+                            ui.selectedBox = selectedBoxPosition.value
+                            GameInputHandler.handleBackKeyUp(
+                                nowMs = SystemClock.elapsedRealtime(),
+                                gameController = gameController,
+                                ui = ui,
+                                resetSelection = {
+                                    selectedBoxPosition.value = null
+                                    ui.selectedBox = null
+                                    ui.isFacingLeft = false
+                                }
+                            )
+                            selectedBoxPosition.value = ui.selectedBox
                             true
                         }
                         else -> false
@@ -170,54 +171,6 @@ fun GameScreen(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        fun handleTap(tappedPosition: Position) {
-            fun attemptBoxMove(selectedBox: Position) {
-                val boxPath = gameController.moveBoxTo(selectedBox, tappedPosition)
-                if (boxPath == null) {
-                    blinkPulse.value += 1
-                    return
-                }
-                val previous = boxPath[boxPath.size - 2]
-                val current = boxPath.last()
-                val pushLeft = previous.row == current.row && current.col < previous.col
-                if (!pushLeft) {
-                    isFacingLeft.value = false
-                }
-                val lastPosition = boxPath.last()
-                if (gameController.tiles[lastPosition.row][lastPosition.col] == Tile.WALL) {
-                    vanishAnimation.start(lastPosition)
-                    blinkPulse.value += 1
-                }
-                boxPathAnimation.start(boxPath, gameController.playerPosition) {
-                    isFacingLeft.value = pushLeft
-                }
-            }
-
-            val tile = gameController.tiles[tappedPosition.row][tappedPosition.col]
-            val selectedBox = selectedBoxPosition.value
-
-            if (tile == Tile.WALL) {
-                if (selectedBox != null) {
-                    selectedBoxPosition.value = null
-                    attemptBoxMove(selectedBox)
-                }
-                return
-            }
-
-            if (gameController.boxPositions.contains(tappedPosition)) {
-                if (selectedBox == tappedPosition) {
-                    selectedBoxPosition.value = null
-                } else {
-                    selectedBoxPosition.value = tappedPosition
-                }
-            } else if (selectedBox != null) {
-                selectedBoxPosition.value = null
-                attemptBoxMove(selectedBox)
-            } else {
-                gameController.movePlayerTo(tappedPosition)
-                isFacingLeft.value = false
-            }
-        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
@@ -357,7 +310,15 @@ fun GameScreen(
                             )
                             val tappedPosition = viewport.screenToInnerCell(offset.x, offset.y)
                             if (!gameController.isGameWon && tappedPosition != null) {
-                                handleTap(tappedPosition)
+                                ui.selectedBox = selectedBoxPosition.value
+                                GameInputHandler.handleTap(
+                                    tappedPosition = tappedPosition,
+                                    gameController = gameController,
+                                    ui = ui,
+                                    anim = anim
+                                )
+                                selectedBoxPosition.value = ui.selectedBox
+                                blinkPulseState.value = ui.blinkPulse
                             }
                         }
                     }
@@ -409,7 +370,7 @@ fun GameScreen(
                         Position(position.row + 1, position.col + 1),
                         boxPainter,
                         selectedBoxPainter,
-                        position == selectedBoxPosition.value,
+                        position == ui.selectedBox,
                         cellSize,
                         offsetX,
                         offsetY
@@ -417,7 +378,7 @@ fun GameScreen(
                 }
 
                 val drawnPlayerPosition = displayedPlayerPosition
-                val flipPlayer = isFacingLeft.value
+                val flipPlayer = ui.isFacingLeft
                 drawPlayer(
                     Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
                     playerPainter,
