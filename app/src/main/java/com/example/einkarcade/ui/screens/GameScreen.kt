@@ -102,6 +102,7 @@ fun GameScreen(
     val vanishAnimation = rememberVanishAnimationState()
 
     val isBlinking = remember { mutableStateOf(false) }
+    val blinkTrigger = remember { mutableStateOf(0) }
 
     BackHandler(enabled = true) {
         // handled manually via key events below
@@ -111,13 +112,12 @@ fun GameScreen(
         focusRequester.requestFocus()
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1500L)
-            isBlinking.value = true
-            delay(350L)
-            isBlinking.value = false
-        }
+    LaunchedEffect(blinkTrigger.value) {
+        if (blinkTrigger.value == 0) return@LaunchedEffect
+        delay(400L)
+        isBlinking.value = true
+        delay(300L)
+        isBlinking.value = false
     }
 
     Box(
@@ -169,6 +169,7 @@ fun GameScreen(
                 if (gameController.tiles[lastPosition.row][lastPosition.col] == Tile.WALL) {
                     vanishAnimation.start(lastPosition)
                 }
+                blinkTrigger.value += 1
                 boxPathAnimation.start(boxPath, gameController.playerPosition)
             }
 
