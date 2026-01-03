@@ -1,5 +1,7 @@
 package com.example.einkarcade.sokoban
 
+import kotlin.math.abs
+
 class GameEngine(private val level: Level) {
     private var gameState = GameState.fromLevel(level)
     private var lastSavedState: GameState? = null
@@ -27,6 +29,21 @@ class GameEngine(private val level: Level) {
     fun moveBoxTo(from: Position, to: Position): List<Position>? {
         if (isGameWon) return null
         if (!hasBoxAt(from)) return null
+
+        val dirRow = from.row - playerPosition.row
+        val dirCol = from.col - playerPosition.col
+        val isAdjacentPush = abs(dirRow) + abs(dirCol) == 1
+        val pushedTo = Position(from.row + dirRow, from.col + dirCol)
+        val pushedIntoWall = isAdjacentPush &&
+            pushedTo == to &&
+            level.grid[to.row][to.col] == Tile.WALL
+
+        if (pushedIntoWall) {
+            lastSavedState = gameState.deepCopy()
+            gameState.removeBox(from)
+            gameState.movePlayer(from)
+            return listOf(from, to)
+        }
 
         // Plan a multi-push move using BoxMover. The walkable grid treats boxes as obstacles,
         // so mark the starting box square walkable for the planning step.

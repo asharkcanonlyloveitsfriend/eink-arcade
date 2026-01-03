@@ -149,12 +149,25 @@ fun GameScreen(
             contentScale = ContentScale.Crop
         )
         fun handleTap(tappedPosition: Position) {
+            fun attemptBoxMove(selectedBox: Position) {
+                val boxPath = gameController.moveBoxTo(selectedBox, tappedPosition) ?: return
+                val lastPosition = boxPath.last()
+                if (gameController.tiles[lastPosition.row][lastPosition.col] == Tile.WALL) {
+                    vanishAnimation.start(lastPosition)
+                }
+                boxPathAnimation.start(boxPath, gameController.playerPosition)
+            }
+
             val tile = gameController.tiles[tappedPosition.row][tappedPosition.col]
+            val selectedBox = selectedBoxPosition.value
+
             if (tile == Tile.WALL) {
-                vanishAnimation.start(tappedPosition)
+                if (selectedBox != null) {
+                    selectedBoxPosition.value = null
+                    attemptBoxMove(selectedBox)
+                }
                 return
             }
-            val selectedBox = selectedBoxPosition.value
 
             if (gameController.boxPositions.contains(tappedPosition)) {
                 if (selectedBox == tappedPosition) {
@@ -164,10 +177,7 @@ fun GameScreen(
                 }
             } else if (selectedBox != null) {
                 selectedBoxPosition.value = null
-                val boxPath = gameController.moveBoxTo(selectedBox, tappedPosition)
-                if (boxPath != null) {
-                    boxPathAnimation.start(boxPath, gameController.playerPosition)
-                }
+                attemptBoxMove(selectedBox)
             } else {
                 gameController.movePlayerTo(tappedPosition)
             }
