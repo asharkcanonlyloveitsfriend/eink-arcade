@@ -89,7 +89,8 @@ fun GameScreen(
     val displayedPlayerPosition = boxPathAnimation.displayedPlayerPosition(playerPosition)
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
-    val backDownTime = remember { mutableStateOf<Long?>(null) }
+    val lastBackTapTime = remember { mutableStateOf<Long?>(null) }
+    val doubleTapWindowMs = 350L
     val boxPathShrink = boxPathAnimation.shrink
     val boxPathActive = boxPathAnimation.isActive
     val boxPathPositions = boxPathAnimation.path
@@ -129,24 +130,16 @@ fun GameScreen(
             .onKeyEvent { event ->
                 if (event.key == Key.Back) {
                     when (event.type) {
-                        KeyEventType.KeyDown -> {
-                            if (backDownTime.value == null) {
-                                backDownTime.value = SystemClock.elapsedRealtime()
-                            }
-                            true
-                        }
+                        KeyEventType.KeyDown -> true
                         KeyEventType.KeyUp -> {
-                            val downTime = backDownTime.value
-                            backDownTime.value = null
-                            if (downTime != null) {
-                                val duration = SystemClock.elapsedRealtime() - downTime
-                                if (duration >= 500) {
-                                    // Long press → Restart
-                                    gameController.restart()
-                                } else {
-                                    // Short press → Undo
-                                    gameController.undo()
-                                }
+                            val now = SystemClock.elapsedRealtime()
+                            val lastTap = lastBackTapTime.value
+                            if (lastTap != null && now - lastTap <= doubleTapWindowMs) {
+                                lastBackTapTime.value = null
+                                gameController.restart()
+                            } else {
+                                lastBackTapTime.value = now
+                                gameController.undo()
                             }
                             true
                         }
