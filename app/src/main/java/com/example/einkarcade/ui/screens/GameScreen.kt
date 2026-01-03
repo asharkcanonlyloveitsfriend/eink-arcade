@@ -164,12 +164,16 @@ fun GameScreen(
         )
         fun handleTap(tappedPosition: Position) {
             fun attemptBoxMove(selectedBox: Position) {
-                val boxPath = gameController.moveBoxTo(selectedBox, tappedPosition) ?: return
+                val boxPath = gameController.moveBoxTo(selectedBox, tappedPosition)
+                if (boxPath == null) {
+                    blinkTrigger.value += 1
+                    return
+                }
                 val lastPosition = boxPath.last()
                 if (gameController.tiles[lastPosition.row][lastPosition.col] == Tile.WALL) {
                     vanishAnimation.start(lastPosition)
+                    blinkTrigger.value += 1
                 }
-                blinkTrigger.value += 1
                 boxPathAnimation.start(boxPath, gameController.playerPosition)
             }
 
