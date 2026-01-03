@@ -51,7 +51,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -89,16 +88,14 @@ fun GameScreen(
 ) {
     gameController.revision.value
     val playerPosition = gameController.playerPosition
-    val displayedPlayerPosition = remember { mutableStateOf(playerPosition) }
-    val pendingPlayerPosition = remember { mutableStateOf<Position?>(null) }
-    val holdPlayerPosition = remember { mutableStateOf(false) }
+    val boxPathAnimation = rememberBoxPathAnimationState()
+    val displayedPlayerPosition = boxPathAnimation.displayedPlayerPosition(playerPosition)
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
     val backDownTime = remember { mutableStateOf<Long?>(null) }
-    val boxPathShrink = remember { mutableStateOf(0f) }
-    val boxPathActive = remember { mutableStateOf(false) }
-    val boxPathTrigger = remember { mutableStateOf(0) }
-    val boxPathPositions = remember { mutableStateOf<List<Position>>(emptyList()) }
+    val boxPathShrink = boxPathAnimation.shrink
+    val boxPathActive = boxPathAnimation.isActive
+    val boxPathPositions = boxPathAnimation.path
     val boxPainter = painterResource(id = R.drawable.box)
     val selectedBoxPainter = painterResource(id = R.drawable.box_selected)
     val playerPainter = painterResource(id = R.drawable.player_slime)
@@ -112,30 +109,6 @@ fun GameScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
-    }
-
-    LaunchedEffect(boxPathTrigger.value) {
-        val durationMs = 100L
-        val stepMs = 10L
-        val steps = (durationMs / stepMs).coerceAtLeast(1)
-        boxPathActive.value = true
-        boxPathShrink.value = 0f
-        for (i in 1..steps) {
-            delay(stepMs)
-            boxPathShrink.value = min(1f, i.toFloat() / steps.toFloat())
-        }
-        boxPathActive.value = false
-        pendingPlayerPosition.value?.let { pending ->
-            displayedPlayerPosition.value = pending
-            pendingPlayerPosition.value = null
-        }
-        holdPlayerPosition.value = false
-    }
-
-    LaunchedEffect(playerPosition, holdPlayerPosition.value) {
-        if (!holdPlayerPosition.value) {
-            displayedPlayerPosition.value = playerPosition
-        }
     }
 
     Box(
@@ -223,14 +196,9 @@ fun GameScreen(
                 }
             } else if (selectedBox != null) {
                 selectedBoxPosition.value = null
-                holdPlayerPosition.value = true
                 val boxPath = gameController.moveBoxTo(selectedBox, tappedPosition)
                 if (boxPath != null) {
-                    pendingPlayerPosition.value = gameController.playerPosition
-                    boxPathPositions.value = boxPath
-                    boxPathTrigger.value += 1
-                } else {
-                    holdPlayerPosition.value = false
+                    boxPathAnimation.start(boxPath, gameController.playerPosition)
                 }
             } else {
                 gameController.movePlayerTo(tappedPosition)
@@ -241,10 +209,10 @@ fun GameScreen(
             val lineColIndex = 3
             val maxRowIndex = gameController.tiles.size - 1
             val colCount = gameController.tiles.firstOrNull()?.size ?: 0
-            if (lineColIndex !in 0 until colCount || maxRowIndex < 0) {
-                return emptyList()
-            }
+            require(lineColIndex in 0 until colCount) { "Test path column out of bounds." }
+            require(maxRowIndex >= 0) { "Test path requires at least one row." }
             val endRow = min(6, maxRowIndex)
+            require(endRow >= 1) { "Test path requires at least two points." }
             return (0..endRow).map { Position(it, lineColIndex) }
         }
 
@@ -525,7 +493,7 @@ fun GameScreen(
                     )
                 }
 
-                val drawnPlayerPosition = displayedPlayerPosition.value
+                val drawnPlayerPosition = displayedPlayerPosition
                 drawPlayer(
                     Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
                     playerPainter,
@@ -612,10 +580,7 @@ fun GameScreen(
                 BottomIconButton(
                     onClick = {
                         val path = buildTestPath()
-                        if (path.isNotEmpty()) {
-                            boxPathPositions.value = path
-                            boxPathTrigger.value += 1
-                        }
+                        boxPathAnimation.start(path, playerPosition)
                     },
                     icon = Icons.Filled.Info,
                     contentDescription = "Test animation"
@@ -680,6 +645,72 @@ fun GameScreen(
     }
 }
 
+private class BoxPathAnimationState(
+    val path: MutableState<List<Position>>,
+    val shrink: MutableState<Float>,
+    val isActive: MutableState<Boolean>,
+    private val trigger: MutableState<Int>,
+    private val pendingPlayerPosition: MutableState<Position?>,
+    private val holdPlayerPosition: MutableState<Boolean>,
+    private val displayedPlayerPosition: MutableState<Position>
+) {
+    fun start(path: List<Position>, pendingPlayer: Position) {
+        require(path.size >= 2) { "Box path requires at least two points." }
+        holdPlayerPosition.value = true
+        pendingPlayerPosition.value = pendingPlayer
+        this.path.value = path
+        trigger.value += 1
+    }
+
+    fun displayedPlayerPosition(currentPlayer: Position): Position {
+        if (!holdPlayerPosition.value) {
+            displayedPlayerPosition.value = currentPlayer
+        }
+        return displayedPlayerPosition.value
+    }
+}
+
+@Composable
+private fun rememberBoxPathAnimationState(): BoxPathAnimationState {
+    val path = remember { mutableStateOf<List<Position>>(emptyList()) }
+    val shrink = remember { mutableStateOf(0f) }
+    val isActive = remember { mutableStateOf(false) }
+    val trigger = remember { mutableStateOf(0) }
+    val pendingPlayerPosition = remember { mutableStateOf<Position?>(null) }
+    val holdPlayerPosition = remember { mutableStateOf(false) }
+    val displayedPlayerPosition = remember { mutableStateOf(Position(0, 0)) }
+
+    LaunchedEffect(trigger.value) {
+        if (trigger.value == 0) return@LaunchedEffect
+        val durationMs = 100L
+        val stepMs = 10L
+        val steps = (durationMs / stepMs).coerceAtLeast(1)
+        isActive.value = true
+        shrink.value = 0f
+        for (i in 1..steps) {
+            delay(stepMs)
+            shrink.value = min(1f, i.toFloat() / steps.toFloat())
+        }
+        isActive.value = false
+        val pending = requireNotNull(pendingPlayerPosition.value) {
+            "Box path animation finished without a pending player position."
+        }
+        displayedPlayerPosition.value = pending
+        pendingPlayerPosition.value = null
+        holdPlayerPosition.value = false
+    }
+
+    return BoxPathAnimationState(
+        path = path,
+        shrink = shrink,
+        isActive = isActive,
+        trigger = trigger,
+        pendingPlayerPosition = pendingPlayerPosition,
+        holdPlayerPosition = holdPlayerPosition,
+        displayedPlayerPosition = displayedPlayerPosition
+    )
+}
+
 private fun DrawScope.drawBoxPathLine(
     isActive: Boolean,
     shrink: Float,
@@ -689,7 +720,7 @@ private fun DrawScope.drawBoxPathLine(
     offsetY: Float
 ) {
     if (!isActive) return
-    if (path.size < 2) return
+    require(path.size >= 2) { "Box path requires at least two points." }
 
     val points = path.map { position ->
         Offset(
