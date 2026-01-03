@@ -103,7 +103,7 @@ fun GameScreen(
 
     val isBlinking = remember { mutableStateOf(false) }
     val blinkPulse = remember { mutableStateOf(0) }
-    val faceLeft = remember { mutableStateOf(false) }
+    val isFacingLeft = remember { mutableStateOf(false) }
 
     BackHandler(enabled = true) {
         // handled manually via key events below
@@ -170,17 +170,19 @@ fun GameScreen(
                     blinkPulse.value += 1
                     return
                 }
-                faceLeft.value = false
                 val previous = boxPath[boxPath.size - 2]
                 val current = boxPath.last()
                 val pushLeft = previous.row == current.row && current.col < previous.col
+                if (!pushLeft) {
+                    isFacingLeft.value = false
+                }
                 val lastPosition = boxPath.last()
                 if (gameController.tiles[lastPosition.row][lastPosition.col] == Tile.WALL) {
                     vanishAnimation.start(lastPosition)
                     blinkPulse.value += 1
                 }
                 boxPathAnimation.start(boxPath, gameController.playerPosition) {
-                    faceLeft.value = pushLeft
+                    isFacingLeft.value = pushLeft
                 }
             }
 
@@ -206,7 +208,7 @@ fun GameScreen(
                 attemptBoxMove(selectedBox)
             } else {
                 gameController.movePlayerTo(tappedPosition)
-                faceLeft.value = false
+                isFacingLeft.value = false
             }
         }
 
@@ -428,7 +430,7 @@ fun GameScreen(
                 }
 
                 val drawnPlayerPosition = displayedPlayerPosition
-                val flipPlayer = faceLeft.value
+                val flipPlayer = isFacingLeft.value
                 drawPlayer(
                     Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
                     playerPainter,
