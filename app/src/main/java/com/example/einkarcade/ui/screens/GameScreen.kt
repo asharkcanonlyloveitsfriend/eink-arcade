@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -146,6 +147,39 @@ fun GameScreen(
 
     LaunchedEffect(currentSetName, currentLevelName) {
         resetSelectionAndFacing()
+    }
+
+    @Composable
+    fun BottomIconButton(
+        onClick: () -> Unit,
+        icon: ImageVector,
+        contentDescription: String,
+        backgroundColor: Color = Color.Black,
+        pressedBackgroundColor: Color = Color.DarkGray,
+        tintColor: Color = Color.LightGray
+    ) {
+        val interactionSource = remember { MutableInteractionSource() }
+        val isPressed = interactionSource.collectIsPressedAsState()
+
+        Box(
+            modifier = Modifier
+                .height(48.dp)
+                .background(if (isPressed.value) pressedBackgroundColor else backgroundColor)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+                .padding(horizontal = 12.dp)
+                .focusProperties { canFocus = false },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tintColor
+            )
+        }
     }
 
     Box(
@@ -365,35 +399,6 @@ fun GameScreen(
                 )
             }
 
-            @Composable
-            fun BottomIconButton(
-                onClick: () -> Unit,
-                icon: ImageVector,
-                contentDescription: String
-            ) {
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed = interactionSource.collectIsPressedAsState()
-
-                Box(
-                    modifier = Modifier
-                        .height(48.dp)
-                        .background(if (isPressed.value) Color.DarkGray else Color.Black)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = onClick
-                        )
-                        .padding(horizontal = 12.dp)
-                        .focusProperties { canFocus = false },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = contentDescription,
-                        tint = Color.LightGray
-                    )
-                }
-            }
 
             Row(
                 modifier = Modifier.padding(16.dp),
@@ -491,11 +496,38 @@ fun GameScreen(
                         .border(width = 2.dp, color = Color.Black)
                         .padding(16.dp)
                 ) {
-                    Text(
-                        text = "You win!",
-                        color = Color.Black,
-                        fontSize = 32.sp
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "You win!",
+                            color = Color.Black,
+                            fontSize = 32.sp
+                        )
+
+                        val currentRating = gameController.getCurrentRating()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            BottomIconButton(
+                                onClick = { gameController.toggleThumbDown() },
+                                icon = ImageVector.vectorResource(
+                                    if (currentRating == -1) R.drawable.ic_dislike_filled else R.drawable.ic_dislike_outline
+                                ),
+                                contentDescription = "Dislike level",
+                                backgroundColor = Color.White,
+                                pressedBackgroundColor = Color.White,
+                                tintColor = Color.DarkGray
+                            )
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            BottomIconButton(
+                                onClick = { gameController.toggleThumbUp() },
+                                icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = "Like level",
+                                backgroundColor = Color.White,
+                                pressedBackgroundColor = Color.White,
+                                tintColor = Color.DarkGray
+                            )
+                        }
+                    }
                 }
             }
         }
