@@ -47,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -70,11 +69,11 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.drawBoxPathLine
 import com.example.einkarcade.ui.rendering.drawBox
+import com.example.einkarcade.ui.rendering.drawVanishingBox
 import com.example.einkarcade.ui.rendering.drawFloor
 import com.example.einkarcade.ui.rendering.drawGoal
 import com.example.einkarcade.ui.rendering.drawPlayer
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 
 @Composable
@@ -97,8 +96,7 @@ fun GameScreen(
     val selectedBoxPainter = painterResource(id = R.drawable.box_selected)
     val playerPainter = painterResource(id = R.drawable.player_slime)
     val focusRequester = remember { FocusRequester() }
-    data class VanishState(val position: Position, val step: Int)
-    val vanishingTile = remember { mutableStateOf<VanishState?>(null) }
+    val vanishAnimation = rememberVanishAnimationState()
 
     BackHandler(enabled = true) {
         // handled manually via key events below
@@ -150,37 +148,10 @@ fun GameScreen(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        val VANISH_BASE_DELAY_MS = 170L
-        val WHITE_FLASH_DELAY_MS = 100L
-        val INVISIBLE_DELAY_MS = 100L
-
-        fun advanceVanish(step: Int, position: Position) {
-            val delay = when (step) {
-                0 -> VANISH_BASE_DELAY_MS
-                1 -> (VANISH_BASE_DELAY_MS * 0.75f).toLong()
-                2 -> (VANISH_BASE_DELAY_MS * 0.5f).toLong()
-                3 -> (VANISH_BASE_DELAY_MS * 0.36f).toLong()
-                4 -> (VANISH_BASE_DELAY_MS * 0.2f).toLong()
-                5 -> INVISIBLE_DELAY_MS
-                else -> WHITE_FLASH_DELAY_MS
-            }
-
-            Handler(Looper.getMainLooper()).postDelayed({
-                val nextStep = step + 1
-                if (nextStep >= 7) {
-                    vanishingTile.value = null
-                    return@postDelayed
-                }
-                vanishingTile.value = VanishState(position, nextStep)
-                advanceVanish(nextStep, position)
-            }, delay)
-        }
-
         fun handleTap(tappedPosition: Position) {
             val tile = gameController.tiles[tappedPosition.row][tappedPosition.col]
             if (tile == Tile.WALL) {
-                vanishingTile.value = VanishState(tappedPosition, 0)
-                advanceVanish(0, tappedPosition)
+                vanishAnimation.start(tappedPosition)
                 return
             }
             val selectedBox = selectedBoxPosition.value
@@ -383,76 +354,16 @@ fun GameScreen(
                             Tile.GOAL -> drawGoal(Position(paddedRow, paddedCol), cellSize, offsetX, offsetY)
                             Tile.FLOOR -> drawFloor(Position(paddedRow, paddedCol), cellSize, offsetX, offsetY)
                             Tile.WALL -> {
-                                val vanish = vanishingTile.value
-                                if (vanish != null && vanish.position == Position(rowIndex, colIndex)) {
-                                    when (vanish.step) {
-                                        0, 1, 2, 3, 4 -> {
-                                            val tileLeft = offsetX + paddedCol * cellSize
-                                            val tileTop = offsetY + paddedRow * cellSize
-                                            val baseSize =
-                                                (cellSize * 0.90f * 0.72f).roundToInt().toFloat()
-                                            val baseLeft = (tileLeft + (cellSize - baseSize) / 2).roundToInt().toFloat()
-                                            val baseTop = (tileTop + (cellSize - baseSize) / 2).roundToInt().toFloat()
-                                            val scale = when (vanish.step) {
-                                                0 -> 1.0f
-                                                1 -> 0.75f
-                                                2 -> 0.5f
-                                                3 -> 0.3f
-                                                else -> 0.18f
-                                            }
-                                            val size = baseSize * scale
-                                            val left = baseLeft + (baseSize - size) / 2
-                                            val top = baseTop + (baseSize - size) / 2
-                                            val baseRadius = baseSize * (14f / 72f)
-                                            val innerRadius = size * (14f / 72f)
-
-                                            val shade = when (vanish.step) {
-                                                0 -> Color(0xFF6B7280)
-                                                1 -> Color(0xFF646C79)
-                                                2 -> Color(0xFF5E6672)
-                                                else -> Color(0xFF58616C)
-                                            }
-
-                                            if (vanish.step == 0) {
-                                                drawBox(
-                                                    Position(paddedRow, paddedCol),
-                                                    boxPainter,
-                                                    selectedBoxPainter,
-                                                    false,
-                                                    cellSize,
-                                                    offsetX,
-                                                    offsetY
-                                                )
-                                            } else {
-                                                drawRoundRect(
-                                                    color = shade,
-                                                    topLeft = androidx.compose.ui.geometry.Offset(
-                                                        left,
-                                                        top
-                                                    ),
-                                                    size = androidx.compose.ui.geometry.Size(size, size),
-                                                    cornerRadius = CornerRadius(innerRadius, innerRadius)
-                                                )
-                                            }
-                                        }
-                                        5 -> {
-                                            // Invisible pause before flash.
-                                        }
-                                        6 -> {
-                                            // full-tile white flash (not the box)
-                                            drawRect(
-                                                color = Color.White,
-                                                topLeft = androidx.compose.ui.geometry.Offset(
-                                                    offsetX + paddedCol * cellSize,
-                                                    offsetY + paddedRow * cellSize
-                                                ),
-                                                size = androidx.compose.ui.geometry.Size(cellSize, cellSize)
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    // no-op: wall is invisible, background shows through
-                                }
+                                drawVanishingBox(
+                                    vanish = vanishAnimation.state.value,
+                                    gridPosition = Position(rowIndex, colIndex),
+                                    paddedPosition = Position(paddedRow, paddedCol),
+                                    boxPainter = boxPainter,
+                                    selectedBoxPainter = selectedBoxPainter,
+                                    cellSize = cellSize,
+                                    offsetX = offsetX,
+                                    offsetY = offsetY
+                                )
                             }
                         }
                     }
