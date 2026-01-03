@@ -68,6 +68,7 @@ import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.computeBoardViewport
+import com.example.einkarcade.ui.rendering.buildGameScene
 import com.example.einkarcade.ui.rendering.drawBox
 import com.example.einkarcade.ui.rendering.drawBoxPathLine
 import com.example.einkarcade.ui.rendering.drawFloor
@@ -90,9 +91,6 @@ fun GameScreen(
     val displayedPlayerPosition = boxPathAnimation.displayedPlayerPosition(playerPosition)
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
-    val boxPathShrink = boxPathAnimation.shrink
-    val boxPathActive = boxPathAnimation.isActive
-    val boxPathPositions = boxPathAnimation.path
     val boxPainter = painterResource(id = R.drawable.box)
     val selectedBoxPainter = painterResource(id = R.drawable.box_selected)
     val playerPainter = painterResource(id = R.drawable.player_slime)
@@ -323,17 +321,25 @@ fun GameScreen(
                         }
                     }
             ) {
+                val scene = buildGameScene(
+                    gameController = gameController,
+                    ui = ui,
+                    displayedPlayerPosition = displayedPlayerPosition,
+                    isBlinking = isBlinking.value,
+                    boxPathAnimation = boxPathAnimation,
+                    vanishAnimation = vanishAnimation
+                )
                 val viewport = computeBoardViewport(
                     surfaceWidth = size.width,
                     surfaceHeight = size.height,
-                    innerRows = gameController.tiles.size,
-                    innerCols = gameController.tiles.first().size
+                    innerRows = scene.tiles.size,
+                    innerCols = scene.tiles.first().size
                 )
                 val cellSize = viewport.cellSize
                 val offsetX = viewport.offsetX
                 val offsetY = viewport.offsetY
 
-                for ((rowIndex, row) in gameController.tiles.withIndex()) {
+                for ((rowIndex, row) in scene.tiles.withIndex()) {
                     for ((colIndex, tile) in row.withIndex()) {
                         val paddedRow = rowIndex + 1
                         val paddedCol = colIndex + 1
@@ -342,7 +348,7 @@ fun GameScreen(
                             Tile.FLOOR -> drawFloor(Position(paddedRow, paddedCol), cellSize, offsetX, offsetY)
                             Tile.WALL -> {
                                 drawVanishingBox(
-                                    vanish = vanishAnimation.state.value,
+                                    vanish = scene.vanish,
                                     gridPosition = Position(rowIndex, colIndex),
                                     paddedPosition = Position(paddedRow, paddedCol),
                                     boxPainter = boxPainter,
@@ -357,28 +363,28 @@ fun GameScreen(
                 }
 
                 drawBoxPathLine(
-                    isActive = boxPathActive.value,
-                    shrink = boxPathShrink.value,
-                    path = boxPathPositions.value,
+                    isActive = scene.boxPathActive,
+                    shrink = scene.boxPathShrink,
+                    path = scene.boxPath,
                     cellSize = cellSize,
                     offsetX = offsetX,
                     offsetY = offsetY
                 )
 
-                for (position in gameController.boxPositions) {
+                for (position in scene.boxPositions) {
                     drawBox(
                         Position(position.row + 1, position.col + 1),
                         boxPainter,
                         selectedBoxPainter,
-                        position == ui.selectedBox,
+                        position == scene.selectedBox,
                         cellSize,
                         offsetX,
                         offsetY
                     )
                 }
 
-                val drawnPlayerPosition = displayedPlayerPosition
-                val flipPlayer = ui.isFacingLeft
+                val drawnPlayerPosition = scene.playerPosition
+                val flipPlayer = scene.isFacingLeft
                 drawPlayer(
                     Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
                     playerPainter,
@@ -389,7 +395,7 @@ fun GameScreen(
                 )
                 drawPlayer(
                     Position(drawnPlayerPosition.row + 1, drawnPlayerPosition.col + 1),
-                    if (isBlinking.value) blinkEyesPainter else openEyesPainter,
+                    if (scene.isBlinking) blinkEyesPainter else openEyesPainter,
                     flipPlayer,
                     cellSize,
                     offsetX,
