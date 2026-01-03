@@ -157,7 +157,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                                 val bitmap = assets.getBitmap(R.drawable.box, sizePx)
                                 canvas.drawBitmap(bitmap, left, top, bitmapPaint)
                             }
-                            1, 2, 3, 4 -> {
+                            1, 2, 3, 4, 5 -> {
                                 val baseSize =
                                     (cellSize * 0.90f * 0.72f).roundToInt().toFloat()
                                 val baseLeft =
@@ -168,7 +168,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                                     1 -> 0.75f
                                     2 -> 0.5f
                                     3 -> 0.3f
-                                    else -> 0.18f
+                                    4 -> 0.18f
+                                    else -> 0.1f
                                 }
                                 val size = baseSize * scale
                                 val left = baseLeft + (baseSize - size) / 2f

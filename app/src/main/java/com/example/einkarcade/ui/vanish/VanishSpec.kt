@@ -8,7 +8,7 @@ package com.example.einkarcade.ui.vanish
 internal object VanishSpec {
     const val VANISH_BASE_DELAY_MS: Long = 170L
 
-    const val LAST_STEP: Int = 4
+    const val LAST_STEP: Int = 5
     const val TOTAL_STEPS: Int = LAST_STEP + 1
 
     fun delayMs(step: Int): Long = when (step) {
@@ -17,6 +17,7 @@ internal object VanishSpec {
         2 -> (VANISH_BASE_DELAY_MS * 0.5f).toLong()
         3 -> (VANISH_BASE_DELAY_MS * 0.36f).toLong()
         4 -> (VANISH_BASE_DELAY_MS * 0.2f).toLong()
+        5 -> (VANISH_BASE_DELAY_MS * 0.1f).toLong()
         else -> 0L
     }
 }

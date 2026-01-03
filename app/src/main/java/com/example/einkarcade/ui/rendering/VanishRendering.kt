@@ -36,7 +36,8 @@ internal fun DrawScope.drawVanishingBox(
             1 -> 0.75f
             2 -> 0.5f
             3 -> 0.3f
-            else -> 0.18f
+            4 -> 0.18f
+            else -> 0.1f
         }
         val size = baseSize * scale
         val left = baseLeft + (baseSize - size) / 2
