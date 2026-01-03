@@ -147,6 +147,7 @@ fun GameScreen(
 
     LaunchedEffect(currentSetName, currentLevelName) {
         resetSelectionAndFacing()
+        animRevision.value += 1
     }
 
     @Composable
@@ -497,12 +498,6 @@ fun GameScreen(
                         .padding(16.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "You win!",
-                            color = Color.Black,
-                            fontSize = 32.sp
-                        )
-
                         val currentRating = gameController.getCurrentRating()
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             BottomIconButton(
@@ -514,6 +509,14 @@ fun GameScreen(
                                 backgroundColor = Color.White,
                                 pressedBackgroundColor = Color.White,
                                 tintColor = Color.DarkGray
+                            )
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Text(
+                                text = "You win!",
+                                color = Color.Black,
+                                fontSize = 32.sp
                             )
 
                             Spacer(modifier = Modifier.width(12.dp))
