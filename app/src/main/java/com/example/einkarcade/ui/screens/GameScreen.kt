@@ -150,6 +150,12 @@ fun GameScreen(
         animRevision.value += 1
     }
 
+    LaunchedEffect(gameController.isGameWon, gameController.isCleanWin) {
+        if (gameController.isGameWon && !gameController.isCleanWin) {
+            ui.triggerBlink(SystemClock.elapsedRealtime())
+        }
+    }
+
     @Composable
     fun BottomIconButton(
         onClick: () -> Unit,

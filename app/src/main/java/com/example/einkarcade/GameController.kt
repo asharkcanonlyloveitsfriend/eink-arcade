@@ -28,7 +28,7 @@ class GameController(
     }
 
     private fun recordCompletionIfWon() {
-        if (gameEngine.isGameWon) {
+        if (gameEngine.isCleanWin) {
             val timestamp = repository.updateLastCompletedAt(level)
             level.markCompleted(timestamp)
         }
@@ -116,6 +116,9 @@ class GameController(
 
     val isGameWon: Boolean
         get() = gameEngine.isGameWon
+
+    val isCleanWin: Boolean
+        get() = gameEngine.isCleanWin
 
     val tiles: List<List<Tile>>
         get() = level.grid
