@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -201,17 +200,6 @@ fun GameScreen(
             } else {
                 gameController.movePlayerTo(tappedPosition)
             }
-        }
-
-        fun buildTestPath(): List<Position> {
-            val lineColIndex = 3
-            val maxRowIndex = gameController.tiles.size - 1
-            val colCount = gameController.tiles.firstOrNull()?.size ?: 0
-            require(lineColIndex in 0 until colCount) { "Test path column out of bounds." }
-            require(maxRowIndex >= 0) { "Test path requires at least one row." }
-            val endRow = min(6, maxRowIndex)
-            require(endRow >= 1) { "Test path requires at least two points." }
-            return (0..endRow).map { Position(it, lineColIndex) }
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
@@ -574,15 +562,6 @@ fun GameScreen(
 
 
                 Spacer(modifier = Modifier.weight(1f))
-
-                BottomIconButton(
-                    onClick = {
-                        val path = buildTestPath()
-                        boxPathAnimation.start(path, playerPosition)
-                    },
-                    icon = Icons.Filled.Info,
-                    contentDescription = "Test animation"
-                )
 
                 BottomIconButton(
                     onClick = {
