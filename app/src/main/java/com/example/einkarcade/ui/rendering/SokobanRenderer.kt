@@ -27,11 +27,13 @@ fun DrawScope.drawFloor(position: Position, cellSize: Float, offsetX: Float, off
             topLeft = offset,
             size = Size(cellSize, cellSize)
         )
+        val strokeWidth = 2f
+        val half = strokeWidth / 2f
         drawRect(
             color = Color(0xFFF0F0F0),
-            topLeft = offset,
-            size = Size(cellSize, cellSize),
-            style = Stroke(width = 2f)
+            topLeft = Offset(offset.x + half, offset.y + half),
+            size = Size(cellSize - strokeWidth, cellSize - strokeWidth),
+            style = Stroke(width = strokeWidth)
         )
     }
 }
@@ -43,11 +45,13 @@ fun DrawScope.drawGoal(position: Position, cellSize: Float, offsetX: Float, offs
             topLeft = offset,
             size = Size(cellSize, cellSize)
         )
+        val strokeWidth = 2f
+        val half = strokeWidth / 2f
         drawRect(
             color = Color.White,
-            topLeft = offset,
-            size = Size(cellSize, cellSize),
-            style = Stroke(width = 2f)
+            topLeft = Offset(offset.x + half, offset.y + half),
+            size = Size(cellSize - strokeWidth, cellSize - strokeWidth),
+            style = Stroke(width = strokeWidth)
         )
     }
 }
