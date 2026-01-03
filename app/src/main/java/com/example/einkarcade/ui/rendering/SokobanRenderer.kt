@@ -1,7 +1,5 @@
 package com.example.einkarcade.ui.rendering
 
-import kotlin.math.roundToInt
-
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -11,14 +9,6 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import com.example.einkarcade.sokoban.Position
 
-const val CELL_SIZE = 100f
-const val GRID_OFFSET_X = 50f
-const val GRID_OFFSET_Y = 50f
-
-// E-ink renders subpixel edges poorly.
-private fun snapToWholePixel(px: Float): Float =
-    px.roundToInt().toFloat()
-
 fun DrawScope.drawGameObject(
     position: Position,
     cellSize: Float,
@@ -26,7 +16,8 @@ fun DrawScope.drawGameObject(
     offsetY: Float,
     draw: DrawScope.(Offset) -> Unit
 ) {
-    this.draw(position.toOffset(cellSize, offsetX, offsetY))
+    val point = position.toRenderPoint(cellSize, offsetX, offsetY)
+    this.draw(Offset(point.x, point.y))
 }
 
 fun DrawScope.drawFloor(position: Position, cellSize: Float, offsetX: Float, offsetY: Float) {
@@ -70,10 +61,10 @@ fun DrawScope.drawBox(
     offsetX: Float,
     offsetY: Float
 ) {
-    val offset = position.toOffset(cellSize, offsetX, offsetY)
+    val point = position.toRenderPoint(cellSize, offsetX, offsetY)
     val targetSize = snapToWholePixel(cellSize * 0.90f)
-    val left = snapToWholePixel(offset.x + (cellSize - targetSize) / 2)
-    val top = snapToWholePixel(offset.y + (cellSize - targetSize) / 2)
+    val left = snapToWholePixel(point.x + (cellSize - targetSize) / 2)
+    val top = snapToWholePixel(point.y + (cellSize - targetSize) / 2)
     val activePainter = if (selected) selectedPainter else painter
 
     // Draw box SVG
@@ -94,10 +85,10 @@ fun DrawScope.drawPlayer(
     offsetX: Float,
     offsetY: Float
 ) {
-    val offset = position.toOffset(cellSize, offsetX, offsetY)
+    val point = position.toRenderPoint(cellSize, offsetX, offsetY)
     val targetSize = snapToWholePixel(cellSize * 0.8f)
-    val left = snapToWholePixel(offset.x + (cellSize - targetSize) / 2)
-    val top = snapToWholePixel(offset.y + (cellSize - targetSize) / 2)
+    val left = snapToWholePixel(point.x + (cellSize - targetSize) / 2)
+    val top = snapToWholePixel(point.y + (cellSize - targetSize) / 2)
 
     withTransform({
         translate(left, top)
@@ -109,15 +100,4 @@ fun DrawScope.drawPlayer(
             draw(size = Size(targetSize, targetSize))
         }
     }
-}
-
-fun Position.toOffset(
-    cellSize: Float = CELL_SIZE,
-    offsetX: Float = GRID_OFFSET_X,
-    offsetY: Float = GRID_OFFSET_Y
-): Offset {
-    return Offset(
-        offsetX + this.col * cellSize,
-        offsetY + this.row * cellSize
-    )
 }
