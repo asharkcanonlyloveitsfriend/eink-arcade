@@ -2,12 +2,14 @@ package com.example.einkarcade.ui.rendering
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 
@@ -17,11 +19,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var isGameWon: Boolean = false
     private var onTapCell: ((Position) -> Unit)? = null
     private var lastViewport: BoardViewport? = null
+    private val assets = AndroidGameAssets(context)
     private val wallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.DKGRAY }
     private val floorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GRAY }
     private val goalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.LTGRAY }
-    private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.LTGRAY }
-    private val playerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.LTGRAY
         style = Paint.Style.STROKE
@@ -83,6 +84,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val canvas = holder.lockCanvas() ?: return
         try {
             canvas.drawColor(Color.BLACK)
+            val bitmapPaint = assets.bitmapPaint()
             pathPaint.strokeWidth = viewport.cellSize * 0.2f
 
             val cellSize = viewport.cellSize
@@ -111,34 +113,67 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             }
 
             for (position in scene.boxPositions) {
-                val point = Position(position.row + 1, position.col + 1)
+                val origin = Position(position.row + 1, position.col + 1)
                     .toRenderPoint(cellSize, offsetX, offsetY)
-                val size = cellSize * 0.9f
-                val left = point.x + (cellSize - size) / 2f
-                val top = point.y + (cellSize - size) / 2f
-                canvas.drawRect(left, top, left + size, top + size, boxPaint)
+                val targetSize = snapToWholePixel(cellSize * 0.90f)
+                val sizePx = targetSize.toInt()
+                require(sizePx > 0)
+                val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
+                val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
+                val resId =
+                    if (scene.selectedBox == position) R.drawable.box_selected else R.drawable.box
+                val bitmap = assets.getBitmap(resId, sizePx)
+                canvas.drawBitmap(bitmap, left, top, bitmapPaint)
             }
 
-            val playerPoint = Position(scene.playerPosition.row + 1, scene.playerPosition.col + 1)
+            val origin = Position(scene.playerPosition.row + 1, scene.playerPosition.col + 1)
                 .toRenderPoint(cellSize, offsetX, offsetY)
-            val playerCenterX = playerPoint.x + cellSize / 2f
-            val playerCenterY = playerPoint.y + cellSize / 2f
-            canvas.drawCircle(playerCenterX, playerCenterY, cellSize * 0.35f, playerPaint)
+            val targetSize = snapToWholePixel(cellSize * 0.80f)
+            val sizePx = targetSize.toInt()
+            require(sizePx > 0)
+            val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
+            val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
+            val body = assets.getBitmap(R.drawable.player_slime, sizePx)
+            val eyesRes =
+                if (scene.isBlinking) R.drawable.player_eyes_blink else R.drawable.player_eyes_open
+            val eyes = assets.getBitmap(eyesRes, sizePx)
+            drawSprite(canvas, body, left, top, sizePx, scene.isFacingLeft, bitmapPaint)
+            drawSprite(canvas, eyes, left, top, sizePx, scene.isFacingLeft, bitmapPaint)
 
             if (scene.boxPathActive && scene.boxPath.size >= 2) {
-                val points = scene.boxPath.map { position ->
-                    val centerX = offsetX + (position.col + 1) * cellSize + cellSize / 2f
-                    val centerY = offsetY + (position.row + 1) * cellSize + cellSize / 2f
-                    Pair(centerX, centerY)
-                }
-                for (i in 0 until points.size - 1) {
-                    val start = points[i]
-                    val end = points[i + 1]
-                    canvas.drawLine(start.first, start.second, end.first, end.second, pathPaint)
+                val first = scene.boxPath.first()
+                var prevX = offsetX + (first.col + 1) * cellSize + cellSize / 2f
+                var prevY = offsetY + (first.row + 1) * cellSize + cellSize / 2f
+
+                for (i in 1 until scene.boxPath.size) {
+                    val position = scene.boxPath[i]
+                    val x = offsetX + (position.col + 1) * cellSize + cellSize / 2f
+                    val y = offsetY + (position.row + 1) * cellSize + cellSize / 2f
+                    canvas.drawLine(prevX, prevY, x, y, pathPaint)
+                    prevX = x
+                    prevY = y
                 }
             }
         } finally {
             holder.unlockCanvasAndPost(canvas)
         }
+    }
+
+    private fun drawSprite(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        left: Float,
+        top: Float,
+        sizePx: Int,
+        flipX: Boolean,
+        paint: Paint
+    ) {
+        canvas.save()
+        canvas.translate(left, top)
+        if (flipX) {
+            canvas.scale(-1f, 1f, sizePx / 2f, sizePx / 2f)
+        }
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        canvas.restore()
     }
 }
