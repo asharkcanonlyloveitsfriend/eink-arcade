@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -23,6 +25,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var onTapCell: ((Position) -> Unit)? = null
     private var lastViewport: BoardViewport? = null
     private val assets = AndroidGameAssets(context)
+    private val backgroundBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_space)
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
+    private val backgroundSrcRect = Rect()
+    private val backgroundDstRect = Rect()
     private val floorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val floorStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFF0F0F0.toInt()
@@ -99,7 +105,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
         val canvas = holder.lockCanvas() ?: return
         try {
-            canvas.drawColor(Color.BLACK)
+            drawBackground(canvas)
             val bitmapPaint = assets.bitmapPaint()
             pathPaint.strokeWidth = viewport.cellSize * 0.2f
 
@@ -276,5 +282,33 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
         canvas.restore()
+    }
+
+    private fun drawBackground(canvas: Canvas) {
+        val viewW = width
+        val viewH = height
+        require(viewW > 0 && viewH > 0)
+
+        val bmpW = backgroundBitmap.width
+        val bmpH = backgroundBitmap.height
+        require(bmpW > 0 && bmpH > 0)
+
+        val viewAspect = viewW.toFloat() / viewH.toFloat()
+        val bmpAspect = bmpW.toFloat() / bmpH.toFloat()
+
+        if (bmpAspect > viewAspect) {
+            // Bitmap is wider than the view; crop left/right.
+            val srcW = (bmpH * viewAspect).roundToInt().coerceAtMost(bmpW)
+            val left = ((bmpW - srcW) / 2f).roundToInt().coerceAtLeast(0)
+            backgroundSrcRect.set(left, 0, left + srcW, bmpH)
+        } else {
+            // Bitmap is taller than the view; crop top/bottom.
+            val srcH = (bmpW / viewAspect).roundToInt().coerceAtMost(bmpH)
+            val top = ((bmpH - srcH) / 2f).roundToInt().coerceAtLeast(0)
+            backgroundSrcRect.set(0, top, bmpW, top + srcH)
+        }
+
+        backgroundDstRect.set(0, 0, viewW, viewH)
+        canvas.drawBitmap(backgroundBitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
     }
 }
