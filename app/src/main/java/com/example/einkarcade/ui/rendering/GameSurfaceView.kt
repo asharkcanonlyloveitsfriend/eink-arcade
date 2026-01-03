@@ -12,6 +12,8 @@ import android.view.SurfaceView
 import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
+import com.example.einkarcade.ui.vanish.VanishSpec
+import kotlin.math.roundToInt
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
@@ -20,14 +22,27 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var onTapCell: ((Position) -> Unit)? = null
     private var lastViewport: BoardViewport? = null
     private val assets = AndroidGameAssets(context)
-    private val wallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.DKGRAY }
-    private val floorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GRAY }
-    private val goalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.LTGRAY }
+    private val floorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val floorStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFF0F0F0.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+    private val goalFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE0E0E0.toInt() }
+    private val goalStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+    private val vanishPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.LTGRAY
+        color = 0xFFD3D3D3.toInt()
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
+
+    private var pathXs = FloatArray(0)
+    private var pathYs = FloatArray(0)
 
     init {
         holder.addCallback(this)
@@ -90,23 +105,93 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             val cellSize = viewport.cellSize
             val offsetX = viewport.offsetX
             val offsetY = viewport.offsetY
+            val vanish = scene.vanish
 
             for ((rowIndex, row) in scene.tiles.withIndex()) {
                 for ((colIndex, tile) in row.withIndex()) {
-                    val point = Position(rowIndex + 1, colIndex + 1)
-                        .toRenderPoint(cellSize, offsetX, offsetY)
-                    val left = point.x
-                    val top = point.y
-                    val right = left + cellSize
-                    val bottom = top + cellSize
+                    val tileLeft = offsetX + (colIndex + 1) * cellSize
+                    val tileTop = offsetY + (rowIndex + 1) * cellSize
+                    val tileRight = tileLeft + cellSize
+                    val tileBottom = tileTop + cellSize
+                    val halfStroke = floorStrokePaint.strokeWidth / 2f
                     when (tile) {
-                        Tile.WALL -> canvas.drawRect(left, top, right, bottom, wallPaint)
-                        Tile.FLOOR -> canvas.drawRect(left, top, right, bottom, floorPaint)
+                        Tile.WALL -> Unit
+                        Tile.FLOOR -> {
+                            canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, floorFillPaint)
+                            canvas.drawRect(
+                                tileLeft + halfStroke,
+                                tileTop + halfStroke,
+                                tileRight - halfStroke,
+                                tileBottom - halfStroke,
+                                floorStrokePaint
+                            )
+                        }
                         Tile.GOAL -> {
-                            canvas.drawRect(left, top, right, bottom, floorPaint)
-                            val centerX = left + cellSize / 2f
-                            val centerY = top + cellSize / 2f
-                            canvas.drawCircle(centerX, centerY, cellSize * 0.2f, goalPaint)
+                            canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, goalFillPaint)
+                            canvas.drawRect(
+                                tileLeft + halfStroke,
+                                tileTop + halfStroke,
+                                tileRight - halfStroke,
+                                tileBottom - halfStroke,
+                                goalStrokePaint
+                            )
+                        }
+                    }
+
+                    if (vanish != null &&
+                        vanish.position.row == rowIndex &&
+                        vanish.position.col == colIndex
+                    ) {
+                        if (vanish.step !in 0..VanishSpec.LAST_STEP) {
+                            continue
+                        }
+                        when (vanish.step) {
+                            0 -> {
+                                val targetSize = snapToWholePixel(cellSize * 0.90f)
+                                val sizePx = targetSize.toInt()
+                                require(sizePx > 0)
+                                val left =
+                                    snapToWholePixel(tileLeft + (cellSize - targetSize) / 2f)
+                                val top =
+                                    snapToWholePixel(tileTop + (cellSize - targetSize) / 2f)
+                                val bitmap = assets.getBitmap(R.drawable.box, sizePx)
+                                canvas.drawBitmap(bitmap, left, top, bitmapPaint)
+                            }
+                            1, 2, 3, 4 -> {
+                                val baseSize =
+                                    (cellSize * 0.90f * 0.72f).roundToInt().toFloat()
+                                val baseLeft =
+                                    (tileLeft + (cellSize - baseSize) / 2f).roundToInt().toFloat()
+                                val baseTop =
+                                    (tileTop + (cellSize - baseSize) / 2f).roundToInt().toFloat()
+                                val scale = when (vanish.step) {
+                                    1 -> 0.75f
+                                    2 -> 0.5f
+                                    3 -> 0.3f
+                                    else -> 0.18f
+                                }
+                                val size = baseSize * scale
+                                val left = baseLeft + (baseSize - size) / 2f
+                                val top = baseTop + (baseSize - size) / 2f
+                                val cornerRadius = size * (14f / 72f)
+                                val color = when (vanish.step) {
+                                    1 -> 0xFF646C79.toInt()
+                                    2 -> 0xFF5E6672.toInt()
+                                    3 -> 0xFF58616C.toInt()
+                                    else -> 0xFF58616C.toInt()
+                                }
+                                vanishPaint.color = color
+                                canvas.drawRoundRect(
+                                    left,
+                                    top,
+                                    left + size,
+                                    top + size,
+                                    cornerRadius,
+                                    cornerRadius,
+                                    vanishPaint
+                                )
+                            }
+                            else -> Unit
                         }
                     }
                 }
@@ -141,17 +226,46 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             drawSprite(canvas, eyes, left, top, sizePx, scene.isFacingLeft, bitmapPaint)
 
             if (scene.boxPathActive && scene.boxPath.size >= 2) {
-                val first = scene.boxPath.first()
-                var prevX = offsetX + (first.col + 1) * cellSize + cellSize / 2f
-                var prevY = offsetY + (first.row + 1) * cellSize + cellSize / 2f
+                val n = scene.boxPath.size
+                if (pathXs.size < n) {
+                    pathXs = FloatArray(n)
+                    pathYs = FloatArray(n)
+                }
 
-                for (i in 1 until scene.boxPath.size) {
+                for (i in 0 until n) {
                     val position = scene.boxPath[i]
-                    val x = offsetX + (position.col + 1) * cellSize + cellSize / 2f
-                    val y = offsetY + (position.row + 1) * cellSize + cellSize / 2f
+                    pathXs[i] = offsetX + (position.col + 1) * cellSize + cellSize / 2f
+                    pathYs[i] = offsetY + (position.row + 1) * cellSize + cellSize / 2f
+                }
+
+                val totalSegments = n - 1
+                val clampedShrink = scene.boxPathShrink.coerceIn(0f, 1f)
+                val startT = totalSegments.toFloat() * clampedShrink
+                val startSegment = startT.toInt().coerceIn(0, totalSegments - 1)
+                val startFraction = startT - startSegment
+
+                val startX = pathXs[startSegment]
+                val startY = pathYs[startSegment]
+                val endX = pathXs[startSegment + 1]
+                val endY = pathYs[startSegment + 1]
+                val startPointX = startX + (endX - startX) * startFraction
+                val startPointY = startY + (endY - startY) * startFraction
+
+                var prevX = startPointX
+                var prevY = startPointY
+                var drewAnySegment = false
+                for (i in (startSegment + 1) until n) {
+                    val x = pathXs[i]
+                    val y = pathYs[i]
                     canvas.drawLine(prevX, prevY, x, y, pathPaint)
                     prevX = x
                     prevY = y
+                    drewAnySegment = true
+                }
+
+                if (!drewAnySegment) {
+                    val radius = (cellSize * 0.2f) / 2f
+                    canvas.drawCircle(startPointX, startPointY, radius, pathPaint)
                 }
             }
         } finally {
