@@ -31,7 +31,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -57,7 +59,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -435,9 +436,7 @@ fun GameScreen(
                         syncError.value = null
                         gameController.toggleThumbDown()
                     },
-                    icon = ImageVector.vectorResource(
-                        if (currentRating == -1) R.drawable.ic_dislike_filled else R.drawable.ic_dislike_outline
-                    ),
+                    icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
                     contentDescription = "Dislike level"
                 )
 
@@ -508,9 +507,7 @@ fun GameScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             BottomIconButton(
                                 onClick = { gameController.toggleThumbDown() },
-                                icon = ImageVector.vectorResource(
-                                    if (currentRating == -1) R.drawable.ic_dislike_filled else R.drawable.ic_dislike_outline
-                                ),
+                                icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
                                 contentDescription = "Dislike level",
                                 backgroundColor = Color.White,
                                 pressedBackgroundColor = Color.White,
