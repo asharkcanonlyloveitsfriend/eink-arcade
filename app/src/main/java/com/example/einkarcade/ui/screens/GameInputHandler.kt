@@ -34,6 +34,12 @@ internal object GameInputHandler {
         ui: GameUiState,
         resetSelection: () -> Unit
     ) {
+        if (gameController.isAtStart) {
+            ui.lastBackTapTimeMs = null
+            ui.isFacingLeft = false
+            gameController.previousLevel()
+            return
+        }
         val lastTap = ui.lastBackTapTimeMs
         if (lastTap != null && nowMs - lastTap <= ui.doubleTapWindowMs) {
             ui.lastBackTapTimeMs = null

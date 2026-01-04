@@ -18,6 +18,10 @@ class GameEngine(private val level: Level) {
     val isCleanWin: Boolean
         get() = isGameWon && gameState.boxPositions.size == level.boxPositions.size
 
+    val isAtStart: Boolean
+        get() = gameState.playerPosition == level.playerStart &&
+            gameState.boxPositions == level.boxPositions
+
     private fun hasBoxAt(position: Position): Boolean {
         return gameState.boxPositions.contains(position)
     }

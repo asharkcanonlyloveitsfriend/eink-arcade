@@ -120,6 +120,9 @@ class GameController(
     val isCleanWin: Boolean
         get() = gameEngine.isCleanWin
 
+    val isAtStart: Boolean
+        get() = gameEngine.isAtStart
+
     val tiles: List<List<Tile>>
         get() = level.grid
 

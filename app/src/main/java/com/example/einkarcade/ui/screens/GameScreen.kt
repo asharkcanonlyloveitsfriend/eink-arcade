@@ -412,21 +412,6 @@ fun GameScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BottomIconButton(
-                    onClick = {
-                        gameController.previousLevel()
-                    },
-                    icon = Icons.Filled.ArrowBack,
-                    contentDescription = "Previous level"
-                )
-
-                BottomIconButton(
-                    onClick = {
-                        gameController.nextLevel()
-                    },
-                    icon = Icons.Filled.ArrowForward,
-                    contentDescription = "Next level"
-                )
                 val currentRating = gameController.getCurrentRating()
 
                 // --- X (dislike) ---
@@ -479,6 +464,14 @@ fun GameScreen(
                         else -> Icons.Filled.Refresh
                     },
                     contentDescription = "Sync"
+                )
+
+                BottomIconButton(
+                    onClick = {
+                        gameController.nextLevel()
+                    },
+                    icon = Icons.Filled.ArrowForward,
+                    contentDescription = "Next level"
                 )
             }
         }

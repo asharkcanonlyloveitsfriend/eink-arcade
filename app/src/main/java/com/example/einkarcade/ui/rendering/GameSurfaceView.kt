@@ -28,7 +28,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var onTapCell: ((Position) -> Unit)? = null
     private var lastViewport: BoardViewport? = null
     private val assets = AndroidGameAssets(context)
-    private val backgroundBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_space)
+    private var backgroundBitmap: Bitmap? = null
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
     private val backgroundSrcRect = Rect()
     private val backgroundDstRect = Rect()
@@ -54,6 +54,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var pathXs = FloatArray(0)
     private var pathYs = FloatArray(0)
     private var lastSnap: GameSceneSnapshot? = null
+    private var backBufferBitmap: Bitmap? = null
+    private var backBufferCanvas: Canvas? = null
+    private val blitRect = Rect()
 
     internal data class DirtyRect(val left: Float, val top: Float, val right: Float, val bottom: Float)
 
@@ -108,7 +111,14 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        backBufferBitmap?.recycle()
+        backBufferBitmap = null
+        backBufferCanvas = null
+        lastSnap = null
+        backgroundBitmap?.recycle()
+        backgroundBitmap = null
+    }
 
     private fun render() {
         if (width <= 0 || height <= 0) return
@@ -122,6 +132,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         lastViewport = viewport
 
         if (!holder.surface.isValid) return
+        ensureBackBuffer()
+        val bufferBitmap = requireNotNull(backBufferBitmap)
+        val bufferCanvas = requireNotNull(backBufferCanvas)
 
         val curSnap = GameSceneSnapshot(
             player = scene.playerPosition,
@@ -143,9 +156,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val dirtyRects = computeDirtyRects(lastSnap, curSnap, viewport)
 
         if (lastSnap == null) {
+            drawScene(bufferCanvas, viewport, scene)
             val canvas = holder.lockCanvas() ?: return
             try {
-                drawScene(canvas, viewport, scene)
+                canvas.drawBitmap(bufferBitmap, 0f, 0f, null)
             } finally {
                 holder.unlockCanvasAndPost(canvas)
             }
@@ -159,18 +173,31 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
 
         for (dirtyRect in dirtyRects) {
+            bufferCanvas.save()
+            bufferCanvas.clipRect(dirtyRect)
+            drawScene(bufferCanvas, viewport, scene)
+            bufferCanvas.restore()
+
             val canvas = holder.lockCanvas(dirtyRect) ?: continue
             try {
-                canvas.save()
-                canvas.clipRect(dirtyRect)
-                drawScene(canvas, viewport, scene)
-                canvas.restore()
+                blitRect.set(dirtyRect)
+                canvas.drawBitmap(bufferBitmap, blitRect, blitRect, null)
             } finally {
                 holder.unlockCanvasAndPost(canvas)
             }
         }
         lastSnap = curSnap
     }
+    private fun requireBackgroundBitmap(): Bitmap {
+        val existing = backgroundBitmap
+        if (existing != null && !existing.isRecycled) return existing
+
+        val decoded = BitmapFactory.decodeResource(resources, R.drawable.bg_space)
+        require(!decoded.isRecycled)
+        backgroundBitmap = decoded
+        return decoded
+    }
+
 
     private fun drawSprite(
         canvas: Canvas,
@@ -195,8 +222,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val viewH = height
         require(viewW > 0 && viewH > 0)
 
-        val bmpW = backgroundBitmap.width
-        val bmpH = backgroundBitmap.height
+        val bitmap = requireBackgroundBitmap()
+        val bmpW = bitmap.width
+        val bmpH = bitmap.height
         require(bmpW > 0 && bmpH > 0)
 
         val viewAspect = viewW.toFloat() / viewH.toFloat()
@@ -215,7 +243,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
 
         backgroundDstRect.set(0, 0, viewW, viewH)
-        canvas.drawBitmap(backgroundBitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
+        canvas.drawBitmap(bitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
     }
 
     private fun drawScene(canvas: Canvas, viewport: BoardViewport, scene: GameScene) {
@@ -227,6 +255,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
         val vanish = scene.vanish
+        val halfStroke = floorStrokePaint.strokeWidth / 2f
 
         for ((rowIndex, row) in scene.tiles.withIndex()) {
             for ((colIndex, tile) in row.withIndex()) {
@@ -234,7 +263,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 val tileTop = offsetY + (rowIndex + 1) * cellSize
                 val tileRight = tileLeft + cellSize
                 val tileBottom = tileTop + cellSize
-                val halfStroke = floorStrokePaint.strokeWidth / 2f
                 when (tile) {
                     Tile.WALL -> Unit
                     Tile.FLOOR -> {
@@ -490,5 +518,18 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val bottom = ceil(dirty.bottom).toInt().coerceIn(0, height)
         if (right <= left || bottom <= top) return null
         return Rect(left, top, right, bottom)
+    }
+
+    private fun ensureBackBuffer() {
+        require(width > 0 && height > 0)
+        val existing = backBufferBitmap
+        if (existing != null && existing.width == width && existing.height == height) return
+
+        existing?.recycle()
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        backBufferBitmap = bitmap
+        backBufferCanvas = Canvas(bitmap)
+        lastSnap = null
     }
 }
