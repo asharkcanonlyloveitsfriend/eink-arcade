@@ -438,6 +438,24 @@ fun GameScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
+                run {
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isPressed = interactionSource.collectIsPressedAsState()
+                    Box(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .width(144.dp)
+                            .background(if (isPressed.value) Color.DarkGray else Color.Black)
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = { gameController.nextLevel() }
+                            )
+                            .focusProperties { canFocus = false },
+                        contentAlignment = Alignment.Center
+                    ) {}
+                }
+
                 BottomIconButton(
                     onClick = {
                         syncError.value = null

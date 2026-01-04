@@ -3,10 +3,10 @@ package com.example.einkarcade.ui.rendering
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.SurfaceHolder
@@ -123,8 +123,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private fun render() {
         if (width <= 0 || height <= 0) return
         val scene = scene ?: return
-        if (scene.tiles.isEmpty()) return
-        if (scene.tiles.first().isEmpty()) return
+        require(scene.tiles.isNotEmpty())
+        require(scene.tiles.first().isNotEmpty())
 
         val innerRows = scene.tiles.size
         val innerCols = scene.tiles.first().size
@@ -198,6 +198,40 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         return decoded
     }
 
+    private fun drawTileCell(
+        canvas: Canvas,
+        tile: Tile,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        halfStroke: Float
+    ) {
+        when (tile) {
+            Tile.WALL -> Unit
+            Tile.FLOOR -> {
+                canvas.drawRect(left, top, right, bottom, floorFillPaint)
+                canvas.drawRect(
+                    left + halfStroke,
+                    top + halfStroke,
+                    right - halfStroke,
+                    bottom - halfStroke,
+                    floorStrokePaint
+                )
+            }
+            Tile.GOAL -> {
+                canvas.drawRect(left, top, right, bottom, goalFillPaint)
+                canvas.drawRect(
+                    left + halfStroke,
+                    top + halfStroke,
+                    right - halfStroke,
+                    bottom - halfStroke,
+                    goalStrokePaint
+                )
+            }
+        }
+    }
+
 
     private fun drawSprite(
         canvas: Canvas,
@@ -263,29 +297,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 val tileTop = offsetY + (rowIndex + 1) * cellSize
                 val tileRight = tileLeft + cellSize
                 val tileBottom = tileTop + cellSize
-                when (tile) {
-                    Tile.WALL -> Unit
-                    Tile.FLOOR -> {
-                        canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, floorFillPaint)
-                        canvas.drawRect(
-                            tileLeft + halfStroke,
-                            tileTop + halfStroke,
-                            tileRight - halfStroke,
-                            tileBottom - halfStroke,
-                            floorStrokePaint
-                        )
-                    }
-                    Tile.GOAL -> {
-                        canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, goalFillPaint)
-                        canvas.drawRect(
-                            tileLeft + halfStroke,
-                            tileTop + halfStroke,
-                            tileRight - halfStroke,
-                            tileBottom - halfStroke,
-                            goalStrokePaint
-                        )
-                    }
-                }
+                drawTileCell(canvas, tile, tileLeft, tileTop, tileRight, tileBottom, halfStroke)
 
                 if (vanish != null &&
                     vanish.position.row == rowIndex &&
@@ -312,7 +324,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                                 rowIndex = rowIndex,
                                 colIndex = colIndex,
                                 outer = outer,
-                                inner = inner
+                                inner = inner,
+                                halfStroke = halfStroke
                             )
                             outer = inner
                         }
@@ -536,7 +549,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         rowIndex: Int,
         colIndex: Int,
         outer: FRect,
-        inner: FRect
+        inner: FRect,
+        halfStroke: Float
     ) {
         val bands = arrayOf(
             FRect(outer.l, outer.t, outer.r, inner.t),
@@ -550,36 +564,13 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val tileTop = viewport.offsetY + (rowIndex + 1) * cellSize
         val tileRight = tileLeft + cellSize
         val tileBottom = tileTop + cellSize
-        val halfStroke = floorStrokePaint.strokeWidth / 2f
 
         for (band in bands) {
             if (band.r <= band.l || band.b <= band.t) continue
             canvas.save()
             canvas.clipRect(band.l, band.t, band.r, band.b)
             drawBackground(canvas)
-            when (tile) {
-                Tile.WALL -> Unit
-                Tile.FLOOR -> {
-                    canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, floorFillPaint)
-                    canvas.drawRect(
-                        tileLeft + halfStroke,
-                        tileTop + halfStroke,
-                        tileRight - halfStroke,
-                        tileBottom - halfStroke,
-                        floorStrokePaint
-                    )
-                }
-                Tile.GOAL -> {
-                    canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, goalFillPaint)
-                    canvas.drawRect(
-                        tileLeft + halfStroke,
-                        tileTop + halfStroke,
-                        tileRight - halfStroke,
-                        tileBottom - halfStroke,
-                        goalStrokePaint
-                    )
-                }
-            }
+            drawTileCell(canvas, tile, tileLeft, tileTop, tileRight, tileBottom, halfStroke)
             canvas.restore()
         }
     }
