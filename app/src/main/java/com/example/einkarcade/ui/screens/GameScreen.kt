@@ -26,7 +26,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
@@ -466,13 +465,6 @@ fun GameScreen(
                     contentDescription = "Sync"
                 )
 
-                BottomIconButton(
-                    onClick = {
-                        gameController.nextLevel()
-                    },
-                    icon = Icons.Filled.ArrowForward,
-                    contentDescription = "Next level"
-                )
             }
         }
 
