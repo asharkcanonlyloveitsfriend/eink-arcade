@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
@@ -63,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.einkarcade.GameController
 import com.example.einkarcade.R
+import com.example.einkarcade.audio.playSound
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.ComposeGameAssets
 import com.example.einkarcade.ui.rendering.ComposeGameBoard
@@ -121,11 +121,22 @@ fun GameScreen(
 
     LaunchedEffect(Unit) {
         var wasActive = false
+        var wasVanishActive = false
+        var pendingSoundAtMs: Long? = null
         while (true) {
             val now = SystemClock.elapsedRealtime()
 
             boxPathAnimation.update(now)
             vanishAnimation.update(now)
+            val vanishActive = vanishAnimation.state != null
+            if (wasVanishActive && !vanishActive) {
+                pendingSoundAtMs = now + 300L
+            }
+            wasVanishActive = vanishActive
+            if (pendingSoundAtMs != null && now >= pendingSoundAtMs!!) {
+                playSound()
+                pendingSoundAtMs = null
+            }
 
             val blinkActive = now < ui.blinkEndMs
             val active = boxPathAnimation.isActive || vanishAnimation.state != null || blinkActive
@@ -434,7 +445,6 @@ fun GameScreen(
                     icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = "Like level"
                 )
-
 
                 Spacer(modifier = Modifier.weight(1f))
 
