@@ -130,7 +130,7 @@ fun GameScreen(
             vanishAnimation.update(now)
             val vanishActive = vanishAnimation.state != null
             if (wasVanishActive && !vanishActive) {
-                pendingSoundAtMs = now + 300L
+                pendingSoundAtMs = now + 400L
             }
             wasVanishActive = vanishActive
             if (pendingSoundAtMs != null && now >= pendingSoundAtMs!!) {
