@@ -44,7 +44,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         style = Paint.Style.STROKE
         strokeWidth = 2f
     }
-    private val vanishPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFD3D3D3.toInt()
         style = Paint.Style.STROKE
@@ -59,6 +58,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val blitRect = Rect()
 
     internal data class DirtyRect(val left: Float, val top: Float, val right: Float, val bottom: Float)
+    private data class FRect(val l: Float, val t: Float, val r: Float, val b: Float)
 
     private data class GameSceneSnapshot(
         val player: Position,
@@ -172,11 +172,44 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             return
         }
 
+        val prevVanish = prevSnap?.vanish
+        val curVanish = curSnap.vanish
+        val vanishCellRect = curVanish?.let { toIntRect(cellDirtyRect(it.position, viewport)) }
+        val canEraseRing = prevVanish != null &&
+            curVanish != null &&
+            prevVanish.position == curVanish.position &&
+            curVanish.step > prevVanish.step
+
         for (dirtyRect in dirtyRects) {
-            bufferCanvas.save()
-            bufferCanvas.clipRect(dirtyRect)
-            drawScene(bufferCanvas, viewport, scene)
-            bufferCanvas.restore()
+            val useRingErase = canEraseRing &&
+                vanishCellRect != null &&
+                dirtyRect == vanishCellRect
+
+            if (useRingErase) {
+                val rowIndex = curVanish!!.position.row
+                val colIndex = curVanish.position.col
+                val tileLeft = viewport.offsetX + (colIndex + 1) * viewport.cellSize
+                val tileTop = viewport.offsetY + (rowIndex + 1) * viewport.cellSize
+                var outer = vanishRectForStep(prevVanish!!.step, tileLeft, tileTop, viewport.cellSize)
+                for (s in (prevVanish.step + 1)..curVanish.step) {
+                    val inner = vanishRectForStep(s, tileLeft, tileTop, viewport.cellSize)
+                    eraseRing(
+                        canvas = bufferCanvas,
+                        viewport = viewport,
+                        scene = scene,
+                        rowIndex = rowIndex,
+                        colIndex = colIndex,
+                        outer = outer,
+                        inner = inner
+                    )
+                    outer = inner
+                }
+            } else {
+                bufferCanvas.save()
+                bufferCanvas.clipRect(dirtyRect)
+                drawScene(bufferCanvas, viewport, scene)
+                bufferCanvas.restore()
+            }
 
             val canvas = holder.lockCanvas(dirtyRect) ?: continue
             try {
@@ -294,39 +327,28 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     if (vanish.step !in 0..VanishSpec.LAST_STEP) {
                         continue
                     }
-                    if (VanishVisualSpec.isSpriteStep(vanish.step)) {
-                        val targetSize = snapToWholePixel(cellSize * 0.90f)
-                        val sizePx = targetSize.toInt()
-                        require(sizePx > 0)
-                        val left =
-                            snapToWholePixel(tileLeft + (cellSize - targetSize) / 2f)
-                        val top =
-                            snapToWholePixel(tileTop + (cellSize - targetSize) / 2f)
-                        val bitmap = assets.getBitmap(R.drawable.box, sizePx)
-                        canvas.drawBitmap(bitmap, left, top, bitmapPaint)
-                    } else {
-                        val baseSize =
-                            (cellSize * VanishVisualSpec.BASE_SIZE_FACTOR).roundToInt().toFloat()
-                        val baseLeft =
-                            (tileLeft + (cellSize - baseSize) / 2f).roundToInt().toFloat()
-                        val baseTop =
-                            (tileTop + (cellSize - baseSize) / 2f).roundToInt().toFloat()
-                        val scale = VanishVisualSpec.scale(vanish.step)
-                        val size = baseSize * scale
-                        val left = baseLeft + (baseSize - size) / 2f
-                        val top = baseTop + (baseSize - size) / 2f
-                        val cornerRadius = size * VanishVisualSpec.CORNER_RADIUS_FACTOR
-                        val color = VanishVisualSpec.colorArgb(vanish.step)
-                        vanishPaint.color = color
-                        canvas.drawRoundRect(
-                            left,
-                            top,
-                            left + size,
-                            top + size,
-                            cornerRadius,
-                            cornerRadius,
-                            vanishPaint
-                        )
+                    val spriteRect = vanishRectForStep(0, tileLeft, tileTop, cellSize)
+                    val targetSize = spriteRect.r - spriteRect.l
+                    val sizePx = targetSize.toInt()
+                    require(sizePx > 0)
+                    val bitmap = assets.getBitmap(R.drawable.box, sizePx)
+                    canvas.drawBitmap(bitmap, spriteRect.l, spriteRect.t, bitmapPaint)
+
+                    if (vanish.step >= 1) {
+                        var outer = spriteRect
+                        for (s in 1..vanish.step) {
+                            val inner = vanishRectForStep(s, tileLeft, tileTop, cellSize)
+                            eraseRing(
+                                canvas = canvas,
+                                viewport = viewport,
+                                scene = scene,
+                                rowIndex = rowIndex,
+                                colIndex = colIndex,
+                                outer = outer,
+                                inner = inner
+                            )
+                            outer = inner
+                        }
                     }
                 }
             }
@@ -518,6 +540,80 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val bottom = ceil(dirty.bottom).toInt().coerceIn(0, height)
         if (right <= left || bottom <= top) return null
         return Rect(left, top, right, bottom)
+    }
+
+    private fun vanishRectForStep(step: Int, tileLeft: Float, tileTop: Float, cellSize: Float): FRect {
+        require(step in 0..VanishSpec.LAST_STEP) { "Vanish step out of range: $step" }
+        return if (step == 0) {
+            val targetSize = snapToWholePixel(cellSize * 0.90f)
+            val left = snapToWholePixel(tileLeft + (cellSize - targetSize) / 2f)
+            val top = snapToWholePixel(tileTop + (cellSize - targetSize) / 2f)
+            FRect(left, top, left + targetSize, top + targetSize)
+        } else {
+            val baseSize = (cellSize * VanishVisualSpec.BASE_SIZE_FACTOR).roundToInt().toFloat()
+            val baseLeft = (tileLeft + (cellSize - baseSize) / 2f).roundToInt().toFloat()
+            val baseTop = (tileTop + (cellSize - baseSize) / 2f).roundToInt().toFloat()
+            val scale = VanishVisualSpec.scale(step)
+            val size = baseSize * scale
+            val left = baseLeft + (baseSize - size) / 2f
+            val top = baseTop + (baseSize - size) / 2f
+            FRect(left, top, left + size, top + size)
+        }
+    }
+
+    private fun eraseRing(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        scene: GameScene,
+        rowIndex: Int,
+        colIndex: Int,
+        outer: FRect,
+        inner: FRect
+    ) {
+        val bands = arrayOf(
+            FRect(outer.l, outer.t, outer.r, inner.t),
+            FRect(outer.l, inner.b, outer.r, outer.b),
+            FRect(outer.l, inner.t, inner.l, inner.b),
+            FRect(inner.r, inner.t, outer.r, inner.b)
+        )
+        val tile = scene.tiles[rowIndex][colIndex]
+        val cellSize = viewport.cellSize
+        val tileLeft = viewport.offsetX + (colIndex + 1) * cellSize
+        val tileTop = viewport.offsetY + (rowIndex + 1) * cellSize
+        val tileRight = tileLeft + cellSize
+        val tileBottom = tileTop + cellSize
+        val halfStroke = floorStrokePaint.strokeWidth / 2f
+
+        for (band in bands) {
+            if (band.r <= band.l || band.b <= band.t) continue
+            canvas.save()
+            canvas.clipRect(band.l, band.t, band.r, band.b)
+            drawBackground(canvas)
+            when (tile) {
+                Tile.WALL -> Unit
+                Tile.FLOOR -> {
+                    canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, floorFillPaint)
+                    canvas.drawRect(
+                        tileLeft + halfStroke,
+                        tileTop + halfStroke,
+                        tileRight - halfStroke,
+                        tileBottom - halfStroke,
+                        floorStrokePaint
+                    )
+                }
+                Tile.GOAL -> {
+                    canvas.drawRect(tileLeft, tileTop, tileRight, tileBottom, goalFillPaint)
+                    canvas.drawRect(
+                        tileLeft + halfStroke,
+                        tileTop + halfStroke,
+                        tileRight - halfStroke,
+                        tileBottom - halfStroke,
+                        goalStrokePaint
+                    )
+                }
+            }
+            canvas.restore()
+        }
     }
 
     private fun ensureBackBuffer() {
