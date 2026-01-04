@@ -210,10 +210,8 @@ fun GameScreen(
                     when (event.type) {
                         KeyEventType.KeyDown -> true
                         KeyEventType.KeyUp -> {
-                            val nowMs = SystemClock.elapsedRealtime()
                             ui.selectedBox = selectedBoxPosition.value
                             GameInputHandler.handleBackKeyUp(
-                                nowMs = nowMs,
                                 gameController = gameController,
                                 ui = ui,
                                 resetSelection = {

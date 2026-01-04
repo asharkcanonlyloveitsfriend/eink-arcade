@@ -7,8 +7,6 @@ import com.example.einkarcade.sokoban.Tile
 internal class GameUiState(
     var selectedBox: Position? = null,
     var isFacingLeft: Boolean = false,
-    var lastBackTapTimeMs: Long? = null,
-    val doubleTapWindowMs: Long = 350L,
     var blinkStartMs: Long = 0L,
     var blinkEndMs: Long = 0L
 ) {
@@ -29,26 +27,21 @@ internal class GameAnimState(
 
 internal object GameInputHandler {
     fun handleBackKeyUp(
-        nowMs: Long,
         gameController: GameController,
         ui: GameUiState,
         resetSelection: () -> Unit
     ) {
-        if (gameController.isAtStart) {
-            ui.lastBackTapTimeMs = null
+        val undone = gameController.undo()
+        if (undone) {
             ui.isFacingLeft = false
-            gameController.previousLevel()
             return
         }
-        val lastTap = ui.lastBackTapTimeMs
-        if (lastTap != null && nowMs - lastTap <= ui.doubleTapWindowMs) {
-            ui.lastBackTapTimeMs = null
+        if (gameController.isAtStart) {
+            ui.isFacingLeft = false
+            gameController.previousLevel()
+        } else {
             resetSelection()
             gameController.restart()
-        } else {
-            ui.lastBackTapTimeMs = nowMs
-            ui.isFacingLeft = false
-            gameController.undo()
         }
     }
 
