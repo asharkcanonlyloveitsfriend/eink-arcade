@@ -172,7 +172,39 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun setSelectedBox(selected: Position?) {
         if (!isInitialized) return
+
+        val previous = selectedBox
+        if (previous == selected) return
+
         selectedBox = selected
+
+        // Phase 1b: selection highlight -> redraw only affected box sprite regions.
+        // If we don't have a cached static frame / viewport (or animations are active), fall back.
+        if (!boxPathActive && vanishPosition == null) {
+            val viewport = lastViewport
+            val staticFrame = staticFrameBitmap
+            if (viewport != null && staticFrame != null && !staticFrame.isRecycled) {
+                var dirty: Rect? = null
+
+                if (previous != null) {
+                    dirty = Rect(spriteDrawParams(viewport, previous, 0.90f).dirtyRect)
+                }
+                if (selected != null) {
+                    val rect = spriteDrawParams(viewport, selected, 0.90f).dirtyRect
+                    if (dirty == null) {
+                        dirty = Rect(rect)
+                    } else {
+                        dirty.union(rect)
+                    }
+                }
+
+                if (dirty != null) {
+                    renderDirty(dirty)
+                    return
+                }
+            }
+        }
+
         render()
     }
 
