@@ -7,8 +7,6 @@ import com.example.einkarcade.sokoban.Position
 
 @Composable
 internal fun SurfaceGameBoard(
-    scene: GameScene,
-    isGameWon: Boolean,
     modifier: Modifier = Modifier,
     onTapCell: (Position) -> Unit
 ) {
@@ -16,7 +14,7 @@ internal fun SurfaceGameBoard(
         modifier = modifier,
         factory = { context -> GameSurfaceView(context) },
         update = { view ->
-            view.setContent(scene, isGameWon, onTapCell)
+            view.setOnTapCell(onTapCell)
         }
     )
 }

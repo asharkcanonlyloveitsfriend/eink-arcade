@@ -23,6 +23,39 @@ class GameController(
     val revision: State<Long>
         get() = revisionState
 
+    /**
+     * Renderer deltas emitted when the game state changes.
+     */
+    sealed interface RenderDelta {
+        data class LevelLoaded(
+            val tiles: List<List<Tile>>,
+            val playerPosition: Position,
+            val boxPositions: Set<Position>
+        ) : RenderDelta
+        data class PlayerMoved(val to: Position) : RenderDelta
+        data class BoxMoved(val path: List<Position>) : RenderDelta
+        data class GameWon(val isClean: Boolean) : RenderDelta
+
+        data object MoveRejected : RenderDelta
+    }
+
+    private fun currentLevelLoadedDelta(): RenderDelta.LevelLoaded = RenderDelta.LevelLoaded(
+        tiles = tiles,
+        playerPosition = playerPosition,
+        boxPositions = boxPositions
+    )
+
+    /**
+     * Optional sink for render deltas (e.g., a SurfaceView bridge).
+     *
+     * The controller must not reference any specific renderer type.
+     */
+    var onRenderDelta: ((RenderDelta) -> Unit)? = null
+        set(value) {
+            field = value
+            value?.invoke(currentLevelLoadedDelta())
+        }
+
     private fun markChanged() {
         revisionState.value = revisionState.value + 1L
     }
@@ -31,6 +64,13 @@ class GameController(
         if (gameEngine.isCleanWin) {
             val timestamp = repository.updateLastCompletedAt(level)
             level.markCompleted(timestamp)
+        }
+    }
+
+    private fun notifyIfWon() {
+        if (gameEngine.isGameWon) {
+            markChanged()
+            onRenderDelta?.invoke(RenderDelta.GameWon(isClean = gameEngine.isCleanWin))
         }
     }
 
@@ -58,6 +98,7 @@ class GameController(
         gameEngine = GameEngine(level)
         persistSelection()
         markChanged()
+        onRenderDelta?.invoke(currentLevelLoadedDelta())
     }
 
     // Levels for current set.
@@ -80,6 +121,7 @@ class GameController(
         val sets = loadLevelSets() ?: emptyList()
         rebuildState(sets)
         markChanged()
+        onRenderDelta?.invoke(currentLevelLoadedDelta())
     }
 
     private var currentSetIndex: Int = 0
@@ -100,6 +142,7 @@ class GameController(
             gameEngine = GameEngine(level)
             persistSelection()
             markChanged()
+            onRenderDelta?.invoke(currentLevelLoadedDelta())
         }
     }
 
@@ -132,6 +175,7 @@ class GameController(
     fun restart() {
         gameEngine = GameEngine(level)
         markChanged()
+        onRenderDelta?.invoke(currentLevelLoadedDelta())
     }
 
     fun nextLevel() {
@@ -141,6 +185,7 @@ class GameController(
         gameEngine = GameEngine(level)
         persistSelection()
         markChanged()
+        onRenderDelta?.invoke(currentLevelLoadedDelta())
     }
 
     fun previousLevel() {
@@ -150,27 +195,34 @@ class GameController(
         gameEngine = GameEngine(level)
         persistSelection()
         markChanged()
+        onRenderDelta?.invoke(currentLevelLoadedDelta())
     }
 
     fun undo(): Boolean {
         val changed = gameEngine.undo()
         if (!changed) return false
         markChanged()
+        onRenderDelta?.invoke(currentLevelLoadedDelta())
         return true
     }
 
     fun movePlayerTo(position: Position): Boolean {
         val changed = gameEngine.movePlayerTo(position)
         if (changed) {
-            markChanged()
+            onRenderDelta?.invoke(RenderDelta.PlayerMoved(to = gameEngine.playerPosition))
         }
         return changed
     }
 
     fun moveBoxTo(boxFrom: Position, boxTo: Position): List<Position>? {
-        val boxPath = gameEngine.moveBoxTo(boxFrom, boxTo) ?: return null
+        val boxPath = gameEngine.moveBoxTo(boxFrom, boxTo)
+        if (boxPath == null) {
+            onRenderDelta?.invoke(RenderDelta.MoveRejected)
+            return null
+        }
         recordCompletionIfWon()
-        markChanged()
+        onRenderDelta?.invoke(RenderDelta.BoxMoved(path = boxPath))
+        notifyIfWon()
         return boxPath
     }
 

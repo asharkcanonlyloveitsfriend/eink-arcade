@@ -2,7 +2,6 @@ package com.example.einkarcade.ui.screens
 
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -37,8 +36,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -60,56 +59,39 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
 import com.example.einkarcade.R
-import com.example.einkarcade.audio.playSound
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.ui.rendering.ComposeGameAssets
-import com.example.einkarcade.ui.rendering.ComposeGameBoard
-import com.example.einkarcade.ui.rendering.SurfaceGameBoard
-import com.example.einkarcade.ui.rendering.buildGameScene
-import kotlinx.coroutines.delay
+import com.example.einkarcade.ui.rendering.GameSurfaceView
 
 
 @Composable
 fun GameScreen(
     modifier: Modifier = Modifier,
-    gameController: GameController,
-    selectedBoxPosition: MutableState<Position?>
+    gameController: GameController
 ) {
-    val useSurfaceView = false
     gameController.revision.value
-    val animRevision = remember { mutableStateOf(0) }
-    animRevision.value
-    val playerPosition = gameController.playerPosition
-    val boxPathAnimation = remember { BoxPathAnimator() }
-    val displayedPlayerPosition = boxPathAnimation.displayedPlayerPosition(playerPosition)
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
-    val boxPainter = painterResource(id = R.drawable.box)
-    val selectedBoxPainter = painterResource(id = R.drawable.box_selected)
-    val playerPainter = painterResource(id = R.drawable.player_slime)
-    val openEyesPainter = painterResource(id = R.drawable.player_eyes_open)
-    val blinkEyesPainter = painterResource(id = R.drawable.player_eyes_blink)
-    val assets = ComposeGameAssets(
-        boxPainter = boxPainter,
-        selectedBoxPainter = selectedBoxPainter,
-        playerPainter = playerPainter,
-        openEyesPainter = openEyesPainter,
-        blinkEyesPainter = blinkEyesPainter
-    )
     val focusRequester = remember { FocusRequester() }
-    val vanishAnimation = remember { VanishAnimator() }
-    val ui = remember { GameUiState(selectedBox = selectedBoxPosition.value) }
-    val anim = remember { GameAnimState(boxPathAnimation, vanishAnimation) }
+    val surfaceViewRef = remember { mutableStateOf<GameSurfaceView?>(null) }
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
 
-    fun resetSelectionAndFacing() {
-        selectedBoxPosition.value = null
-        ui.selectedBox = null
-        ui.isFacingLeft = false
+    DisposableEffect(surfaceViewRef.value) {
+        val surfaceView = surfaceViewRef.value
+        val sink: (GameController.RenderDelta) -> Unit = { delta ->
+            surfaceView?.applyDelta(delta)
+        }
+        gameController.onRenderDelta = sink
+        onDispose {
+            if (gameController.onRenderDelta === sink) {
+                gameController.onRenderDelta = null
+            }
+        }
     }
+
 
     BackHandler(enabled = true) {
         // handled manually via key events below
@@ -117,54 +99,6 @@ fun GameScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
-    }
-
-    LaunchedEffect(Unit) {
-        var wasActive = false
-        var wasVanishActive = false
-        var pendingSoundAtMs: Long? = null
-        while (true) {
-            val now = SystemClock.elapsedRealtime()
-
-            boxPathAnimation.update(now)
-            vanishAnimation.update(now)
-            val vanishActive = vanishAnimation.state != null
-            if (wasVanishActive && !vanishActive) {
-                pendingSoundAtMs = now + 400L
-            }
-            wasVanishActive = vanishActive
-            if (pendingSoundAtMs != null && now >= pendingSoundAtMs!!) {
-                playSound()
-                pendingSoundAtMs = null
-            }
-
-            val blinkActive = now < ui.blinkEndMs
-            val active = boxPathAnimation.isActive || vanishAnimation.state != null || blinkActive
-
-            if (active) {
-                animRevision.value += 1
-                delay(16L)
-            } else {
-                if (wasActive) {
-                    // Ensure a final recomposition after an animation/blink completes.
-                    animRevision.value += 1
-                }
-                delay(100L)
-            }
-
-            wasActive = active
-        }
-    }
-
-    LaunchedEffect(currentSetName, currentLevelName) {
-        resetSelectionAndFacing()
-        animRevision.value += 1
-    }
-
-    LaunchedEffect(gameController.isGameWon, gameController.isCleanWin) {
-        if (gameController.isGameWon && !gameController.isCleanWin) {
-            ui.triggerBlink(SystemClock.elapsedRealtime())
-        }
     }
 
     @Composable
@@ -210,17 +144,9 @@ fun GameScreen(
                     when (event.type) {
                         KeyEventType.KeyDown -> true
                         KeyEventType.KeyUp -> {
-                            ui.selectedBox = selectedBoxPosition.value
                             GameInputHandler.handleBackKeyUp(
-                                gameController = gameController,
-                                ui = ui,
-                                resetSelection = {
-                                    selectedBoxPosition.value = null
-                                    ui.selectedBox = null
-                                    ui.isFacingLeft = false
-                                }
+                                gameController = gameController
                             )
-                            selectedBoxPosition.value = ui.selectedBox
                             true
                         }
                         else -> false
@@ -360,60 +286,34 @@ fun GameScreen(
                 }
             }
 
-            val nowForBlink = SystemClock.elapsedRealtime()
-            val blinking = ui.isBlinking(nowForBlink)
-            val scene = buildGameScene(
-                gameController = gameController,
-                ui = ui,
-                displayedPlayerPosition = displayedPlayerPosition,
-                isBlinking = blinking,
-                boxPathAnimation = boxPathAnimation,
-                vanishAnimation = vanishAnimation
-            ).copy(selectedBox = selectedBoxPosition.value)
-            if (useSurfaceView) {
-                SurfaceGameBoard(
-                    scene = scene,
-                    isGameWon = gameController.isGameWon,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .testTag("gameCanvas"),
-                    onTapCell = { pos ->
-                        val nowMs = SystemClock.elapsedRealtime()
-                        ui.selectedBox = selectedBoxPosition.value
+
+            AndroidView(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .testTag("gameCanvas"),
+                factory = { context ->
+                    GameSurfaceView(context).also { surfaceViewRef.value = it }
+                },
+                update = { view ->
+                    if (surfaceViewRef.value !== view) {
+                        surfaceViewRef.value = view
+                    }
+                    view.setOnTapCell { pos ->
                         GameInputHandler.handleTap(
                             tappedPosition = pos,
-                            nowMs = nowMs,
                             gameController = gameController,
-                            ui = ui,
-                            anim = anim
+                            selection = object : GameInputHandler.BoxSelection {
+                                override fun getSelectedBox(): Position? = view.getSelectedBox()
+
+                                override fun setSelectedBox(position: Position?) {
+                                    view.setSelectedBox(position)
+                                }
+                            }
                         )
-                        selectedBoxPosition.value = ui.selectedBox
                     }
-                )
-            } else {
-                ComposeGameBoard(
-                    scene = scene,
-                    assets = assets,
-                    isGameWon = gameController.isGameWon,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .testTag("gameCanvas"),
-                    onTapCell = { pos ->
-                        val nowMs = SystemClock.elapsedRealtime()
-                        ui.selectedBox = selectedBoxPosition.value
-                        GameInputHandler.handleTap(
-                            tappedPosition = pos,
-                            nowMs = nowMs,
-                            gameController = gameController,
-                            ui = ui,
-                            anim = anim
-                        )
-                        selectedBoxPosition.value = ui.selectedBox
-                    }
-                )
-            }
+                }
+            )
 
 
             Row(
@@ -421,48 +321,6 @@ fun GameScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val currentRating = gameController.getCurrentRating()
-
-                // --- X (dislike) ---
-                BottomIconButton(
-                    onClick = {
-                        syncSuccess.value = false
-                        syncError.value = null
-                        gameController.toggleThumbDown()
-                    },
-                    icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
-                    contentDescription = "Dislike level"
-                )
-
-                // --- Heart (like) ---
-                BottomIconButton(
-                    onClick = {
-                        syncSuccess.value = false
-                        syncError.value = null
-                        gameController.toggleThumbUp()
-                    },
-                    icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = "Like level"
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                run {
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val isPressed = interactionSource.collectIsPressedAsState()
-                    Box(
-                        modifier = Modifier
-                            .height(48.dp)
-                            .width(144.dp)
-                            .background(if (isPressed.value) Color.DarkGray else Color.Black)
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = null,
-                                onClick = { gameController.nextLevel() }
-                            )
-                            .focusProperties { canFocus = false },
-                        contentAlignment = Alignment.Center
-                    ) {}
-                }
 
                 BottomIconButton(
                     onClick = {
@@ -489,6 +347,48 @@ fun GameScreen(
                         else -> Icons.Filled.Refresh
                     },
                     contentDescription = "Sync"
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                run {
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isPressed = interactionSource.collectIsPressedAsState()
+                    Box(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .width(144.dp)
+                            .background(if (isPressed.value) Color.DarkGray else Color.Black)
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = { gameController.nextLevel() }
+                            )
+                            .focusProperties { canFocus = false },
+                        contentAlignment = Alignment.Center
+                    ) {}
+                }
+
+                // --- X (dislike) ---
+                BottomIconButton(
+                    onClick = {
+                        syncSuccess.value = false
+                        syncError.value = null
+                        gameController.toggleThumbDown()
+                    },
+                    icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
+                    contentDescription = "Dislike level"
+                )
+
+                // --- Heart (like) ---
+                BottomIconButton(
+                    onClick = {
+                        syncSuccess.value = false
+                        syncError.value = null
+                        gameController.toggleThumbUp()
+                    },
+                    icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = "Like level"
                 )
 
             }

@@ -8,25 +8,50 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.os.SystemClock
+import com.example.einkarcade.GameController
 import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
-import com.example.einkarcade.ui.screens.VanishState
 import com.example.einkarcade.ui.vanish.VanishSpec
 import com.example.einkarcade.ui.vanish.VanishVisualSpec
-import kotlin.math.ceil
-import kotlin.math.floor
 import kotlin.math.roundToInt
+import androidx.core.graphics.withTranslation
+
+internal data class LevelInit(
+    val tiles: List<List<Tile>>,
+    val playerPosition: Position,
+    val boxPositions: Set<Position>
+)
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
-    private var scene: GameScene? = null
-    private var isGameWon: Boolean = false
+    private var tiles: List<List<Tile>> = emptyList()
+    private var boxPositions: Set<Position> = emptySet()
+    private var playerPosition: Position? = null
+    private var displayedPlayerPosition: Position? = null
+    private var pendingPlayerPosition: Position? = null
+    private var selectedBox: Position? = null
+    private var isFacingLeft: Boolean = false
+    private var pendingFacingLeft: Boolean? = null
+    private var isInitialized: Boolean = false
     private var onTapCell: ((Position) -> Unit)? = null
     private var lastViewport: BoardViewport? = null
+    private var boxPath: List<Position> = emptyList()
+    private var boxPathActive: Boolean = false
+    private var boxPathShrink: Float = 0f
+    private var boxPathStartMs: Long = 0L
+    private val boxPathDurationMs: Long = 100L
+    private var blinkStartMs: Long = 0L
+    private var blinkEndMs: Long = 0L
+    private var lastBlinkActive: Boolean = false
+    private var vanishPosition: Position? = null
+    private var vanishStartMs: Long = 0L
+    private var vanishStep: Int? = null
     private val assets = AndroidGameAssets(context)
     private var backgroundBitmap: Bitmap? = null
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
@@ -44,44 +69,52 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         style = Paint.Style.STROKE
         strokeWidth = 2f
     }
-    private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val boxPathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFD3D3D3.toInt()
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
-
-    private var pathXs = FloatArray(0)
-    private var pathYs = FloatArray(0)
-    private var lastSnap: GameSceneSnapshot? = null
-    private var backBufferBitmap: Bitmap? = null
-    private var backBufferCanvas: Canvas? = null
-    private val blitRect = Rect()
-
-    internal data class DirtyRect(val left: Float, val top: Float, val right: Float, val bottom: Float)
-    private data class FRect(val l: Float, val t: Float, val r: Float, val b: Float)
-
-    private data class GameSceneSnapshot(
-        val player: Position,
-        val boxes: Set<Position>,
-        val selectedBox: Position?,
-        val isBlinking: Boolean,
-        val isFacingLeft: Boolean,
-        val vanish: VanishState?,
-        val boxPathActive: Boolean,
-        val boxPath: List<Position>,
-        val boxPathShrink: Float,
-        val innerRows: Int,
-        val innerCols: Int
-    )
-
+    private val boxPathDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFD3D3D3.toInt()
+        style = Paint.Style.FILL
+    }
+    private val vanishRectPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val vanishRect = RectF()
+    private val animationFrameRunnable = object : Runnable {
+        override fun run() {
+            val now = SystemClock.elapsedRealtime()
+            val changed = updateBoxPathAnimation(now)
+            val vanishChanged = updateVanishAnimation(now)
+            val blinkActive = isBlinking(now)
+            val pendingBlink = !blinkActive && blinkStartMs > now
+            if (blinkActive != lastBlinkActive) {
+                lastBlinkActive = blinkActive
+                if (!changed && !vanishChanged) {
+                    render()
+                }
+            }
+            if (changed) {
+                render()
+            }
+            if (vanishChanged && !changed) {
+                render()
+            }
+            val vanishActive = vanishPosition != null
+            if (boxPathActive || blinkActive || vanishActive) {
+                postOnAnimation(this)
+            } else if (pendingBlink) {
+                val delay = (blinkStartMs - now).coerceAtLeast(0L)
+                postDelayed(this, delay)
+            }
+        }
+    }
     init {
         holder.addCallback(this)
         setOnTouchListener { _, event ->
             if (event.action == MotionEvent.ACTION_UP) {
-                if (isGameWon) return@setOnTouchListener true
-                val viewport = requireNotNull(lastViewport) {
-                    "SurfaceView tap received before viewport was initialized."
-                }
+                val viewport = lastViewport ?: return@setOnTouchListener true
                 val position = viewport.screenToInnerCell(event.x, event.y)
                 if (position != null) {
                     onTapCell?.invoke(position)
@@ -92,101 +125,154 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    fun setContent(scene: GameScene, isGameWon: Boolean, onTapCell: (Position) -> Unit) {
-        this.scene = scene
-        this.isGameWon = isGameWon
+    fun setOnTapCell(onTapCell: (Position) -> Unit) {
         this.onTapCell = onTapCell
+    }
+
+    fun applyDelta(delta: GameController.RenderDelta) {
+        when (delta) {
+            is GameController.RenderDelta.LevelLoaded -> {
+                loadLevel(
+                    LevelInit(
+                        tiles = delta.tiles,
+                        playerPosition = delta.playerPosition,
+                        boxPositions = delta.boxPositions
+                    )
+                )
+            }
+            is GameController.RenderDelta.PlayerMoved -> onPlayerMoved(to = delta.to)
+            is GameController.RenderDelta.BoxMoved -> onBoxMoved(path = delta.path)
+            is GameController.RenderDelta.MoveRejected -> onMoveRejected()
+            is GameController.RenderDelta.GameWon -> onGameWon(isClean = delta.isClean)
+        }
+    }
+
+    fun loadLevel(init: LevelInit) {
+        tiles = init.tiles.map { it.toList() }
+        boxPositions = init.boxPositions.toSet()
+        playerPosition = init.playerPosition
+        displayedPlayerPosition = init.playerPosition
+        pendingPlayerPosition = null
+        selectedBox = null
+        resetFacing()
+        boxPath = emptyList()
+        boxPathActive = false
+        boxPathShrink = 0f
+        blinkStartMs = 0L
+        blinkEndMs = 0L
+        lastBlinkActive = false
+        vanishPosition = null
+        vanishStep = null
+        vanishStartMs = 0L
+        isInitialized = true
+        render()
+    }
+
+    fun setSelectedBox(selected: Position?) {
+        if (!isInitialized) return
+        selectedBox = selected
+        render()
+    }
+
+    fun getSelectedBox(): Position? = selectedBox
+
+    fun onPlayerMoved(to: Position) {
+        if (!isInitialized) return
+        resetFacing()
+        playerPosition = to
+        displayedPlayerPosition = to
+        render()
+    }
+
+    fun onMoveRejected() {
+        if (!isInitialized) return
+        triggerBlink()
+    }
+
+    fun onGameWon(isClean: Boolean) {
+        if (!isInitialized) return
+        if (!isClean) {
+            triggerBlink()
+        }
+    }
+
+    fun onBoxMoved(path: List<Position>) {
+        if (!isInitialized) return
+        if (path.size < 2) return
+        val from = path.first()
+        val to = path.last()
+        if (tiles[to.row][to.col] == Tile.WALL) {
+            boxPositions = boxPositions - from
+            startVanishBoxAnimation(at = to)
+            triggerBlink()
+        } else {
+            boxPositions = (boxPositions - from) + to
+        }
+        for (i in path.size - 1 downTo 1) {
+            val prev = path[i - 1]
+            val curr = path[i]
+            if (curr.col != prev.col) {
+                pendingFacingLeft = curr.col < prev.col
+                break
+            }
+        }
+        displayedPlayerPosition = playerPosition
+        playerPosition = path[path.size - 2]
+        startBoxPathAnimation(path, playerPosition ?: path[path.size - 2])
         render()
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        if (scene != null) {
+        if (isInitialized) {
             render()
         }
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        if (scene != null) {
+        if (isInitialized) {
             render()
         }
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        backBufferBitmap?.recycle()
-        backBufferBitmap = null
-        backBufferCanvas = null
-        lastSnap = null
+        removeCallbacks(animationFrameRunnable)
         backgroundBitmap?.recycle()
         backgroundBitmap = null
     }
 
     private fun render() {
         if (width <= 0 || height <= 0) return
-        val scene = scene ?: return
-        require(scene.tiles.isNotEmpty())
-        require(scene.tiles.first().isNotEmpty())
-
-        val innerRows = scene.tiles.size
-        val innerCols = scene.tiles.first().size
+        if (!isInitialized) return
+        val playerPosition = if (boxPathActive) {
+            displayedPlayerPosition ?: playerPosition!!
+        } else {
+            playerPosition!!
+        }
+        val innerRows = tiles.size
+        val innerCols = tiles.first().size
         val viewport = computeBoardViewport(width.toFloat(), height.toFloat(), innerRows, innerCols)
         lastViewport = viewport
 
         if (!holder.surface.isValid) return
-        ensureBackBuffer()
-        val bufferBitmap = requireNotNull(backBufferBitmap)
-        val bufferCanvas = requireNotNull(backBufferCanvas)
-
-        val curSnap = GameSceneSnapshot(
-            player = scene.playerPosition,
-            boxes = scene.boxPositions.toSet(),
-            selectedBox = scene.selectedBox,
-            isBlinking = scene.isBlinking,
-            isFacingLeft = scene.isFacingLeft,
-            vanish = scene.vanish,
-            boxPathActive = scene.boxPathActive,
-            boxPath = scene.boxPath,
-            boxPathShrink = scene.boxPathShrink,
-            innerRows = innerRows,
-            innerCols = innerCols
-        )
-        val prevSnap = lastSnap
-        if (prevSnap != null && (prevSnap.innerRows != innerRows || prevSnap.innerCols != innerCols)) {
-            lastSnap = null
+        val canvas = holder.lockCanvas() ?: return
+        try {
+            drawScene(
+                canvas = canvas,
+                viewport = viewport,
+                tiles = tiles,
+                boxPositions = boxPositions,
+                playerPosition = playerPosition,
+                selectedBox = selectedBox,
+                isFacingLeft = isFacingLeft
+            )
+        } finally {
+            holder.unlockCanvasAndPost(canvas)
         }
-        val dirtyRects = computeDirtyRects(lastSnap, curSnap, viewport)
+    }
 
-        if (lastSnap == null) {
-            drawScene(bufferCanvas, viewport, scene)
-            val canvas = holder.lockCanvas() ?: return
-            try {
-                canvas.drawBitmap(bufferBitmap, 0f, 0f, null)
-            } finally {
-                holder.unlockCanvasAndPost(canvas)
-            }
-            lastSnap = curSnap
-            return
-        }
-
-        if (dirtyRects.isEmpty()) {
-            lastSnap = curSnap
-            return
-        }
-
-        for (dirtyRect in dirtyRects) {
-            bufferCanvas.save()
-            bufferCanvas.clipRect(dirtyRect)
-            drawScene(bufferCanvas, viewport, scene)
-            bufferCanvas.restore()
-
-            val canvas = holder.lockCanvas(dirtyRect) ?: continue
-            try {
-                blitRect.set(dirtyRect)
-                canvas.drawBitmap(bufferBitmap, blitRect, blitRect, null)
-            } finally {
-                holder.unlockCanvasAndPost(canvas)
-            }
-        }
-        lastSnap = curSnap
+    private fun resetFacing() {
+        isFacingLeft = false
+        pendingFacingLeft = null
     }
     private fun requireBackgroundBitmap(): Bitmap {
         val existing = backgroundBitmap
@@ -242,13 +328,12 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         flipX: Boolean,
         paint: Paint
     ) {
-        canvas.save()
-        canvas.translate(left, top)
-        if (flipX) {
-            canvas.scale(-1f, 1f, sizePx / 2f, sizePx / 2f)
+        canvas.withTranslation(left, top) {
+            if (flipX) {
+                scale(-1f, 1f, sizePx / 2f, sizePx / 2f)
+            }
+            drawBitmap(bitmap, 0f, 0f, paint)
         }
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        canvas.restore()
     }
 
     private fun drawBackground(canvas: Canvas) {
@@ -280,61 +365,50 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         canvas.drawBitmap(bitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
     }
 
-    private fun drawScene(canvas: Canvas, viewport: BoardViewport, scene: GameScene) {
+    private fun drawScene(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        tiles: List<List<Tile>>,
+        boxPositions: Set<Position>,
+        playerPosition: Position,
+        selectedBox: Position?,
+        isFacingLeft: Boolean
+    ) {
         drawBackground(canvas)
         val bitmapPaint = assets.bitmapPaint()
-        pathPaint.strokeWidth = viewport.cellSize * 0.2f
-
         val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
-        val vanish = scene.vanish
         val halfStroke = floorStrokePaint.strokeWidth / 2f
 
-        for ((rowIndex, row) in scene.tiles.withIndex()) {
+        for ((rowIndex, row) in tiles.withIndex()) {
             for ((colIndex, tile) in row.withIndex()) {
                 val tileLeft = offsetX + (colIndex + 1) * cellSize
                 val tileTop = offsetY + (rowIndex + 1) * cellSize
                 val tileRight = tileLeft + cellSize
                 val tileBottom = tileTop + cellSize
                 drawTileCell(canvas, tile, tileLeft, tileTop, tileRight, tileBottom, halfStroke)
-
-                if (vanish != null &&
-                    vanish.position.row == rowIndex &&
-                    vanish.position.col == colIndex
-                ) {
-                    if (vanish.step !in 0..VanishSpec.LAST_STEP) {
-                        continue
-                    }
-                    val spriteRect = vanishRectForStep(0, tileLeft, tileTop, cellSize)
-                    val targetSize = spriteRect.r - spriteRect.l
-                    val sizePx = targetSize.toInt()
-                    require(sizePx > 0)
-                    val bitmap = assets.getBitmap(R.drawable.box, sizePx)
-                    canvas.drawBitmap(bitmap, spriteRect.l, spriteRect.t, bitmapPaint)
-
-                    if (vanish.step >= 1) {
-                        var outer = spriteRect
-                        for (s in 1..vanish.step) {
-                            val inner = vanishRectForStep(s, tileLeft, tileTop, cellSize)
-                            eraseRing(
-                                canvas = canvas,
-                                viewport = viewport,
-                                scene = scene,
-                                rowIndex = rowIndex,
-                                colIndex = colIndex,
-                                outer = outer,
-                                inner = inner,
-                                halfStroke = halfStroke
-                            )
-                            outer = inner
-                        }
-                    }
+                if (tile == Tile.WALL) {
+                    drawVanishingBox(
+                        canvas = canvas,
+                        viewport = viewport,
+                        gridPosition = Position(rowIndex, colIndex),
+                        paddedPosition = Position(rowIndex + 1, colIndex + 1)
+                    )
                 }
             }
         }
 
-        for (position in scene.boxPositions) {
+        if (boxPathActive) {
+            drawBoxPathLine(
+                canvas = canvas,
+                viewport = viewport,
+                path = boxPath,
+                shrink = boxPathShrink
+            )
+        }
+
+        for (position in boxPositions) {
             val origin = Position(position.row + 1, position.col + 1)
                 .toRenderPoint(cellSize, offsetX, offsetY)
             val targetSize = snapToWholePixel(cellSize * 0.90f)
@@ -343,12 +417,12 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
             val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
             val resId =
-                if (scene.selectedBox == position) R.drawable.box_selected else R.drawable.box
+                if (selectedBox == position) R.drawable.box_selected else R.drawable.box
             val bitmap = assets.getBitmap(resId, sizePx)
             canvas.drawBitmap(bitmap, left, top, bitmapPaint)
         }
 
-        val origin = Position(scene.playerPosition.row + 1, scene.playerPosition.col + 1)
+        val origin = Position(playerPosition.row + 1, playerPosition.col + 1)
             .toRenderPoint(cellSize, offsetX, offsetY)
         val targetSize = snapToWholePixel(cellSize * 0.80f)
         val sizePx = targetSize.toInt()
@@ -356,235 +430,191 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
         val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
         val body = assets.getBitmap(R.drawable.player_slime, sizePx)
-        val eyesRes =
-            if (scene.isBlinking) R.drawable.player_eyes_blink else R.drawable.player_eyes_open
+        val eyesRes = if (isBlinking(SystemClock.elapsedRealtime())) {
+            R.drawable.player_eyes_blink
+        } else {
+            R.drawable.player_eyes_open
+        }
         val eyes = assets.getBitmap(eyesRes, sizePx)
-        drawSprite(canvas, body, left, top, sizePx, scene.isFacingLeft, bitmapPaint)
-        drawSprite(canvas, eyes, left, top, sizePx, scene.isFacingLeft, bitmapPaint)
+        drawSprite(canvas, body, left, top, sizePx, isFacingLeft, bitmapPaint)
+        drawSprite(canvas, eyes, left, top, sizePx, isFacingLeft, bitmapPaint)
 
-        if (scene.boxPathActive && scene.boxPath.size >= 2) {
-            val n = scene.boxPath.size
-            if (pathXs.size < n) {
-                pathXs = FloatArray(n)
-                pathYs = FloatArray(n)
-            }
-
-            for (i in 0 until n) {
-                val position = scene.boxPath[i]
-                pathXs[i] = offsetX + (position.col + 1) * cellSize + cellSize / 2f
-                pathYs[i] = offsetY + (position.row + 1) * cellSize + cellSize / 2f
-            }
-
-            val totalSegments = n - 1
-            val clampedShrink = scene.boxPathShrink.coerceIn(0f, 1f)
-            val startT = totalSegments.toFloat() * clampedShrink
-            val startSegment = startT.toInt().coerceIn(0, totalSegments - 1)
-            val startFraction = startT - startSegment
-
-            val startX = pathXs[startSegment]
-            val startY = pathYs[startSegment]
-            val endX = pathXs[startSegment + 1]
-            val endY = pathYs[startSegment + 1]
-            val startPointX = startX + (endX - startX) * startFraction
-            val startPointY = startY + (endY - startY) * startFraction
-
-            var prevX = startPointX
-            var prevY = startPointY
-            var drewAnySegment = false
-            for (i in (startSegment + 1) until n) {
-                val x = pathXs[i]
-                val y = pathYs[i]
-                canvas.drawLine(prevX, prevY, x, y, pathPaint)
-                prevX = x
-                prevY = y
-                drewAnySegment = true
-            }
-
-            if (!drewAnySegment) {
-                val radius = (cellSize * 0.2f) / 2f
-                canvas.drawCircle(startPointX, startPointY, radius, pathPaint)
-            }
-        }
     }
 
-    private fun computeDirtyRects(
-        prev: GameSceneSnapshot?,
-        cur: GameSceneSnapshot,
-        viewport: BoardViewport
-    ): List<Rect> {
-        if (prev == null) return emptyList()
+    private fun startVanishBoxAnimation(at: Position) {
+        vanishPosition = at
+        vanishStartMs = SystemClock.elapsedRealtime()
+        vanishStep = 0
+        removeCallbacks(animationFrameRunnable)
+        postOnAnimation(animationFrameRunnable)
+    }
 
-        // If the board dimensions changed, we cannot rely on incremental updates.
-        if (prev.innerRows != cur.innerRows || prev.innerCols != cur.innerCols) return emptyList()
+    private fun startBoxPathAnimation(path: List<Position>, pendingPlayer: Position) {
+        require(path.size >= 2) { "Box path requires at least two points." }
+        boxPath = path
+        pendingPlayerPosition = pendingPlayer
+        boxPathStartMs = SystemClock.elapsedRealtime()
+        boxPathShrink = 0f
+        boxPathActive = true
+        removeCallbacks(animationFrameRunnable)
+        postOnAnimation(animationFrameRunnable)
+    }
 
-        val dirty = mutableListOf<DirtyRect>()
-
-        // Player dirty region.
-        if (prev.player != cur.player) {
-            dirty.add(cellDirtyRect(prev.player, viewport))
-            dirty.add(cellDirtyRect(cur.player, viewport))
-        } else {
-            if (prev.isBlinking != cur.isBlinking || prev.isFacingLeft != cur.isFacingLeft) {
-                dirty.add(cellDirtyRect(cur.player, viewport))
+    private fun updateBoxPathAnimation(nowMs: Long): Boolean {
+        if (!boxPathActive) return false
+        val elapsed = nowMs - boxPathStartMs
+        val progress = (elapsed.toFloat() / boxPathDurationMs.toFloat()).coerceAtMost(1f)
+        var changed = false
+        if (progress != boxPathShrink) {
+            boxPathShrink = progress
+            changed = true
+        }
+        if (elapsed >= boxPathDurationMs) {
+            boxPathActive = false
+            val pending = pendingPlayerPosition
+            if (pending != null) {
+                displayedPlayerPosition = pending
+                pendingPlayerPosition = null
             }
+            pendingFacingLeft?.let { facing ->
+                isFacingLeft = facing
+            }
+            pendingFacingLeft = null
+            changed = true
         }
+        return changed
+    }
 
-        // Boxes: only redraw boxes that changed position (symmetric difference).
-        val removedBoxes = prev.boxes - cur.boxes
-        val addedBoxes = cur.boxes - prev.boxes
-        val changedBoxes = removedBoxes.union(addedBoxes)
-        for (pos in changedBoxes) {
-            dirty.add(cellDirtyRect(pos, viewport))
-        }
+    private fun updateVanishAnimation(nowMs: Long): Boolean {
+        if (vanishPosition == null) return false
+        val elapsed = nowMs - vanishStartMs
+        var cumulative = 0L
 
-        // Selection affects which bitmap is drawn for a box.
-        if (prev.selectedBox != cur.selectedBox) {
-            prev.selectedBox?.let { dirty.add(cellDirtyRect(it, viewport)) }
-            cur.selectedBox?.let { dirty.add(cellDirtyRect(it, viewport)) }
-        }
-
-        // Vanish: update the affected cell(s) when vanish state changes.
-        if (prev.vanish != cur.vanish) {
-            prev.vanish?.let { dirty.add(cellDirtyRect(it.position, viewport)) }
-            cur.vanish?.let { dirty.add(cellDirtyRect(it.position, viewport)) }
-        }
-
-        // Box path: if anything about the path changes, redraw a single bounding rect for the path.
-        val pathChanged = prev.boxPathActive != cur.boxPathActive ||
-            prev.boxPath != cur.boxPath ||
-            prev.boxPathShrink != cur.boxPathShrink
-
-        if (pathChanged && (prev.boxPathActive || cur.boxPathActive)) {
-            val stroke = viewport.cellSize * 0.2f
-            val expand = stroke / 2f + 2f
-
-            var minX = Float.POSITIVE_INFINITY
-            var minY = Float.POSITIVE_INFINITY
-            var maxX = Float.NEGATIVE_INFINITY
-            var maxY = Float.NEGATIVE_INFINITY
-
-            fun accumulate(points: List<Position>) {
-                for (position in points) {
-                    val centerX =
-                        viewport.offsetX + (position.col + 1) * viewport.cellSize +
-                            viewport.cellSize / 2f
-                    val centerY =
-                        viewport.offsetY + (position.row + 1) * viewport.cellSize +
-                            viewport.cellSize / 2f
-                    minX = minX.coerceAtMost(centerX)
-                    minY = minY.coerceAtMost(centerY)
-                    maxX = maxX.coerceAtLeast(centerX)
-                    maxY = maxY.coerceAtLeast(centerY)
+        for (step in 0..VanishSpec.LAST_STEP) {
+            val delay = VanishSpec.delayMs(step)
+            if (elapsed < cumulative + delay) {
+                if (vanishStep != step) {
+                    vanishStep = step
+                    return true
                 }
+                return false
             }
-
-            if (prev.boxPathActive) accumulate(prev.boxPath)
-            if (cur.boxPathActive) accumulate(cur.boxPath)
-
-            if (minX != Float.POSITIVE_INFINITY) {
-                dirty.add(
-                    DirtyRect(
-                        left = minX - expand,
-                        top = minY - expand,
-                        right = maxX + expand,
-                        bottom = maxY + expand
-                    )
-                )
-            }
+            cumulative += delay
         }
 
-        return dirty.mapNotNull { rect ->
-            toIntRect(rect)
+        if (vanishStep != null) {
+            vanishStep = null
+            vanishPosition = null
+            return true
         }
+
+        return false
     }
 
-    private fun cellDirtyRect(position: Position, viewport: BoardViewport): DirtyRect {
-        val paddedCol = position.col + 1
-        val paddedRow = position.row + 1
-        val tileLeft = viewport.offsetX + paddedCol * viewport.cellSize
-        val tileTop = viewport.offsetY + paddedRow * viewport.cellSize
-        val tileRight = tileLeft + viewport.cellSize
-        val tileBottom = tileTop + viewport.cellSize
-        return DirtyRect(
-            left = tileLeft - 2f,
-            top = tileTop - 2f,
-            right = tileRight + 2f,
-            bottom = tileBottom + 2f
-        )
+    private fun isBlinking(nowMs: Long): Boolean {
+        return nowMs in blinkStartMs until blinkEndMs
     }
 
-    private fun toIntRect(dirty: DirtyRect): Rect? {
-        val left = floor(dirty.left).toInt().coerceIn(0, width)
-        val top = floor(dirty.top).toInt().coerceIn(0, height)
-        val right = ceil(dirty.right).toInt().coerceIn(0, width)
-        val bottom = ceil(dirty.bottom).toInt().coerceIn(0, height)
-        if (right <= left || bottom <= top) return null
-        return Rect(left, top, right, bottom)
-    }
-
-    private fun vanishRectForStep(step: Int, tileLeft: Float, tileTop: Float, cellSize: Float): FRect {
-        require(step in 0..VanishSpec.LAST_STEP) { "Vanish step out of range: $step" }
-        return if (step == 0) {
-            val targetSize = snapToWholePixel(cellSize * 0.90f)
-            val left = snapToWholePixel(tileLeft + (cellSize - targetSize) / 2f)
-            val top = snapToWholePixel(tileTop + (cellSize - targetSize) / 2f)
-            FRect(left, top, left + targetSize, top + targetSize)
+    private fun triggerBlink() {
+        val nowMs = SystemClock.elapsedRealtime()
+        val start = nowMs + 400L
+        blinkStartMs = start
+        blinkEndMs = start + 300L
+        lastBlinkActive = false
+        val delay = (blinkStartMs - nowMs).coerceAtLeast(0L)
+        removeCallbacks(animationFrameRunnable)
+        if (boxPathActive || delay == 0L) {
+            postOnAnimation(animationFrameRunnable)
         } else {
-            val baseSize = (cellSize * VanishVisualSpec.BASE_SIZE_FACTOR).roundToInt().toFloat()
-            val baseLeft = (tileLeft + (cellSize - baseSize) / 2f).roundToInt().toFloat()
-            val baseTop = (tileTop + (cellSize - baseSize) / 2f).roundToInt().toFloat()
-            val scale = VanishVisualSpec.scale(step)
-            val size = baseSize * scale
-            val left = baseLeft + (baseSize - size) / 2f
-            val top = baseTop + (baseSize - size) / 2f
-            FRect(left, top, left + size, top + size)
+            postDelayed(animationFrameRunnable, delay)
         }
     }
 
-
-    private fun eraseRing(
+    private fun drawBoxPathLine(
         canvas: Canvas,
         viewport: BoardViewport,
-        scene: GameScene,
-        rowIndex: Int,
-        colIndex: Int,
-        outer: FRect,
-        inner: FRect,
-        halfStroke: Float
+        path: List<Position>,
+        shrink: Float
     ) {
-        val bands = arrayOf(
-            FRect(outer.l, outer.t, outer.r, inner.t),
-            FRect(outer.l, inner.b, outer.r, outer.b),
-            FRect(outer.l, inner.t, inner.l, inner.b),
-            FRect(inner.r, inner.t, outer.r, inner.b)
-        )
-        val tile = scene.tiles[rowIndex][colIndex]
+        if (path.size < 2) return
         val cellSize = viewport.cellSize
-        val tileLeft = viewport.offsetX + (colIndex + 1) * cellSize
-        val tileTop = viewport.offsetY + (rowIndex + 1) * cellSize
-        val tileRight = tileLeft + cellSize
-        val tileBottom = tileTop + cellSize
+        val offsetX = viewport.offsetX
+        val offsetY = viewport.offsetY
+        val strokeWidth = cellSize * 0.2f
+        boxPathPaint.strokeWidth = strokeWidth
 
-        for (band in bands) {
-            if (band.r <= band.l || band.b <= band.t) continue
-            canvas.save()
-            canvas.clipRect(band.l, band.t, band.r, band.b)
-            drawBackground(canvas)
-            drawTileCell(canvas, tile, tileLeft, tileTop, tileRight, tileBottom, halfStroke)
-            canvas.restore()
+        val points = path.map { position ->
+            val cx = offsetX + (position.col + 1) * cellSize + cellSize / 2f
+            val cy = offsetY + (position.row + 1) * cellSize + cellSize / 2f
+            android.graphics.PointF(cx, cy)
+        }
+
+        val totalSegments = points.size - 1
+        val startT = totalSegments.toFloat() * shrink.coerceIn(0f, 1f)
+        val startSegment = startT.toInt().coerceIn(0, totalSegments - 1)
+        val startFraction = startT - startSegment
+
+        fun interpolate(start: android.graphics.PointF, end: android.graphics.PointF, t: Float): android.graphics.PointF {
+            return android.graphics.PointF(
+                start.x + (end.x - start.x) * t,
+                start.y + (end.y - start.y) * t
+            )
+        }
+
+        val startPoint = interpolate(points[startSegment], points[startSegment + 1], startFraction)
+
+        var prev = startPoint
+        var drewAnySegment = false
+        for (index in (startSegment + 1) until points.size) {
+            val next = points[index]
+            canvas.drawLine(prev.x, prev.y, next.x, next.y, boxPathPaint)
+            prev = next
+            drewAnySegment = true
+        }
+
+        if (!drewAnySegment) {
+            canvas.drawCircle(startPoint.x, startPoint.y, strokeWidth / 2f, boxPathDotPaint)
         }
     }
 
-    private fun ensureBackBuffer() {
-        require(width > 0 && height > 0)
-        val existing = backBufferBitmap
-        if (existing != null && existing.width == width && existing.height == height) return
+    private fun drawVanishingBox(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        gridPosition: Position,
+        paddedPosition: Position
+    ) {
+        val currentPosition = vanishPosition ?: return
+        val step = vanishStep ?: return
+        if (currentPosition != gridPosition) return
+        require(step in 0..VanishSpec.LAST_STEP) { "Vanish step out of range: $step" }
 
-        existing?.recycle()
+        val cellSize = viewport.cellSize
+        val offsetX = viewport.offsetX
+        val offsetY = viewport.offsetY
+        val tileLeft = offsetX + paddedPosition.col * cellSize
+        val tileTop = offsetY + paddedPosition.row * cellSize
+        val baseSize = (cellSize * VanishVisualSpec.BASE_SIZE_FACTOR).roundToInt().toFloat()
+        val baseLeft = (tileLeft + (cellSize - baseSize) / 2f).roundToInt().toFloat()
+        val baseTop = (tileTop + (cellSize - baseSize) / 2f).roundToInt().toFloat()
+        val scale = VanishVisualSpec.scale(step)
+        val size = baseSize * scale
+        val left = baseLeft + (baseSize - size) / 2f
+        val top = baseTop + (baseSize - size) / 2f
+        val innerRadius = size * VanishVisualSpec.CORNER_RADIUS_FACTOR
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        backBufferBitmap = bitmap
-        backBufferCanvas = Canvas(bitmap)
-        lastSnap = null
+        if (VanishVisualSpec.isSpriteStep(step)) {
+            val origin = paddedPosition.toRenderPoint(cellSize, offsetX, offsetY)
+            val targetSize = snapToWholePixel(cellSize * 0.90f)
+            val sizePx = targetSize.toInt()
+            require(sizePx > 0)
+            val leftPx = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
+            val topPx = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
+            val bitmap = assets.getBitmap(R.drawable.box, sizePx)
+            canvas.drawBitmap(bitmap, leftPx, topPx, assets.bitmapPaint())
+        } else {
+            vanishRectPaint.color = VanishVisualSpec.colorArgb(step)
+            vanishRect.set(left, top, left + size, top + size)
+            canvas.drawRoundRect(vanishRect, innerRadius, innerRadius, vanishRectPaint)
+        }
     }
 }

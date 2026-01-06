@@ -8,10 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.screens.GameScreen
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
 
@@ -24,8 +21,6 @@ class MainActivity : ComponentActivity() {
 
 
     private lateinit var gameController: GameController
-    private val selectedBoxPosition = mutableStateOf<Position?>(null)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -36,8 +31,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     GameScreen(
                         modifier = Modifier.padding(innerPadding),
-                        gameController = gameController,
-                        selectedBoxPosition = selectedBoxPosition
+                        gameController = gameController
                     )
                 }
             }
