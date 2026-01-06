@@ -3,7 +3,6 @@ package com.example.einkarcade.ui.screens
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +39,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -52,10 +52,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,6 +74,7 @@ fun GameScreen(
     val syncSuccess = remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val surfaceViewRef = remember { mutableStateOf<GameSurfaceView?>(null) }
+    val currentGameController = rememberUpdatedState(gameController)
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
 
@@ -156,11 +155,34 @@ fun GameScreen(
                 }
             }
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.bg_space),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+        AndroidView(
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("gameCanvas"),
+            factory = { context ->
+                val view = GameSurfaceView(context)
+                val selection = object : GameInputHandler.BoxSelection {
+                    override fun getSelectedBox(): Position? = view.getSelectedBox()
+
+                    override fun setSelectedBox(position: Position?) {
+                        view.setSelectedBox(position)
+                    }
+                }
+                view.setOnTapCell { pos ->
+                    GameInputHandler.handleTap(
+                        tappedPosition = pos,
+                        gameController = currentGameController.value,
+                        selection = selection
+                    )
+                }
+                surfaceViewRef.value = view
+                view
+            },
+            update = { view ->
+                if (surfaceViewRef.value !== view) {
+                    surfaceViewRef.value = view
+                }
+            }
         )
 
         Column(modifier = Modifier.fillMaxSize()) {
@@ -287,34 +309,7 @@ fun GameScreen(
             }
 
 
-            AndroidView(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .testTag("gameCanvas"),
-                factory = { context ->
-                    GameSurfaceView(context).also { surfaceViewRef.value = it }
-                },
-                update = { view ->
-                    if (surfaceViewRef.value !== view) {
-                        surfaceViewRef.value = view
-                    }
-                    view.setOnTapCell { pos ->
-                        GameInputHandler.handleTap(
-                            tappedPosition = pos,
-                            gameController = gameController,
-                            selection = object : GameInputHandler.BoxSelection {
-                                override fun getSelectedBox(): Position? = view.getSelectedBox()
-
-                                override fun setSelectedBox(position: Position?) {
-                                    view.setSelectedBox(position)
-                                }
-                            }
-                        )
-                    }
-                }
-            )
-
+            Spacer(modifier = Modifier.weight(1f))
 
             Row(
                 modifier = Modifier.padding(16.dp),
