@@ -105,12 +105,18 @@ fun GameScreen(
         onClick: () -> Unit,
         icon: ImageVector,
         contentDescription: String,
-        backgroundColor: Color = Color.Black,
-        pressedBackgroundColor: Color = Color.DarkGray,
-        tintColor: Color = Color.LightGray
+        backgroundColor: Color = Color.Transparent,
+        pressedBackgroundColor: Color = Color.Transparent,
+        tintColor: Color = Color.LightGray,
+        pressedTintAlpha: Float = 0.6f
     ) {
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed = interactionSource.collectIsPressedAsState()
+        val currentTint = if (isPressed.value) {
+            tintColor.copy(alpha = tintColor.alpha * pressedTintAlpha)
+        } else {
+            tintColor
+        }
 
         Box(
             modifier = Modifier
@@ -128,7 +134,7 @@ fun GameScreen(
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                tint = tintColor
+                tint = currentTint
             )
         }
     }
@@ -346,23 +352,18 @@ fun GameScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                run {
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val isPressed = interactionSource.collectIsPressedAsState()
-                    Box(
-                        modifier = Modifier
-                            .height(48.dp)
-                            .width(144.dp)
-                            .background(if (isPressed.value) Color.DarkGray else Color.Black)
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = null,
-                                onClick = { gameController.nextLevel() }
-                            )
-                            .focusProperties { canFocus = false },
-                        contentAlignment = Alignment.Center
-                    ) {}
-                }
+                Spacer(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .width(144.dp)
+                        .background(Color.Transparent)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { gameController.nextLevel() }
+                        )
+                        .focusProperties { canFocus = false }
+                )
 
                 // --- X (dislike) ---
                 BottomIconButton(
