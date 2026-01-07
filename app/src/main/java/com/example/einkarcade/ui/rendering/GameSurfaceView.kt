@@ -49,6 +49,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val boxPathDurationMs: Long = 125L
     private val boxPathDelayMs: Long = 200L
     private var boxPathSuppressLine: Boolean = false
+    private var levelTransition: LevelTransition? = null
     private var playerSilhouettePosition: Position? = null
     private var playerSilhouetteStartMs: Long = 0L
     private var playerFlashPosition: Position? = null
@@ -126,6 +127,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             val now = SystemClock.elapsedRealtime()
             val changed = updateBoxPathAnimation(now)
             val vanishChanged = updateVanishAnimation(now)
+            val transitionActive = levelTransition?.let { !it.isComplete(now) } == true
             val blinkActive = isBlinking(now)
             val pendingBlink = !blinkActive && blinkStartMs > now
             val playerFlashActive =
@@ -163,6 +165,13 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     renderDirty(rect)
                 }
             }
+            if (transitionActive && !changed && !vanishChanged && !blinkActive && !boxPathActive) {
+                render()
+            }
+            if (levelTransition?.isComplete(now) == true) {
+                levelTransition = null
+                render()
+            }
             if (vanishNeedsFinalClear && vanishPosition == null) {
                 renderVanishDirty()
                 vanishNeedsFinalClear = false
@@ -175,7 +184,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 boxPathNeedsFinalClear = false
             }
             val vanishActive = vanishPosition != null
-            if (boxPathActive || blinkActive || vanishActive) {
+            if (boxPathActive || blinkActive || vanishActive || transitionActive) {
                 postOnAnimation(this)
             } else if (pendingBlink) {
                 val delay = (blinkStartMs - now).coerceAtLeast(0L)
@@ -223,7 +232,22 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     fun loadLevel(init: LevelInit) {
-        tiles = init.tiles.map { it.toList() }
+        val nowMs = SystemClock.elapsedRealtime()
+        val newTiles = init.tiles.map { it.toList() }
+        val isSameLayout = isInitialized && tiles == newTiles
+        val shouldAnimate = init.tiles.isNotEmpty() && !isSameLayout
+        if (shouldAnimate) {
+            levelTransition = LevelTransition(
+                oldTiles = tiles,
+                newTiles = newTiles,
+                startMs = nowMs
+            )
+            removeCallbacks(animationFrameRunnable)
+            postOnAnimation(animationFrameRunnable)
+        } else {
+            levelTransition = null
+        }
+        tiles = newTiles
         boxPositions = init.boxPositions.toSet()
         playerPosition = init.playerPosition
         displayedPlayerPosition = init.playerPosition
@@ -847,6 +871,23 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         drawPlayer: Boolean
     ) {
         drawBackground(canvas)
+        val transition = levelTransition
+        if (transition != null) {
+            val nowMs = SystemClock.elapsedRealtime()
+            if (transition.isComplete(nowMs)) {
+                levelTransition = null
+            } else {
+                drawTransitionTiles(canvas, viewport, transition)
+                drawTransitionEntities(
+                    canvas = canvas,
+                    viewport = viewport,
+                    transition = transition,
+                    nowMs = nowMs,
+                    drawPlayer = drawPlayer
+                )
+                return
+            }
+        }
         val bitmapPaint = assets.bitmapPaint()
         val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
@@ -915,6 +956,118 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             drawSprite(canvas, eyes, left, top, sizePx, isFacingLeft, bitmapPaint)
         }
 
+    }
+
+    private fun drawTransitionTiles(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        transition: LevelTransition
+    ) {
+        val nowMs = SystemClock.elapsedRealtime()
+        val cellSize = viewport.cellSize
+        val offsetX = viewport.offsetX
+        val offsetY = viewport.offsetY
+        val halfStroke = floorStrokePaint.strokeWidth / 2f
+        val rows = transition.rows
+        val cols = transition.cols
+        for (rowIndex in 0 until rows) {
+            for (colIndex in 0 until cols) {
+                val newTile = transition.tileAt(transition.newTiles, rowIndex, colIndex)
+                val growScale = if (newTile != Tile.WALL) transition.growScale(nowMs, rowIndex, colIndex) else null
+                if (growScale != null) {
+                    drawScaledTile(
+                        canvas = canvas,
+                        tile = newTile,
+                        rowIndex = rowIndex,
+                        colIndex = colIndex,
+                        scale = growScale,
+                        cellSize = cellSize,
+                        offsetX = offsetX,
+                        offsetY = offsetY,
+                        halfStroke = halfStroke
+                    )
+                }
+            }
+        }
+    }
+
+    private fun drawTransitionEntities(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        transition: LevelTransition,
+        nowMs: Long,
+        drawPlayer: Boolean
+    ) {
+        val bitmapPaint = assets.bitmapPaint()
+        for (position in boxPositions) {
+            if (!transition.isCellReady(nowMs, position.row, position.col)) continue
+            val params = spriteDrawParams(viewport, position, 0.90f)
+            val resId = if (selectedBox == position) R.drawable.box_selected else R.drawable.box
+            val bitmap = assets.getBitmap(resId, params.sizePx)
+            canvas.drawBitmap(bitmap, params.left, params.top, bitmapPaint)
+        }
+
+        if (drawPlayer) {
+            val playerPos = playerPosition
+            if (playerPos != null && transition.isCellReady(nowMs, playerPos.row, playerPos.col)) {
+                val params = spriteDrawParams(viewport, playerPos, 0.80f)
+                val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
+                val eyesRes = if (isBlinking(SystemClock.elapsedRealtime())) {
+                    R.drawable.player_eyes_blink
+                } else {
+                    R.drawable.player_eyes_open
+                }
+                val eyes = assets.getBitmap(eyesRes, params.sizePx)
+                drawSprite(canvas, body, params.left, params.top, params.sizePx, isFacingLeft, bitmapPaint)
+                drawSprite(canvas, eyes, params.left, params.top, params.sizePx, isFacingLeft, bitmapPaint)
+            }
+        }
+    }
+
+    private fun drawScaledTile(
+        canvas: Canvas,
+        tile: Tile,
+        rowIndex: Int,
+        colIndex: Int,
+        scale: Float,
+        cellSize: Float,
+        offsetX: Float,
+        offsetY: Float,
+        halfStroke: Float
+    ) {
+        if (tile == Tile.WALL) return
+        val tileLeft = offsetX + (colIndex + 1) * cellSize
+        val tileTop = offsetY + (rowIndex + 1) * cellSize
+        val centerX = tileLeft + cellSize / 2f
+        val centerY = tileTop + cellSize / 2f
+        val size = cellSize * scale
+        val left = centerX - size / 2f
+        val top = centerY - size / 2f
+        val right = centerX + size / 2f
+        val bottom = centerY + size / 2f
+        when (tile) {
+            Tile.FLOOR -> {
+                canvas.drawRect(left, top, right, bottom, floorFillPaint)
+                canvas.drawRect(
+                    left + halfStroke,
+                    top + halfStroke,
+                    right - halfStroke,
+                    bottom - halfStroke,
+                    floorStrokePaint
+                )
+            }
+            Tile.GOAL -> {
+                canvas.drawRect(left, top, right, bottom, goalFillPaint)
+                canvas.drawRect(
+                    left + halfStroke,
+                    top + halfStroke,
+                    right - halfStroke,
+                    bottom - halfStroke,
+                    goalStrokePaint
+                )
+            }
+            Tile.WALL -> Unit
+        }
     }
 
     private fun startVanishBoxAnimation(at: Position) {
