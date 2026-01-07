@@ -240,7 +240,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun onMoveRejected() {
         if (!isInitialized) return
-        // Animations disabled for now.
+        triggerBlink()
     }
 
     fun onGameWon(isClean: Boolean) {
