@@ -266,28 +266,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 break
             }
         }
-        val previousPlayer = playerPosition
-        playerPosition = path[path.size - 2]
         displayedPlayerPosition = playerPosition
-        boxPath = emptyList()
-        boxPathActive = false
-        boxPathShrink = 0f
-        boxPathDirtyRect = null
-        boxPathNeedsFinalClear = false
-        val viewport = lastViewport
-        if (viewport == null) {
-            render()
-            return
-        }
-        val dirty = Rect(spriteDrawParams(viewport, from, 0.90f).dirtyRect)
-        if (tiles[to.row][to.col] != Tile.WALL) {
-            dirty.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
-        }
-        if (previousPlayer != null) {
-            dirty.union(spriteDrawParams(viewport, previousPlayer, 0.80f).dirtyRect)
-        }
-        dirty.union(spriteDrawParams(viewport, playerPosition ?: path[path.size - 2], 0.80f).dirtyRect)
-        renderDirty(dirty)
+        playerPosition = path[path.size - 2]
+        startBoxPathAnimation(path, playerPosition ?: path[path.size - 2])
+        renderBoxPathOrFull()
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
