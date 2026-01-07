@@ -45,6 +45,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var boxPathActive: Boolean = false
     private var boxPathShrink: Float = 0f
     private var boxPathStartMs: Long = 0L
+    private var boxPathDirtyRect: Rect? = null
+    private var boxPathNeedsFinalClear: Boolean = false
     private val boxPathDurationMs: Long = 100L
     private var blinkStartMs: Long = 0L
     private var blinkEndMs: Long = 0L
@@ -93,14 +95,25 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (blinkActive != lastBlinkActive) {
                 lastBlinkActive = blinkActive
                 if (!changed && !vanishChanged) {
-                    render()
+                    // Keep blink behavior unchanged for now; if a box-path animation is active, use its dirty path.
+                    if (boxPathActive || boxPathNeedsFinalClear) {
+                        renderBoxPathOrFull()
+                    } else {
+                        render()
+                    }
                 }
             }
             if (changed) {
-                render()
+                renderBoxPathOrFull()
             }
             if (vanishChanged && !changed) {
                 render()
+            }
+            // If we just completed a box-path animation, drop the cached dirty rect after the first
+            // post-animation draw clears the line.
+            if (boxPathNeedsFinalClear && !boxPathActive) {
+                boxPathDirtyRect = null
+                boxPathNeedsFinalClear = false
             }
             val vanishActive = vanishPosition != null
             if (boxPathActive || blinkActive || vanishActive) {
@@ -159,6 +172,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         boxPath = emptyList()
         boxPathActive = false
         boxPathShrink = 0f
+        boxPathDirtyRect = null
+        boxPathNeedsFinalClear = false
         blinkStartMs = 0L
         blinkEndMs = 0L
         lastBlinkActive = false
@@ -172,40 +187,33 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun setSelectedBox(selected: Position?) {
         if (!isInitialized) return
-
         val previous = selectedBox
         if (previous == selected) return
 
         selectedBox = selected
 
-        // Phase 1b: selection highlight -> redraw only affected box sprite regions.
-        // If we don't have a cached static frame / viewport (or animations are active), fall back.
-        if (!boxPathActive && vanishPosition == null) {
-            val viewport = lastViewport
-            val staticFrame = staticFrameBitmap
-            if (viewport != null && staticFrame != null && !staticFrame.isRecycled) {
-                var dirty: Rect? = null
-
-                if (previous != null) {
-                    dirty = Rect(spriteDrawParams(viewport, previous, 0.90f).dirtyRect)
-                }
-                if (selected != null) {
-                    val rect = spriteDrawParams(viewport, selected, 0.90f).dirtyRect
-                    if (dirty == null) {
-                        dirty = Rect(rect)
-                    } else {
-                        dirty.union(rect)
-                    }
-                }
-
-                if (dirty != null) {
-                    renderDirty(dirty)
-                    return
-                }
+        val viewport = lastViewport
+        if (viewport == null) {
+            render()
+            return
+        }
+        var dirty: Rect? = null
+        if (previous != null) {
+            dirty = Rect(spriteDrawParams(viewport, previous, 0.90f).dirtyRect)
+        }
+        if (selected != null) {
+            val rect = spriteDrawParams(viewport, selected, 0.90f).dirtyRect
+            if (dirty == null) {
+                dirty = Rect(rect)
+            } else {
+                dirty.union(rect)
             }
         }
-
-        render()
+        if (dirty != null) {
+            renderDirty(dirty)
+        } else {
+            render()
+        }
     }
 
     fun getSelectedBox(): Position? = selectedBox
@@ -218,60 +226,31 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         playerPosition = to
         displayedPlayerPosition = to
 
-        // Phase 1: player teleports -> redraw only old+new player sprite regions.
-        // If we don't have a cached static frame / viewport (or animations are active), fall back.
-        if (from != null && !boxPathActive) {
-            val viewport = lastViewport
-            val staticFrame = staticFrameBitmap
-            if (viewport != null && staticFrame != null && !staticFrame.isRecycled) {
-                val fromParams = spriteDrawParams(viewport, from, 0.80f)
-                val toParams = spriteDrawParams(viewport, to, 0.80f)
-                val dirty = Rect(fromParams.dirtyRect)
-                dirty.union(toParams.dirtyRect)
-                renderDirty(dirty)
-                return
-            }
+        val viewport = lastViewport
+        if (from != null && viewport != null) {
+            val fromParams = spriteDrawParams(viewport, from, 0.80f)
+            val toParams = spriteDrawParams(viewport, to, 0.80f)
+            val dirty = Rect(fromParams.dirtyRect)
+            dirty.union(toParams.dirtyRect)
+            renderDirty(dirty)
+        } else {
+            render()
         }
-
-        render()
     }
 
     fun onMoveRejected() {
         if (!isInitialized) return
-        triggerBlink()
+        // Animations disabled for now.
     }
 
     fun onGameWon(isClean: Boolean) {
         if (!isInitialized) return
-        if (!isClean) {
-            triggerBlink()
-        }
+        // Animations disabled for now.
     }
 
     fun onBoxMoved(path: List<Position>) {
         if (!isInitialized) return
-        if (path.size < 2) return
-        val from = path.first()
-        val to = path.last()
-        if (tiles[to.row][to.col] == Tile.WALL) {
-            boxPositions = boxPositions - from
-            startVanishBoxAnimation(at = to)
-            triggerBlink()
-        } else {
-            boxPositions = (boxPositions - from) + to
-        }
-        for (i in path.size - 1 downTo 1) {
-            val prev = path[i - 1]
-            val curr = path[i]
-            if (curr.col != prev.col) {
-                pendingFacingLeft = curr.col < prev.col
-                break
-            }
-        }
-        displayedPlayerPosition = playerPosition
-        playerPosition = path[path.size - 2]
-        startBoxPathAnimation(path, playerPosition ?: path[path.size - 2])
-        render()
+        // Disabled: box movement is temporarily off while we validate player-only dirty renders.
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -415,21 +394,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             return
         }
 
-        // Ensure we have a valid static frame to restore from.
-        if (staticFrameBitmap == null || staticFrameBitmap?.isRecycled == true) {
-            rebuildStaticFrameIfPossible()
-        }
-        val staticFrame = staticFrameBitmap
         val viewport = lastViewport
-        if (staticFrame == null || staticFrame.isRecycled || viewport == null) {
-            render()
-            return
-        }
-        if (staticFrame.width != width || staticFrame.height != height) {
-            rebuildStaticFrameIfPossible()
-        }
-        val frame = staticFrameBitmap
-        if (frame == null || frame.isRecycled) {
+        if (viewport == null) {
             render()
             return
         }
@@ -445,22 +411,123 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             canvas.save()
             canvas.clipRect(dirtyRect)
 
-            // Restore static pixels (background + tiles) for this region.
-            val src = Rect(dirtyRect)
-            val dst = Rect(dirtyRect)
-            canvas.drawBitmap(frame, src, dst, null)
-
-            // Draw dynamic overlays that intersect the dirty region.
-            drawDynamicScene(
+            drawScene(
                 canvas = canvas,
                 viewport = viewport,
-                dirtyRect = dirtyRect,
-                playerPosition = playerPos
+                tiles = tiles,
+                boxPositions = boxPositions,
+                playerPosition = playerPos,
+                selectedBox = selectedBox,
+                isFacingLeft = isFacingLeft
             )
         } finally {
             canvas.restore()
             holder.unlockCanvasAndPost(canvas)
         }
+    }
+
+    private fun renderBoxPathOrFull() {
+        val dirty = boxPathDirtyRect
+        if (dirty == null) {
+            render()
+            return
+        }
+        renderDirtyForBoxPath(dirty)
+    }
+
+    private fun renderDirtyForBoxPath(requestedDirtyRect: Rect) {
+        if (width <= 0 || height <= 0) return
+        if (!isInitialized) return
+
+        // Keep vanish as full-render for now.
+        if (vanishPosition != null) {
+            render()
+            return
+        }
+
+        val viewport = lastViewport
+        if (viewport == null) {
+            render()
+            return
+        }
+
+        val dirtyRect = Rect(requestedDirtyRect)
+        if (!dirtyRect.intersect(0, 0, width, height)) return
+        if (!holder.surface.isValid) return
+
+        val effectivePlayer = if (boxPathActive) {
+            displayedPlayerPosition ?: playerPosition
+        } else {
+            playerPosition
+        } ?: return
+
+        val canvas = holder.lockCanvas(dirtyRect) ?: return
+        try {
+            canvas.save()
+            canvas.clipRect(dirtyRect)
+
+            drawScene(
+                canvas = canvas,
+                viewport = viewport,
+                tiles = tiles,
+                boxPositions = boxPositions,
+                playerPosition = effectivePlayer,
+                selectedBox = selectedBox,
+                isFacingLeft = isFacingLeft
+            )
+        } finally {
+            canvas.restore()
+            holder.unlockCanvasAndPost(canvas)
+        }
+    }
+
+    private fun computeBoxPathDirtyRect(
+        viewport: BoardViewport,
+        path: List<Position>,
+        displayedPlayer: Position,
+        pendingPlayer: Position
+    ): Rect {
+        require(path.size >= 2)
+
+        val cellSize = viewport.cellSize
+        val offsetX = viewport.offsetX
+        val offsetY = viewport.offsetY
+
+        val strokeWidth = cellSize * 0.2f
+        val pad = (strokeWidth / 2f + 10f)
+
+        var minX = Float.POSITIVE_INFINITY
+        var minY = Float.POSITIVE_INFINITY
+        var maxX = Float.NEGATIVE_INFINITY
+        var maxY = Float.NEGATIVE_INFINITY
+
+        for (position in path) {
+            val cx = offsetX + (position.col + 1) * cellSize + cellSize / 2f
+            val cy = offsetY + (position.row + 1) * cellSize + cellSize / 2f
+            if (cx < minX) minX = cx
+            if (cy < minY) minY = cy
+            if (cx > maxX) maxX = cx
+            if (cy > maxY) maxY = cy
+        }
+
+        val rect = Rect(
+            (minX - pad).toInt(),
+            (minY - pad).toInt(),
+            (maxX + pad).toInt(),
+            (maxY + pad).toInt()
+        )
+
+        // Include moved box sprite bounds (from/to).
+        val from = path.first()
+        val to = path.last()
+        rect.union(spriteDrawParams(viewport, from, 0.90f).dirtyRect)
+        rect.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
+
+        // Include player sprite bounds (both displayed during animation and pending at end).
+        rect.union(spriteDrawParams(viewport, displayedPlayer, 0.80f).dirtyRect)
+        rect.union(spriteDrawParams(viewport, pendingPlayer, 0.80f).dirtyRect)
+
+        return rect
     }
 
     private fun drawDynamicScene(
@@ -681,6 +748,27 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         boxPathStartMs = SystemClock.elapsedRealtime()
         boxPathShrink = 0f
         boxPathActive = true
+        boxPathNeedsFinalClear = false
+
+        // Conservative dirty rect: entire path line + moved box + both displayed and pending player sprites.
+        val viewport = lastViewport
+            ?: run {
+                if (width > 0 && height > 0 && tiles.isNotEmpty() && tiles.first().isNotEmpty()) {
+                    computeBoardViewport(width.toFloat(), height.toFloat(), tiles.size, tiles.first().size)
+                } else {
+                    null
+                }
+            }
+
+        if (viewport != null) {
+            // Ensure future partial renders have a viewport.
+            lastViewport = viewport
+            val displayedPlayer = displayedPlayerPosition ?: pendingPlayer
+            boxPathDirtyRect = computeBoxPathDirtyRect(viewport, path, displayedPlayer, pendingPlayer)
+        } else {
+            boxPathDirtyRect = null
+        }
+
         removeCallbacks(animationFrameRunnable)
         postOnAnimation(animationFrameRunnable)
     }
@@ -696,6 +784,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
         if (elapsed >= boxPathDurationMs) {
             boxPathActive = false
+            boxPathNeedsFinalClear = true
             val pending = pendingPlayerPosition
             if (pending != null) {
                 displayedPlayerPosition = pending
