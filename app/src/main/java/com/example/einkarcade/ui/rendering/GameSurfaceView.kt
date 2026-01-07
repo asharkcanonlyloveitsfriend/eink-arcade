@@ -78,6 +78,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         color = 0xFFD3D3D3.toInt()
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val boxPathTailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFF2F2F2.toInt()
+        style = Paint.Style.FILL
     }
     private val boxPathDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFD3D3D3.toInt()
@@ -518,7 +523,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val offsetY = viewport.offsetY
 
         val strokeWidth = cellSize * 0.2f
-        val pad = (strokeWidth / 2f + 10f)
+        val tailWidth = snapToWholePixel(cellSize * 0.90f)
+        val tailHalfWidth = tailWidth / 2f
+        val pad = maxOf(strokeWidth / 2f, tailHalfWidth) + 10f
 
         var minX = Float.POSITIVE_INFINITY
         var minY = Float.POSITIVE_INFINITY
@@ -932,6 +939,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val offsetY = viewport.offsetY
         val strokeWidth = cellSize * 0.2f
         boxPathPaint.strokeWidth = strokeWidth
+        boxPathTailPaint.strokeWidth = strokeWidth
 
         val points = path.map { position ->
             val cx = offsetX + (position.col + 1) * cellSize + cellSize / 2f
@@ -953,6 +961,20 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
         val startPoint = interpolate(points[startSegment], points[startSegment + 1], startFraction)
 
+        val segmentStart = points[startSegment]
+        val segmentEnd = points[startSegment + 1]
+        val segDx = segmentEnd.x - segmentStart.x
+        val segDy = segmentEnd.y - segmentStart.y
+        val tailParams = spriteDrawParams(viewport, path.first(), 0.90f)
+        val tailOpaque = assets.getOpaqueBounds(R.drawable.box, tailParams.sizePx)
+        if (!tailOpaque.isEmpty) {
+            val left = tailParams.left + tailOpaque.left
+            val top = tailParams.top + tailOpaque.top
+            val right = tailParams.left + tailOpaque.right
+            val bottom = tailParams.top + tailOpaque.bottom
+            canvas.drawRect(left, top, right, bottom, boxPathTailPaint)
+        }
+
         var prev = startPoint
         var drewAnySegment = false
         for (index in (startSegment + 1) until points.size) {
@@ -966,6 +988,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             canvas.drawCircle(startPoint.x, startPoint.y, strokeWidth / 2f, boxPathDotPaint)
         }
     }
+
 
     private fun drawVanishingBox(
         canvas: Canvas,
