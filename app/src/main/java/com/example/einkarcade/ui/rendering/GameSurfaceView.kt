@@ -258,7 +258,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun onGameWon(isClean: Boolean) {
         if (!isInitialized) return
-        // Animations disabled for now.
+        if (!isClean) {
+            triggerBlink()
+        }
     }
 
     fun onBoxMoved(path: List<Position>) {
