@@ -206,10 +206,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         selectedBox = selected
 
         val viewport = lastViewport
-        if (viewport == null) {
-            render()
-            return
-        }
+        checkNotNull(viewport) { "Dirty render requested without viewport." }
         var dirty: Rect? = null
         if (previous != null) {
             dirty = Rect(spriteDrawParams(viewport, previous, 0.90f).dirtyRect)
@@ -222,11 +219,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 dirty.union(rect)
             }
         }
-        if (dirty != null) {
-            renderDirty(dirty)
-        } else {
-            render()
-        }
+        if (dirty == null) return
+        renderDirty(dirty)
     }
 
     fun getSelectedBox(): Position? = selectedBox
@@ -239,16 +233,13 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         playerPosition = to
         displayedPlayerPosition = to
 
-        val viewport = lastViewport
-        if (from != null && viewport != null) {
-            val fromParams = spriteDrawParams(viewport, from, 0.80f)
-            val toParams = spriteDrawParams(viewport, to, 0.80f)
-            val dirty = Rect(fromParams.dirtyRect)
-            dirty.union(toParams.dirtyRect)
-            renderDirty(dirty)
-        } else {
-            render()
-        }
+        checkNotNull(from) { "Dirty render requested without previous player position." }
+        val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
+        val fromParams = spriteDrawParams(viewport, from, 0.80f)
+        val toParams = spriteDrawParams(viewport, to, 0.80f)
+        val dirty = Rect(fromParams.dirtyRect)
+        dirty.union(toParams.dirtyRect)
+        renderDirty(dirty)
     }
 
     fun onMoveRejected() {
@@ -424,17 +415,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (width <= 0 || height <= 0) return
         if (!isInitialized) return
 
-        // Phase 1 scope: don't attempt partial redraws during path/vanish animations.
-        if (boxPathActive || vanishPosition != null) {
-            render()
-            return
-        }
+        check(!boxPathActive) { "Dirty render requested during box path animation." }
 
         val viewport = lastViewport
-        if (viewport == null) {
-            render()
-            return
-        }
+        checkNotNull(viewport) { "Dirty render requested without viewport." }
 
         val dirtyRect = Rect(requestedDirtyRect)
         if (!dirtyRect.intersect(0, 0, width, height)) return
@@ -464,10 +448,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     private fun renderBoxPathOrFull() {
         val viewport = lastViewport
-        if (viewport == null) {
-            render()
-            return
-        }
+        checkNotNull(viewport) { "Dirty render requested without viewport." }
         val boxDirty = boxPathDirtyRect
         val vanishTarget = if (vanishPosition != null || vanishNeedsFinalClear) {
             vanishPosition ?: vanishLastPosition
@@ -482,8 +463,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             else -> null
         }
         if (dirty == null) {
-            render()
-            return
+            error("Dirty render requested without dirty rect.")
         }
         renderDirtyForBoxPath(dirty)
     }
@@ -493,10 +473,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (!isInitialized) return
 
         val viewport = lastViewport
-        if (viewport == null) {
-            render()
-            return
-        }
+        checkNotNull(viewport) { "Dirty render requested without viewport." }
 
         val dirtyRect = Rect(requestedDirtyRect)
         if (!dirtyRect.intersect(0, 0, width, height)) return
@@ -596,10 +573,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     private fun renderVanishDirty() {
         if (!isInitialized) return
-        val viewport = lastViewport ?: run {
-            render()
-            return
-        }
+        val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
         val position = vanishPosition ?: vanishLastPosition ?: return
         renderDirty(computeVanishDirtyRect(viewport, position))
     }
@@ -610,10 +584,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             renderBoxPathOrFull()
             return
         }
-        val viewport = lastViewport ?: run {
-            render()
-            return
-        }
+        val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
         val playerPos = playerPosition ?: return
         val params = spriteDrawParams(viewport, playerPos, 0.80f)
         val openBounds = assets.getOpaqueBounds(R.drawable.player_eyes_open, params.sizePx)
@@ -621,8 +592,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val bounds = Rect(openBounds)
         bounds.union(blinkBounds)
         if (bounds.isEmpty) {
-            render()
-            return
+            error("Dirty render requested with empty blink bounds.")
         }
         val paddingPx = 2
         val left = params.left.toInt() + bounds.left - paddingPx
