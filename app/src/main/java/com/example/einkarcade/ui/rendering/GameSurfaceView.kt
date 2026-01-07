@@ -99,7 +99,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     if (boxPathActive || boxPathNeedsFinalClear) {
                         renderBoxPathOrFull()
                     } else {
-                        render()
+                        renderBlinkDirty()
                     }
                 }
             }
@@ -565,6 +565,34 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         rect.union(spriteDrawParams(viewport, pendingPlayer, 0.80f).dirtyRect)
 
         return rect
+    }
+
+    private fun renderBlinkDirty() {
+        if (!isInitialized) return
+        if (boxPathActive || vanishPosition != null) {
+            render()
+            return
+        }
+        val viewport = lastViewport ?: run {
+            render()
+            return
+        }
+        val playerPos = playerPosition ?: return
+        val params = spriteDrawParams(viewport, playerPos, 0.80f)
+        val openBounds = assets.getOpaqueBounds(R.drawable.player_eyes_open, params.sizePx)
+        val blinkBounds = assets.getOpaqueBounds(R.drawable.player_eyes_blink, params.sizePx)
+        val bounds = Rect(openBounds)
+        bounds.union(blinkBounds)
+        if (bounds.isEmpty) {
+            render()
+            return
+        }
+        val paddingPx = 2
+        val left = params.left.toInt() + bounds.left - paddingPx
+        val top = params.top.toInt() + bounds.top - paddingPx
+        val right = params.left.toInt() + bounds.right + paddingPx
+        val bottom = params.top.toInt() + bounds.bottom + paddingPx
+        renderDirty(Rect(left, top, right, bottom))
     }
 
     private fun drawDynamicScene(
