@@ -19,14 +19,16 @@ import com.example.einkarcade.GameController
 import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
+import com.example.einkarcade.ui.rendering.geom.BoardViewport
+import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
+import com.example.einkarcade.ui.rendering.geom.computeBoxPathDirtyRect
+import com.example.einkarcade.ui.rendering.geom.computeVanishDirtyRect
+import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
+import com.example.einkarcade.ui.rendering.geom.snapToWholePixel
+import com.example.einkarcade.ui.rendering.geom.spriteDrawParams
+import com.example.einkarcade.ui.rendering.geom.toRenderPoint
 import kotlin.math.roundToInt
 import androidx.core.graphics.createBitmap
-
-internal data class LevelInit(
-    val tiles: List<List<Tile>>,
-    val playerPosition: Position,
-    val boxPositions: Set<Position>
-)
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
@@ -47,8 +49,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var boxPathStartMs: Long = 0L
     private var boxPathDirtyRect: Rect? = null
     private var boxPathNeedsFinalClear: Boolean = false
-    private val boxPathDurationMs: Long = 125L
-    private val boxPathDelayMs: Long = 200L
     private var boxPathSuppressLine: Boolean = false
     private var levelTransition: LevelTransition? = null
     private var playerSilhouettePosition: Position? = null
@@ -128,7 +128,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             val blinkActive = isBlinking(now)
             val pendingBlink = !blinkActive && blinkStartMs > now
             val playerFlashActive =
-                playerFlashPosition != null && (now - playerFlashStartMs) <= 200L
+                playerFlashPosition != null && (now - playerFlashStartMs) <= RenderTimings.FLASH_DURATION_MS
             if (blinkActive != lastBlinkActive) {
                 lastBlinkActive = blinkActive
                 if (!changed && !vanishChanged) {
@@ -495,7 +495,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (!boxPathActive && playerFlashPosition != null) {
                 val nowMs = SystemClock.elapsedRealtime()
                 val elapsedMs = nowMs - playerFlashStartMs
-                if (elapsedMs <= 200L) {
+                if (elapsedMs <= RenderTimings.FLASH_DURATION_MS) {
                     val flashPos = playerFlashPosition
                     if (flashPos != null) {
                         val params = spriteDrawParams(viewport, flashPos, 0.80f)
@@ -540,7 +540,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             else -> null
         }
         val nowMs = SystemClock.elapsedRealtime()
-        if (boxFlashPosition != null && nowMs - boxFlashStartMs <= 200L) {
+        if (boxFlashPosition != null && nowMs - boxFlashStartMs <= RenderTimings.FLASH_DURATION_MS) {
             val flashRect = spriteDrawParams(viewport, boxFlashPosition!!, 0.90f).dirtyRect
             dirty = dirty?.apply { union(flashRect) } ?: Rect(flashRect)
         }
@@ -550,7 +550,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             dirty = dirty?.apply { union(silhouetteRect) } ?: Rect(silhouetteRect)
         }
         val playerFlashPos = playerFlashPosition
-        if (playerFlashPos != null && nowMs - playerFlashStartMs <= 200L) {
+        if (playerFlashPos != null && nowMs - playerFlashStartMs <= RenderTimings.FLASH_DURATION_MS) {
             val flashRect = spriteDrawParams(viewport, playerFlashPos, 0.80f).dirtyRect
             dirty = dirty?.apply { union(flashRect) } ?: Rect(flashRect)
         }
@@ -595,7 +595,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (boxPathActive && boxFlashPosition != null) {
                 val nowMs = SystemClock.elapsedRealtime()
                 val elapsedMs = nowMs - boxFlashStartMs
-                if (elapsedMs <= 200L) {
+                if (elapsedMs <= RenderTimings.FLASH_DURATION_MS) {
                     val flashPos = boxFlashPosition
                     if (flashPos != null) {
                         val params = spriteDrawParams(viewport, flashPos, 0.90f)
@@ -618,7 +618,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (boxPathActive && playerSilhouettePosition != null) {
                 val nowMs = SystemClock.elapsedRealtime()
                 val elapsedMs = nowMs - playerSilhouetteStartMs
-                if (elapsedMs <= 200L) {
+                if (elapsedMs <= RenderTimings.FLASH_DURATION_MS) {
                     val silhouettePosition = playerSilhouettePosition
                     if (silhouettePosition != null) {
                         val params = spriteDrawParams(viewport, silhouettePosition, 0.80f)
@@ -643,7 +643,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (!boxPathActive && playerFlashPosition != null) {
                 val nowMs = SystemClock.elapsedRealtime()
                 val elapsedMs = nowMs - playerFlashStartMs
-                if (elapsedMs <= 200L) {
+                if (elapsedMs <= RenderTimings.FLASH_DURATION_MS) {
                     val flashPos = playerFlashPosition
                     if (flashPos != null) {
                         val params = spriteDrawParams(viewport, flashPos, 0.80f)
@@ -718,11 +718,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         return nowMs in blinkStartMs until blinkEndMs
     }
 
-    private fun triggerBlink(delayMs: Long = 400L) {
+    private fun triggerBlink(delayMs: Long = RenderTimings.BLINK_DELAY_MS) {
         val nowMs = SystemClock.elapsedRealtime()
         val start = nowMs + delayMs
         blinkStartMs = start
-        blinkEndMs = start + 300L
+        blinkEndMs = start + RenderTimings.BLINK_DURATION_MS
         lastBlinkActive = false
         val delay = (blinkStartMs - nowMs).coerceAtLeast(0L)
         removeCallbacks(animationFrameRunnable)
@@ -1068,18 +1068,20 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private fun updateBoxPathAnimation(nowMs: Long): Boolean {
         if (!boxPathActive) return false
         val elapsed = nowMs - boxPathStartMs
-        if (elapsed < boxPathDelayMs) return false
+        if (elapsed < RenderTimings.BOX_PATH_DELAY_MS) return false
         val progress = if (boxPathSuppressLine) {
             1f
         } else {
-            ((elapsed - boxPathDelayMs).toFloat() / boxPathDurationMs.toFloat()).coerceAtMost(1f)
+            ((elapsed - RenderTimings.BOX_PATH_DELAY_MS).toFloat() /
+                RenderTimings.BOX_PATH_DURATION_MS.toFloat()).coerceAtMost(1f)
         }
         var changed = false
         if (progress != boxPathShrink) {
             boxPathShrink = progress
             changed = true
         }
-        if (elapsed >= boxPathDelayMs + if (boxPathSuppressLine) 0L else boxPathDurationMs) {
+        if (elapsed >= RenderTimings.BOX_PATH_DELAY_MS +
+            if (boxPathSuppressLine) 0L else RenderTimings.BOX_PATH_DURATION_MS) {
             boxPathActive = false
             boxPathNeedsFinalClear = true
             boxPathSuppressLine = false
@@ -1135,7 +1137,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (path.size < 2) return
         if (boxPathSuppressLine) return
         val nowMs = SystemClock.elapsedRealtime()
-        if (nowMs - boxPathStartMs < boxPathDelayMs) return
+        if (nowMs - boxPathStartMs < RenderTimings.BOX_PATH_DELAY_MS) return
         val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY

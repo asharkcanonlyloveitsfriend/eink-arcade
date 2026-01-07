@@ -1,4 +1,4 @@
-package com.example.einkarcade.ui.rendering
+package com.example.einkarcade.ui.rendering.geom
 
 import android.graphics.Rect
 import com.example.einkarcade.sokoban.Position
