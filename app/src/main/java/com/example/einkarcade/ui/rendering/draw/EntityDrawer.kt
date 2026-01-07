@@ -55,13 +55,10 @@ internal class EntityDrawer(private val assets: AndroidGameAssets) {
         val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
         val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
         val body = assets.getBitmap(R.drawable.player_slime, sizePx)
-        val eyesRes = if (blinkActive) {
-            R.drawable.player_eyes_blink
-        } else {
-            R.drawable.player_eyes_open
-        }
-        val eyes = assets.getBitmap(eyesRes, sizePx)
         drawSprite(canvas, body, left, top, sizePx, isFacingLeft, bitmapPaint)
-        drawSprite(canvas, eyes, left, top, sizePx, isFacingLeft, bitmapPaint)
+        if (blinkActive) {
+            val eyes = assets.getBitmap(R.drawable.player_eyes_blink, sizePx)
+            drawSprite(canvas, eyes, left, top, sizePx, isFacingLeft, bitmapPaint)
+        }
     }
 }
