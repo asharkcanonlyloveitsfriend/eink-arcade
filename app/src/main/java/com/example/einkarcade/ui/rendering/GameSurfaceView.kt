@@ -21,27 +21,29 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
-import com.example.einkarcade.ui.rendering.geom.computeBoxPathDirtyRect
-import com.example.einkarcade.ui.rendering.geom.computeVanishDirtyRect
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
 import com.example.einkarcade.ui.rendering.geom.snapToWholePixel
 import com.example.einkarcade.ui.rendering.geom.spriteDrawParams
 import com.example.einkarcade.ui.rendering.geom.toRenderPoint
-import com.example.einkarcade.ui.rendering.model.AnimationState
 import com.example.einkarcade.ui.rendering.model.LevelInit
 import com.example.einkarcade.ui.rendering.model.RenderState
 import com.example.einkarcade.ui.rendering.model.TransitionState
+import com.example.einkarcade.ui.rendering.anim.AnimationState
+import com.example.einkarcade.ui.rendering.anim.GameAnimator
+import com.example.einkarcade.ui.rendering.anim.TickResult
 import kotlin.math.roundToInt
 import androidx.core.graphics.createBitmap
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
     private val renderState = RenderState()
-    private val animationState = AnimationState()
     private val transitionState = TransitionState()
     private var onTapCell: ((Position) -> Unit)? = null
     private var lastViewport: BoardViewport? = null
     private val assets = AndroidGameAssets(context)
+    private val animator = GameAnimator(assets)
+    private val animationState: AnimationState
+        get() = animator.state
     private var backgroundBitmap: Bitmap? = null
     private var staticFrameBitmap: Bitmap? = null
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
@@ -91,80 +93,31 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         color = 0xFFD3D3D3.toInt()
         style = Paint.Style.FILL
     }
-    private val blinkStartRunnable = Runnable {
-        renderBlinkDirty()
-        postOnAnimation(animationFrameRunnable)
-    }
     private val animationFrameRunnable = object : Runnable {
         override fun run() {
             val now = SystemClock.elapsedRealtime()
-            val changed = updateBoxPathAnimation(now)
-            val vanishChanged = updateVanishAnimation(now)
+            val tick = animator.tick(now, lastViewport, renderState)
             val transitionActive = transitionState.transition?.let { !it.isComplete(now) } == true
-            val blinkActive = isBlinking(now)
-            val pendingBlink = !blinkActive && animationState.blinkStartMs > now
-            val playerFlashActive =
-                animationState.playerFlashPosition != null &&
-                    (now - animationState.playerFlashStartMs) <= RenderTimings.FLASH_DURATION_MS
-            if (blinkActive != animationState.lastBlinkActive) {
-                animationState.lastBlinkActive = blinkActive
-                if (!changed && !vanishChanged) {
-                    if (animationState.boxPathActive || animationState.boxPathNeedsFinalClear) {
-                        renderBoxPathOrFull()
-                    } else {
-                        renderBlinkDirty()
-                    }
-                }
-            }
-            if (changed) {
-                renderBoxPathOrFull()
-            }
-            if (vanishChanged && !changed) {
-                if (animationState.boxPathActive || animationState.boxPathNeedsFinalClear) {
-                    renderBoxPathOrFull()
-                } else {
-                    renderVanishDirty()
-                }
-            }
-            if (!changed && !vanishChanged && !blinkActive && playerFlashActive && !animationState.boxPathActive) {
-                renderPlayerFlashDirty()
-            }
-            if (!playerFlashActive && animationState.playerFlashPosition != null && !animationState.boxPathActive) {
-                val clearedPos = animationState.playerFlashPosition
-                animationState.playerFlashPosition = null
-                animationState.playerFlashStartMs = 0L
-                if (clearedPos != null) {
-                    val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
-                    val rect = spriteDrawParams(viewport, clearedPos, 0.80f).dirtyRect
-                    renderDirty(rect)
-                }
-            }
-            if (transitionActive && !changed && !vanishChanged && !blinkActive && !animationState.boxPathActive) {
-                render()
-            }
+
+            renderAnimatorTick(tick, transitionActive)
+
             if (transitionState.transition?.isComplete(now) == true) {
                 transitionState.transition = null
                 render()
             }
-            if (animationState.vanishNeedsFinalClear && animationState.vanishPosition == null) {
-                renderVanishDirty()
-                animationState.vanishNeedsFinalClear = false
-                animationState.vanishLastPosition = null
-            }
-            // If we just completed a box-path animation, drop the cached dirty rect after the first
-            // post-animation draw clears the line.
-            if (animationState.boxPathNeedsFinalClear && !animationState.boxPathActive) {
-                animationState.boxPathDirtyRect = null
-                animationState.boxPathNeedsFinalClear = false
-            }
-            val vanishActive = animationState.vanishPosition != null
-            if (animationState.boxPathActive || blinkActive || vanishActive || transitionActive) {
+
+            if (transitionActive) {
                 postOnAnimation(this)
-            } else if (pendingBlink) {
-                val delay = (animationState.blinkStartMs - now).coerceAtLeast(0L)
-                postDelayed(this, delay)
-            } else if (playerFlashActive) {
-                postOnAnimation(this)
+                return
+            }
+
+            if (tick.needsNextFrame) {
+                val delay = tick.nextFrameDelayMs
+                if (delay != null) {
+                    postDelayed(this, delay)
+                } else {
+                    postOnAnimation(this)
+                }
             }
         }
     }
@@ -228,26 +181,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         renderState.pendingPlayerPosition = null
         renderState.selectedBox = null
         resetFacing()
-        animationState.boxPath = emptyList()
-        animationState.boxPathActive = false
-        animationState.boxPathShrink = 0f
-        animationState.boxPathDirtyRect = null
-        animationState.boxPathNeedsFinalClear = false
-        animationState.boxPathSuppressLine = false
-        animationState.boxFlashPosition = null
-        animationState.boxFlashStartMs = 0L
-        animationState.playerSilhouettePosition = null
-        animationState.playerSilhouetteStartMs = 0L
-        animationState.playerFlashPosition = null
-        animationState.playerFlashStartMs = 0L
-        animationState.blinkStartMs = 0L
-        animationState.blinkEndMs = 0L
-        animationState.lastBlinkActive = false
-        animationState.vanishPosition = null
-        animationState.vanishStep = null
-        animationState.vanishStartMs = 0L
-        animationState.vanishLastPosition = null
-        animationState.vanishNeedsFinalClear = false
+        animator.reset()
         renderState.isInitialized = true
         rebuildStaticFrameIfPossible()
         render()
@@ -284,11 +218,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (!renderState.isInitialized) return
 
         val from = renderState.playerPosition
+        val nowMs = SystemClock.elapsedRealtime()
         resetFacing()
         renderState.playerPosition = to
         renderState.displayedPlayerPosition = to
-        animationState.playerFlashPosition = from
-        animationState.playerFlashStartMs = SystemClock.elapsedRealtime()
+        animator.startPlayerFlash(from, nowMs)
         removeCallbacks(animationFrameRunnable)
         postOnAnimation(animationFrameRunnable)
 
@@ -320,7 +254,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val to = path.last()
         if (renderState.tiles[to.row][to.col] == Tile.WALL) {
             renderState.boxPositions = renderState.boxPositions - from
-            startVanishBoxAnimation(at = to)
+            animator.startVanish(at = to, nowMs = SystemClock.elapsedRealtime())
+            removeCallbacks(animationFrameRunnable)
+            postOnAnimation(animationFrameRunnable)
         } else {
             renderState.boxPositions = (renderState.boxPositions - from) + to
         }
@@ -332,15 +268,41 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 break
             }
         }
+        val nowMs = SystemClock.elapsedRealtime()
         renderState.displayedPlayerPosition = renderState.playerPosition
         renderState.playerPosition = path[path.size - 2]
-        animationState.playerSilhouettePosition = renderState.displayedPlayerPosition
-        animationState.playerSilhouetteStartMs = SystemClock.elapsedRealtime()
-        animationState.boxFlashPosition = from
-        animationState.boxFlashStartMs = animationState.playerSilhouetteStartMs
-        animationState.boxPathSuppressLine = path.size == 2
-        startBoxPathAnimation(path, renderState.playerPosition ?: path[path.size - 2])
-        renderBoxPathOrFull()
+        animator.startPlayerSilhouette(renderState.displayedPlayerPosition, nowMs)
+        animator.startBoxFlash(from, nowMs)
+        val viewport = lastViewport
+            ?: run {
+                if (width > 0 && height > 0 &&
+                    renderState.tiles.isNotEmpty() &&
+                    renderState.tiles.first().isNotEmpty()) {
+                    computeBoardViewport(
+                        width.toFloat(),
+                        height.toFloat(),
+                        renderState.tiles.size,
+                        renderState.tiles.first().size
+                    )
+                } else {
+                    null
+                }
+            }
+        if (viewport != null) {
+            lastViewport = viewport
+        }
+        animator.startBoxPath(
+            path = path,
+            pendingPlayer = renderState.playerPosition ?: path[path.size - 2],
+            displayedPlayer = renderState.displayedPlayerPosition ?: path[path.size - 2],
+            viewport = viewport,
+            suppressLine = path.size == 2,
+            nowMs = nowMs,
+            renderState = renderState
+        )
+        renderBoxPathOrFull(nowMs)
+        removeCallbacks(animationFrameRunnable)
+        postOnAnimation(animationFrameRunnable)
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -500,41 +462,36 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    private fun renderBoxPathOrFull() {
-        val viewport = lastViewport
-        checkNotNull(viewport) { "Dirty render requested without viewport." }
-        val boxDirty = animationState.boxPathDirtyRect
-        val vanishTarget = if (animationState.vanishPosition != null || animationState.vanishNeedsFinalClear) {
-            animationState.vanishPosition ?: animationState.vanishLastPosition
-        } else {
-            null
+    private fun renderAnimatorTick(tick: TickResult, transitionActive: Boolean) {
+        if (tick.forceFullRender) {
+            render()
+            return
         }
-        val vanishDirty = vanishTarget?.let { computeVanishDirtyRect(viewport, it) }
-        var dirty = when {
-            boxDirty != null && vanishDirty != null -> Rect(boxDirty).apply { union(vanishDirty) }
-            boxDirty != null -> Rect(boxDirty)
-            vanishDirty != null -> Rect(vanishDirty)
-            else -> null
+
+        val dirty = tick.dirtyRect
+        if (dirty != null) {
+            if (animationState.boxPathActive || animationState.boxPathNeedsFinalClear) {
+                renderDirtyForBoxPath(dirty)
+            } else {
+                renderDirty(dirty)
+            }
+            return
         }
-        val nowMs = SystemClock.elapsedRealtime()
-        if (animationState.boxFlashPosition != null &&
-            nowMs - animationState.boxFlashStartMs <= RenderTimings.FLASH_DURATION_MS) {
-            val flashRect = spriteDrawParams(viewport, animationState.boxFlashPosition!!, 0.90f).dirtyRect
-            dirty = dirty?.apply { union(flashRect) } ?: Rect(flashRect)
+
+        if (transitionActive && !animationState.boxPathActive) {
+            render()
         }
-        val silhouettePos = animationState.playerSilhouettePosition
-        if (silhouettePos != null) {
-            val silhouetteRect = spriteDrawParams(viewport, silhouettePos, 0.80f).dirtyRect
-            dirty = dirty?.apply { union(silhouetteRect) } ?: Rect(silhouetteRect)
+    }
+
+    private fun renderBoxPathOrFull(nowMs: Long) {
+        val viewport = lastViewport ?: run {
+            render()
+            return
         }
-        val playerFlashPos = animationState.playerFlashPosition
-        if (playerFlashPos != null &&
-            nowMs - animationState.playerFlashStartMs <= RenderTimings.FLASH_DURATION_MS) {
-            val flashRect = spriteDrawParams(viewport, playerFlashPos, 0.80f).dirtyRect
-            dirty = dirty?.apply { union(flashRect) } ?: Rect(flashRect)
-        }
+        val dirty = animator.computeBoxPathDirtyUnion(nowMs, viewport)
         if (dirty == null) {
-            error("Dirty render requested without dirty rect.")
+            render()
+            return
         }
         renderDirtyForBoxPath(dirty)
     }
@@ -650,68 +607,12 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    private fun renderVanishDirty() {
-        if (!renderState.isInitialized) return
-        val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
-        val position = animationState.vanishPosition ?: animationState.vanishLastPosition ?: return
-        renderDirty(computeVanishDirtyRect(viewport, position))
-    }
-
-    private fun renderPlayerFlashDirty() {
-        if (!renderState.isInitialized) return
-        if (animationState.boxPathActive) {
-            renderBoxPathOrFull()
-            return
-        }
-        val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
-        val position = animationState.playerFlashPosition ?: return
-        val rect = spriteDrawParams(viewport, position, 0.80f).dirtyRect
-        renderDirty(rect)
-    }
-
-    private fun renderBlinkDirty() {
-        if (!renderState.isInitialized) return
-        if (animationState.boxPathActive || animationState.vanishPosition != null) {
-            renderBoxPathOrFull()
-            return
-        }
-        val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
-        val playerPos = renderState.playerPosition ?: return
-        val params = spriteDrawParams(viewport, playerPos, 0.80f)
-        val openBounds = assets.getOpaqueBounds(R.drawable.player_eyes_open, params.sizePx)
-        val blinkBounds = assets.getOpaqueBounds(R.drawable.player_eyes_blink, params.sizePx)
-        val bounds = Rect(openBounds)
-        bounds.union(blinkBounds)
-        if (bounds.isEmpty) {
-            error("Dirty render requested with empty blink bounds.")
-        }
-        val paddingPx = 2
-        val left = params.left.toInt() + bounds.left - paddingPx
-        val top = params.top.toInt() + bounds.top - paddingPx
-        val right = params.left.toInt() + bounds.right + paddingPx
-        val bottom = params.top.toInt() + bounds.bottom + paddingPx
-        renderDirty(Rect(left, top, right, bottom))
-    }
-
-    private fun isBlinking(nowMs: Long): Boolean {
-        return nowMs in animationState.blinkStartMs until animationState.blinkEndMs
-    }
 
     private fun triggerBlink(delayMs: Long = RenderTimings.BLINK_DELAY_MS) {
         val nowMs = SystemClock.elapsedRealtime()
-        val start = nowMs + delayMs
-        animationState.blinkStartMs = start
-        animationState.blinkEndMs = start + RenderTimings.BLINK_DURATION_MS
-        animationState.lastBlinkActive = false
-        val delay = (animationState.blinkStartMs - nowMs).coerceAtLeast(0L)
+        animator.triggerBlink(nowMs, delayMs)
         removeCallbacks(animationFrameRunnable)
-        removeCallbacks(blinkStartRunnable)
-        if (delay == 0L) {
-            renderBlinkDirty()
-            postOnAnimation(animationFrameRunnable)
-        } else {
-            postDelayed(blinkStartRunnable, delay)
-        }
+        postOnAnimation(animationFrameRunnable)
     }
 
     private fun resetFacing() {
@@ -878,7 +779,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
             val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
             val body = assets.getBitmap(R.drawable.player_slime, sizePx)
-            val eyesRes = if (isBlinking(SystemClock.elapsedRealtime())) {
+            val eyesRes = if (animator.isBlinking(SystemClock.elapsedRealtime())) {
                 R.drawable.player_eyes_blink
             } else {
                 R.drawable.player_eyes_open
@@ -944,7 +845,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (playerPos != null && transition.isCellReady(nowMs, playerPos.row, playerPos.col)) {
                 val params = spriteDrawParams(viewport, playerPos, 0.80f)
                 val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
-                val eyesRes = if (isBlinking(SystemClock.elapsedRealtime())) {
+                val eyesRes = if (animator.isBlinking(SystemClock.elapsedRealtime())) {
                     R.drawable.player_eyes_blink
                 } else {
                     R.drawable.player_eyes_open
@@ -1002,118 +903,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    private fun startVanishBoxAnimation(at: Position) {
-        animationState.vanishPosition = at
-        animationState.vanishStartMs = SystemClock.elapsedRealtime()
-        animationState.vanishStep = 0
-        animationState.vanishLastPosition = at
-        animationState.vanishNeedsFinalClear = false
-        removeCallbacks(animationFrameRunnable)
-        postOnAnimation(animationFrameRunnable)
-    }
-
-    private fun startBoxPathAnimation(path: List<Position>, pendingPlayer: Position) {
-        require(path.size >= 2) { "Box path requires at least two points." }
-        animationState.boxPath = path
-        renderState.pendingPlayerPosition = pendingPlayer
-        animationState.boxPathStartMs = SystemClock.elapsedRealtime()
-        animationState.boxPathShrink = 0f
-        animationState.boxPathActive = true
-        animationState.boxPathNeedsFinalClear = false
-
-        // Conservative dirty rect: entire path line + moved box + both displayed and pending player sprites.
-        val viewport = lastViewport
-            ?: run {
-                if (width > 0 && height > 0 &&
-                    renderState.tiles.isNotEmpty() &&
-                    renderState.tiles.first().isNotEmpty()) {
-                    computeBoardViewport(
-                        width.toFloat(),
-                        height.toFloat(),
-                        renderState.tiles.size,
-                        renderState.tiles.first().size
-                    )
-                } else {
-                    null
-                }
-            }
-
-        if (viewport != null) {
-            // Ensure future partial renders have a viewport.
-            lastViewport = viewport
-            val displayedPlayer = renderState.displayedPlayerPosition ?: pendingPlayer
-            animationState.boxPathDirtyRect =
-                computeBoxPathDirtyRect(viewport, path, displayedPlayer, pendingPlayer)
-        } else {
-            animationState.boxPathDirtyRect = null
-        }
-
-        removeCallbacks(animationFrameRunnable)
-        postOnAnimation(animationFrameRunnable)
-    }
-
-    private fun updateBoxPathAnimation(nowMs: Long): Boolean {
-        if (!animationState.boxPathActive) return false
-        val elapsed = nowMs - animationState.boxPathStartMs
-        if (elapsed < RenderTimings.BOX_PATH_DELAY_MS) return false
-        val progress = if (animationState.boxPathSuppressLine) {
-            1f
-        } else {
-            ((elapsed - RenderTimings.BOX_PATH_DELAY_MS).toFloat() /
-                RenderTimings.BOX_PATH_DURATION_MS.toFloat()).coerceAtMost(1f)
-        }
-        var changed = false
-        if (progress != animationState.boxPathShrink) {
-            animationState.boxPathShrink = progress
-            changed = true
-        }
-        if (elapsed >= RenderTimings.BOX_PATH_DELAY_MS +
-            if (animationState.boxPathSuppressLine) 0L else RenderTimings.BOX_PATH_DURATION_MS) {
-            animationState.boxPathActive = false
-            animationState.boxPathNeedsFinalClear = true
-            animationState.boxPathSuppressLine = false
-            val pending = renderState.pendingPlayerPosition
-            if (pending != null) {
-                renderState.displayedPlayerPosition = pending
-                renderState.pendingPlayerPosition = null
-            }
-            renderState.pendingFacingLeft?.let { facing ->
-                renderState.isFacingLeft = facing
-            }
-            renderState.pendingFacingLeft = null
-            changed = true
-        }
-        return changed
-    }
-
-    private fun updateVanishAnimation(nowMs: Long): Boolean {
-        val currentPosition = animationState.vanishPosition ?: return false
-        val elapsed = nowMs - animationState.vanishStartMs
-        var cumulative = 0L
-
-        for (step in 0..VanishSpec.LAST_STEP) {
-            val delay = VanishSpec.delayMs(step)
-            if (elapsed < cumulative + delay) {
-                if (animationState.vanishStep != step) {
-                    animationState.vanishStep = step
-                    return true
-                }
-                return false
-            }
-            cumulative += delay
-        }
-
-        if (animationState.vanishStep != null) {
-            animationState.vanishStep = null
-            animationState.vanishPosition = null
-            animationState.vanishLastPosition = currentPosition
-            animationState.vanishNeedsFinalClear = true
-            triggerBlink(delayMs = 0L)
-            return true
-        }
-
-        return false
-    }
 
     private fun drawBoxPathLine(
         canvas: Canvas,
