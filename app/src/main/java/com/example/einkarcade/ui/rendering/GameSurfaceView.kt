@@ -330,7 +330,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 boxPositions = boxPositions,
                 playerPosition = playerPosition,
                 selectedBox = selectedBox,
-                isFacingLeft = isFacingLeft
+                isFacingLeft = isFacingLeft,
+                drawPlayer = true
             )
         } finally {
             holder.unlockCanvasAndPost(canvas)
@@ -443,7 +444,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 boxPositions = boxPositions,
                 playerPosition = playerPos,
                 selectedBox = selectedBox,
-                isFacingLeft = isFacingLeft
+                isFacingLeft = isFacingLeft,
+                drawPlayer = true
             )
         } finally {
             canvas.restore()
@@ -502,7 +504,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 boxPositions = boxPositions,
                 playerPosition = effectivePlayer,
                 selectedBox = selectedBox,
-                isFacingLeft = isFacingLeft
+                isFacingLeft = isFacingLeft,
+                drawPlayer = !boxPathActive
             )
         } finally {
             canvas.restore()
@@ -764,7 +767,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         boxPositions: Set<Position>,
         playerPosition: Position,
         selectedBox: Position?,
-        isFacingLeft: Boolean
+        isFacingLeft: Boolean,
+        drawPlayer: Boolean
     ) {
         drawBackground(canvas)
         val bitmapPaint = assets.bitmapPaint()
@@ -814,22 +818,24 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             canvas.drawBitmap(bitmap, left, top, bitmapPaint)
         }
 
-        val origin = Position(playerPosition.row + 1, playerPosition.col + 1)
-            .toRenderPoint(cellSize, offsetX, offsetY)
-        val targetSize = snapToWholePixel(cellSize * 0.80f)
-        val sizePx = targetSize.toInt()
-        require(sizePx > 0)
-        val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
-        val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
-        val body = assets.getBitmap(R.drawable.player_slime, sizePx)
-        val eyesRes = if (isBlinking(SystemClock.elapsedRealtime())) {
-            R.drawable.player_eyes_blink
-        } else {
-            R.drawable.player_eyes_open
+        if (drawPlayer) {
+            val origin = Position(playerPosition.row + 1, playerPosition.col + 1)
+                .toRenderPoint(cellSize, offsetX, offsetY)
+            val targetSize = snapToWholePixel(cellSize * 0.80f)
+            val sizePx = targetSize.toInt()
+            require(sizePx > 0)
+            val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
+            val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
+            val body = assets.getBitmap(R.drawable.player_slime, sizePx)
+            val eyesRes = if (isBlinking(SystemClock.elapsedRealtime())) {
+                R.drawable.player_eyes_blink
+            } else {
+                R.drawable.player_eyes_open
+            }
+            val eyes = assets.getBitmap(eyesRes, sizePx)
+            drawSprite(canvas, body, left, top, sizePx, isFacingLeft, bitmapPaint)
+            drawSprite(canvas, eyes, left, top, sizePx, isFacingLeft, bitmapPaint)
         }
-        val eyes = assets.getBitmap(eyesRes, sizePx)
-        drawSprite(canvas, body, left, top, sizePx, isFacingLeft, bitmapPaint)
-        drawSprite(canvas, eyes, left, top, sizePx, isFacingLeft, bitmapPaint)
 
     }
 
