@@ -10,16 +10,17 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
-import android.graphics.RectF
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import android.os.SystemClock
+import androidx.core.graphics.withClip
 import com.example.einkarcade.GameController
 import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import kotlin.math.roundToInt
+import androidx.core.graphics.createBitmap
 
 internal data class LevelInit(
     val tiles: List<List<Tile>>,
@@ -114,10 +115,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         color = 0xFFD3D3D3.toInt()
         style = Paint.Style.FILL
     }
-    private val vanishRectPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-    private val vanishRect = RectF()
     private val blinkStartRunnable = Runnable {
         renderBlinkDirty()
         postOnAnimation(animationFrameRunnable)
@@ -436,7 +433,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
         existing?.recycle()
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height)
         val bitmapCanvas = Canvas(bitmap)
 
         val innerRows = tiles.size
@@ -545,29 +542,17 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val nowMs = SystemClock.elapsedRealtime()
         if (boxFlashPosition != null && nowMs - boxFlashStartMs <= 200L) {
             val flashRect = spriteDrawParams(viewport, boxFlashPosition!!, 0.90f).dirtyRect
-            dirty = if (dirty == null) {
-                Rect(flashRect)
-            } else {
-                dirty.apply { union(flashRect) }
-            }
+            dirty = dirty?.apply { union(flashRect) } ?: Rect(flashRect)
         }
         val silhouettePos = playerSilhouettePosition
         if (silhouettePos != null) {
             val silhouetteRect = spriteDrawParams(viewport, silhouettePos, 0.80f).dirtyRect
-            dirty = if (dirty == null) {
-                Rect(silhouetteRect)
-            } else {
-                dirty.apply { union(silhouetteRect) }
-            }
+            dirty = dirty?.apply { union(silhouetteRect) } ?: Rect(silhouetteRect)
         }
         val playerFlashPos = playerFlashPosition
         if (playerFlashPos != null && nowMs - playerFlashStartMs <= 200L) {
             val flashRect = spriteDrawParams(viewport, playerFlashPos, 0.80f).dirtyRect
-            dirty = if (dirty == null) {
-                Rect(flashRect)
-            } else {
-                dirty.apply { union(flashRect) }
-            }
+            dirty = dirty?.apply { union(flashRect) } ?: Rect(flashRect)
         }
         if (dirty == null) {
             error("Dirty render requested without dirty rect.")
@@ -747,38 +732,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             postOnAnimation(animationFrameRunnable)
         } else {
             postDelayed(blinkStartRunnable, delay)
-        }
-    }
-
-    private fun drawDynamicScene(
-        canvas: Canvas,
-        viewport: BoardViewport,
-        dirtyRect: Rect,
-        playerPosition: Position
-    ) {
-        val bitmapPaint = assets.bitmapPaint()
-
-        // Boxes
-        for (position in boxPositions) {
-            val params = spriteDrawParams(viewport, position, 0.90f)
-            if (!Rect.intersects(dirtyRect, params.dirtyRect)) continue
-            val resId = if (selectedBox == position) R.drawable.box_selected else R.drawable.box
-            val bitmap = assets.getBitmap(resId, params.sizePx)
-            canvas.drawBitmap(bitmap, params.left, params.top, bitmapPaint)
-        }
-
-        // Player
-        val playerParams = spriteDrawParams(viewport, playerPosition, 0.80f)
-        if (Rect.intersects(dirtyRect, playerParams.dirtyRect)) {
-            val body = assets.getBitmap(R.drawable.player_slime, playerParams.sizePx)
-            val eyesRes = if (isBlinking(SystemClock.elapsedRealtime())) {
-                R.drawable.player_eyes_blink
-            } else {
-                R.drawable.player_eyes_open
-            }
-            val eyes = assets.getBitmap(eyesRes, playerParams.sizePx)
-            drawSprite(canvas, body, playerParams.left, playerParams.top, playerParams.sizePx, isFacingLeft, bitmapPaint)
-            drawSprite(canvas, eyes, playerParams.left, playerParams.top, playerParams.sizePx, isFacingLeft, bitmapPaint)
         }
     }
 
@@ -1066,7 +1019,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     goalStrokePaint
                 )
             }
-            Tile.WALL -> Unit
+            else -> Unit
         }
     }
 
@@ -1210,10 +1163,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
         val startPoint = interpolate(points[startSegment], points[startSegment + 1], startFraction)
 
-        val segmentStart = points[startSegment]
-        val segmentEnd = points[startSegment + 1]
-        val segDx = segmentEnd.x - segmentStart.x
-        val segDy = segmentEnd.y - segmentStart.y
         val tailParams = spriteDrawParams(viewport, path[startSegment], 0.90f)
         val tailOpaque = assets.getOpaqueBounds(R.drawable.box, tailParams.sizePx)
         if (!tailOpaque.isEmpty) {
@@ -1266,9 +1215,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val left = leftPx + (targetSize - size) / 2f
         val top = topPx + (targetSize - size) / 2f
         val bitmap = assets.getBitmap(R.drawable.box, sizePx)
-        canvas.save()
-        canvas.clipRect(left, top, left + size, top + size)
-        canvas.drawBitmap(bitmap, leftPx, topPx, assets.bitmapPaint())
-        canvas.restore()
+        canvas.withClip(left, top, left + size, top + size) {
+            drawBitmap(bitmap, leftPx, topPx, assets.bitmapPaint())
+        }
     }
 }

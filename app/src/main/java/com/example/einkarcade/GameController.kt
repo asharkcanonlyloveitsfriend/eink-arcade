@@ -19,13 +19,41 @@ class GameController(
 
     private val repository = LevelsRepository(context)
 
-    private val revisionState = mutableLongStateOf(0L)
-    val revision: State<Long>
-        get() = revisionState
+    private var levelSets: List<LevelSet> = emptyList()
 
-    /**
-     * Renderer deltas emitted when the game state changes.
-     */
+    private var currentSetIndex: Int = 0
+    private var currentLevelIndex = 0
+    private lateinit var level: Level
+    private lateinit var gameEngine: GameEngine
+    val currentSetName: String
+        get() = levelSets[currentSetIndex].name
+
+    private val levelsInCurrentSet: List<Level>
+        get() = levelSets[currentSetIndex].levels
+
+    init {
+        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
+        rebuildState(sets)
+    }
+
+    val playerPosition: Position
+        get() = gameEngine.playerPosition
+
+    val boxPositions: Set<Position>
+        get() = gameEngine.boxPositions
+
+    val isGameWon: Boolean
+        get() = gameEngine.isGameWon
+
+    val isAtStart: Boolean
+        get() = gameEngine.isAtStart
+
+    val tiles: List<List<Tile>>
+        get() = level.grid
+
+    val levelName: String
+        get() = level.name
+
     sealed interface RenderDelta {
         data class LevelLoaded(
             val tiles: List<List<Tile>>,
@@ -45,11 +73,6 @@ class GameController(
         boxPositions = boxPositions
     )
 
-    /**
-     * Optional sink for render deltas (e.g., a SurfaceView bridge).
-     *
-     * The controller must not reference any specific renderer type.
-     */
     var onRenderDelta: ((RenderDelta) -> Unit)? = null
         set(value) {
             field = value
@@ -75,8 +98,6 @@ class GameController(
     }
 
     private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
-
-    private var levelSets: List<LevelSet> = emptyList()
 
     private fun persistSelection() {
         lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
@@ -124,16 +145,6 @@ class GameController(
         onRenderDelta?.invoke(currentLevelLoadedDelta())
     }
 
-    private var currentSetIndex: Int = 0
-    private var currentLevelIndex = 0
-    private lateinit var level: Level
-    private lateinit var gameEngine: GameEngine
-    val currentSetName: String
-        get() = levelSets[currentSetIndex].name
-
-    private val levelsInCurrentSet: List<Level>
-        get() = levelSets[currentSetIndex].levels
-
     fun selectLevel(name: String) {
         val index = levelsInCurrentSet.indexOfFirst { it.name == name }
         if (index != -1) {
@@ -145,32 +156,6 @@ class GameController(
             onRenderDelta?.invoke(currentLevelLoadedDelta())
         }
     }
-
-    init {
-        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
-        rebuildState(sets)
-    }
-
-    val playerPosition: Position
-        get() = gameEngine.playerPosition
-
-    val boxPositions: Set<Position>
-        get() = gameEngine.boxPositions
-
-    val isGameWon: Boolean
-        get() = gameEngine.isGameWon
-
-    val isCleanWin: Boolean
-        get() = gameEngine.isCleanWin
-
-    val isAtStart: Boolean
-        get() = gameEngine.isAtStart
-
-    val tiles: List<List<Tile>>
-        get() = level.grid
-
-    val levelName: String
-        get() = level.name
 
     fun restart() {
         gameEngine = GameEngine(level)
@@ -225,6 +210,10 @@ class GameController(
         notifyIfWon()
         return boxPath
     }
+
+    private val revisionState = mutableLongStateOf(0L)
+    val revision: State<Long>
+        get() = revisionState
 
     private fun rebuildState(sets: List<LevelSet>) {
         val nonEmpty = sets.filter { it.levels.isNotEmpty() }

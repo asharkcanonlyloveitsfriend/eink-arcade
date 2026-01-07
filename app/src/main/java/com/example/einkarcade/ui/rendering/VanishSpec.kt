@@ -30,16 +30,6 @@ internal object VanishSpec {
         return total
     }
 
-    fun stepForElapsed(elapsedMs: Long): Int? {
-        var cumulative = 0L
-        for (step in 0..LAST_STEP) {
-            val delay = delayMs(step)
-            if (elapsedMs < cumulative + delay) return step
-            cumulative += delay
-        }
-        return null
-    }
-
     fun scale(step: Int): Float = when (step) {
         0 -> 1.0f
         1 -> 0.75f

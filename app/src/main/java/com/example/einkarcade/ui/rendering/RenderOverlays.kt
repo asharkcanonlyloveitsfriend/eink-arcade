@@ -5,7 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.core.graphics.withTranslation
 
-internal const val FLASH_PHASE_MS: Long = 100L
+internal const val FLASH_PHASE_MS: Long = 50L
 
 internal fun drawSprite(
     canvas: Canvas,
