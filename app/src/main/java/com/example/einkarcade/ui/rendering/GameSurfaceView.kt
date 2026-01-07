@@ -7,6 +7,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.graphics.RectF
 import android.view.MotionEvent
@@ -45,7 +47,14 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var boxPathStartMs: Long = 0L
     private var boxPathDirtyRect: Rect? = null
     private var boxPathNeedsFinalClear: Boolean = false
-    private val boxPathDurationMs: Long = 100L
+    private val boxPathDurationMs: Long = 125L
+    private val boxPathDelayMs: Long = 200L
+    private var playerSilhouettePosition: Position? = null
+    private var playerSilhouetteStartMs: Long = 0L
+    private var playerFlashPosition: Position? = null
+    private var playerFlashStartMs: Long = 0L
+    private var boxFlashPosition: Position? = null
+    private var boxFlashStartMs: Long = 0L
     private var blinkStartMs: Long = 0L
     private var blinkEndMs: Long = 0L
     private var lastBlinkActive: Boolean = false
@@ -82,6 +91,24 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         color = 0xFFF2F2F2.toInt()
         style = Paint.Style.FILL
     }
+    private val playerSilhouetteDarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(0xFF8E8E8E.toInt(), PorterDuff.Mode.SRC_IN)
+    }
+    private val playerSilhouetteLightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(0xFFF2F2F2.toInt(), PorterDuff.Mode.SRC_IN)
+    }
+    private val playerFlashDarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(0xFF8E8E8E.toInt(), PorterDuff.Mode.SRC_IN)
+    }
+    private val playerFlashLightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(0xFFF2F2F2.toInt(), PorterDuff.Mode.SRC_IN)
+    }
+    private val boxFlashDarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(0xFF8E8E8E.toInt(), PorterDuff.Mode.SRC_IN)
+    }
+    private val boxFlashLightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(0xFFF2F2F2.toInt(), PorterDuff.Mode.SRC_IN)
+    }
     private val boxPathDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFD3D3D3.toInt()
         style = Paint.Style.FILL
@@ -101,6 +128,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             val vanishChanged = updateVanishAnimation(now)
             val blinkActive = isBlinking(now)
             val pendingBlink = !blinkActive && blinkStartMs > now
+            val playerFlashActive =
+                playerFlashPosition != null && (now - playerFlashStartMs) <= 200L
             if (blinkActive != lastBlinkActive) {
                 lastBlinkActive = blinkActive
                 if (!changed && !vanishChanged) {
@@ -121,6 +150,19 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     renderVanishDirty()
                 }
             }
+            if (!changed && !vanishChanged && !blinkActive && playerFlashActive && !boxPathActive) {
+                renderPlayerFlashDirty()
+            }
+            if (!playerFlashActive && playerFlashPosition != null && !boxPathActive) {
+                val clearedPos = playerFlashPosition
+                playerFlashPosition = null
+                playerFlashStartMs = 0L
+                if (clearedPos != null) {
+                    val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
+                    val rect = spriteDrawParams(viewport, clearedPos, 0.80f).dirtyRect
+                    renderDirty(rect)
+                }
+            }
             if (vanishNeedsFinalClear && vanishPosition == null) {
                 renderVanishDirty()
                 vanishNeedsFinalClear = false
@@ -138,6 +180,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             } else if (pendingBlink) {
                 val delay = (blinkStartMs - now).coerceAtLeast(0L)
                 postDelayed(this, delay)
+            } else if (playerFlashActive) {
+                postOnAnimation(this)
             }
         }
     }
@@ -191,6 +235,12 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         boxPathShrink = 0f
         boxPathDirtyRect = null
         boxPathNeedsFinalClear = false
+        boxFlashPosition = null
+        boxFlashStartMs = 0L
+        playerSilhouettePosition = null
+        playerSilhouetteStartMs = 0L
+        playerFlashPosition = null
+        playerFlashStartMs = 0L
         blinkStartMs = 0L
         blinkEndMs = 0L
         lastBlinkActive = false
@@ -238,6 +288,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         resetFacing()
         playerPosition = to
         displayedPlayerPosition = to
+        playerFlashPosition = from
+        playerFlashStartMs = SystemClock.elapsedRealtime()
+        removeCallbacks(animationFrameRunnable)
+        postOnAnimation(animationFrameRunnable)
 
         checkNotNull(from) { "Dirty render requested without previous player position." }
         val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
@@ -281,6 +335,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
         displayedPlayerPosition = playerPosition
         playerPosition = path[path.size - 2]
+        playerSilhouettePosition = displayedPlayerPosition
+        playerSilhouetteStartMs = SystemClock.elapsedRealtime()
+        boxFlashPosition = from
+        boxFlashStartMs = playerSilhouetteStartMs
         startBoxPathAnimation(path, playerPosition ?: path[path.size - 2])
         renderBoxPathOrFull()
     }
@@ -447,6 +505,30 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 isFacingLeft = isFacingLeft,
                 drawPlayer = true
             )
+            if (!boxPathActive && playerFlashPosition != null) {
+                val nowMs = SystemClock.elapsedRealtime()
+                val elapsedMs = nowMs - playerFlashStartMs
+                if (elapsedMs <= 200L) {
+                    val flashPos = playerFlashPosition
+                    if (flashPos != null) {
+                        val params = spriteDrawParams(viewport, flashPos, 0.80f)
+                        val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
+                        val paint = if (elapsedMs <= 100L) playerFlashDarkPaint else playerFlashLightPaint
+                        drawSprite(
+                            canvas,
+                            body,
+                            params.left,
+                            params.top,
+                            params.sizePx,
+                            isFacingLeft,
+                            paint
+                        )
+                    }
+                } else {
+                    playerFlashPosition = null
+                    playerFlashStartMs = 0L
+                }
+            }
         } finally {
             canvas.restore()
             holder.unlockCanvasAndPost(canvas)
@@ -463,11 +545,38 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             null
         }
         val vanishDirty = vanishTarget?.let { computeVanishDirtyRect(viewport, it) }
-        val dirty = when {
+        var dirty = when {
             boxDirty != null && vanishDirty != null -> Rect(boxDirty).apply { union(vanishDirty) }
-            boxDirty != null -> boxDirty
-            vanishDirty != null -> vanishDirty
+            boxDirty != null -> Rect(boxDirty)
+            vanishDirty != null -> Rect(vanishDirty)
             else -> null
+        }
+        val nowMs = SystemClock.elapsedRealtime()
+        if (boxFlashPosition != null && nowMs - boxFlashStartMs <= 200L) {
+            val flashRect = spriteDrawParams(viewport, boxFlashPosition!!, 0.90f).dirtyRect
+            dirty = if (dirty == null) {
+                Rect(flashRect)
+            } else {
+                dirty.apply { union(flashRect) }
+            }
+        }
+        val silhouettePos = playerSilhouettePosition
+        if (silhouettePos != null) {
+            val silhouetteRect = spriteDrawParams(viewport, silhouettePos, 0.80f).dirtyRect
+            dirty = if (dirty == null) {
+                Rect(silhouetteRect)
+            } else {
+                dirty.apply { union(silhouetteRect) }
+            }
+        }
+        val playerFlashPos = playerFlashPosition
+        if (playerFlashPos != null && nowMs - playerFlashStartMs <= 200L) {
+            val flashRect = spriteDrawParams(viewport, playerFlashPos, 0.80f).dirtyRect
+            dirty = if (dirty == null) {
+                Rect(flashRect)
+            } else {
+                dirty.apply { union(flashRect) }
+            }
         }
         if (dirty == null) {
             error("Dirty render requested without dirty rect.")
@@ -507,6 +616,74 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 isFacingLeft = isFacingLeft,
                 drawPlayer = !boxPathActive
             )
+            if (boxPathActive && boxFlashPosition != null) {
+                val nowMs = SystemClock.elapsedRealtime()
+                val elapsedMs = nowMs - boxFlashStartMs
+                if (elapsedMs <= 200L) {
+                    val flashPos = boxFlashPosition
+                    if (flashPos != null) {
+                        val params = spriteDrawParams(viewport, flashPos, 0.90f)
+                        val bitmap = assets.getBitmap(R.drawable.box, params.sizePx)
+                        val paint = if (elapsedMs <= 100L) boxFlashDarkPaint else boxFlashLightPaint
+                        canvas.drawBitmap(bitmap, params.left, params.top, paint)
+                    }
+                } else {
+                    boxFlashPosition = null
+                    boxFlashStartMs = 0L
+                }
+            }
+            if (boxPathActive && playerSilhouettePosition != null) {
+                val nowMs = SystemClock.elapsedRealtime()
+                val elapsedMs = nowMs - playerSilhouetteStartMs
+                if (elapsedMs <= 200L) {
+                    val silhouettePosition = playerSilhouettePosition
+                    if (silhouettePosition != null) {
+                        val params = spriteDrawParams(viewport, silhouettePosition, 0.80f)
+                        val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
+                        val paint = if (elapsedMs <= 100L) {
+                            playerSilhouetteDarkPaint
+                        } else {
+                            playerSilhouetteLightPaint
+                        }
+                        drawSprite(
+                            canvas,
+                            body,
+                            params.left,
+                            params.top,
+                            params.sizePx,
+                            isFacingLeft,
+                            paint
+                        )
+                    }
+                } else {
+                    playerSilhouettePosition = null
+                    playerSilhouetteStartMs = 0L
+                }
+            }
+            if (!boxPathActive && playerFlashPosition != null) {
+                val nowMs = SystemClock.elapsedRealtime()
+                val elapsedMs = nowMs - playerFlashStartMs
+                if (elapsedMs <= 200L) {
+                    val flashPos = playerFlashPosition
+                    if (flashPos != null) {
+                        val params = spriteDrawParams(viewport, flashPos, 0.80f)
+                        val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
+                        val paint = if (elapsedMs <= 100L) playerFlashDarkPaint else playerFlashLightPaint
+                        drawSprite(
+                            canvas,
+                            body,
+                            params.left,
+                            params.top,
+                            params.sizePx,
+                            isFacingLeft,
+                            paint
+                        )
+                    }
+                } else {
+                    playerFlashPosition = null
+                    playerFlashStartMs = 0L
+                }
+            }
         } finally {
             canvas.restore()
             holder.unlockCanvasAndPost(canvas)
@@ -586,6 +763,18 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
         val position = vanishPosition ?: vanishLastPosition ?: return
         renderDirty(computeVanishDirtyRect(viewport, position))
+    }
+
+    private fun renderPlayerFlashDirty() {
+        if (!isInitialized) return
+        if (boxPathActive) {
+            renderBoxPathOrFull()
+            return
+        }
+        val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
+        val position = playerFlashPosition ?: return
+        val rect = spriteDrawParams(viewport, position, 0.80f).dirtyRect
+        renderDirty(rect)
     }
 
     private fun renderBlinkDirty() {
@@ -884,13 +1073,15 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private fun updateBoxPathAnimation(nowMs: Long): Boolean {
         if (!boxPathActive) return false
         val elapsed = nowMs - boxPathStartMs
-        val progress = (elapsed.toFloat() / boxPathDurationMs.toFloat()).coerceAtMost(1f)
+        if (elapsed < boxPathDelayMs) return false
+        val progress =
+            ((elapsed - boxPathDelayMs).toFloat() / boxPathDurationMs.toFloat()).coerceAtMost(1f)
         var changed = false
         if (progress != boxPathShrink) {
             boxPathShrink = progress
             changed = true
         }
-        if (elapsed >= boxPathDurationMs) {
+        if (elapsed >= boxPathDurationMs + boxPathDelayMs) {
             boxPathActive = false
             boxPathNeedsFinalClear = true
             val pending = pendingPlayerPosition
@@ -943,6 +1134,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         shrink: Float
     ) {
         if (path.size < 2) return
+        val nowMs = SystemClock.elapsedRealtime()
+        if (nowMs - boxPathStartMs < boxPathDelayMs) return
         val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
@@ -974,7 +1167,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val segmentEnd = points[startSegment + 1]
         val segDx = segmentEnd.x - segmentStart.x
         val segDy = segmentEnd.y - segmentStart.y
-        val tailParams = spriteDrawParams(viewport, path.first(), 0.90f)
+        val tailParams = spriteDrawParams(viewport, path[startSegment], 0.90f)
         val tailOpaque = assets.getOpaqueBounds(R.drawable.box, tailParams.sizePx)
         if (!tailOpaque.isEmpty) {
             val left = tailParams.left + tailOpaque.left
