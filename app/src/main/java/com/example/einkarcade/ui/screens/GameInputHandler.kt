@@ -29,11 +29,16 @@ internal object GameInputHandler {
         selection: BoxSelection
     ) {
         val tile = gameController.tiles[tappedPosition.row][tappedPosition.col]
+        val selectedBox = selection.getSelectedBox()
         if (tile == Tile.WALL) {
-            selection.setSelectedBox(null)
+            if (selectedBox != null) {
+                selection.setSelectedBox(null)
+                gameController.moveBoxTo(selectedBox, tappedPosition)
+            } else {
+                selection.setSelectedBox(null)
+            }
             return
         }
-        val selectedBox = selection.getSelectedBox()
         if (gameController.boxPositions.contains(tappedPosition)) {
             if (selectedBox == tappedPosition) {
                 selection.setSelectedBox(null)
