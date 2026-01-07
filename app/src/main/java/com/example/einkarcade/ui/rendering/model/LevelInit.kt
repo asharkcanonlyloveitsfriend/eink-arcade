@@ -1,4 +1,4 @@
-package com.example.einkarcade.ui.rendering
+package com.example.einkarcade.ui.rendering.model
 
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
