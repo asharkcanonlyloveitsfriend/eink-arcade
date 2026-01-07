@@ -54,6 +54,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var vanishPosition: Position? = null
     private var vanishStartMs: Long = 0L
     private var vanishStep: Int? = null
+    private var vanishLastPosition: Position? = null
+    private var vanishNeedsFinalClear: Boolean = false
     private val assets = AndroidGameAssets(context)
     private var backgroundBitmap: Bitmap? = null
     private var staticFrameBitmap: Bitmap? = null
@@ -106,9 +108,18 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (changed) {
                 renderBoxPathOrFull()
             }
-            if (vanishChanged && !changed) {
-                render()
+        if (vanishChanged && !changed) {
+            if (boxPathActive || boxPathNeedsFinalClear) {
+                renderBoxPathOrFull()
+            } else {
+                renderVanishDirty()
             }
+        }
+        if (vanishNeedsFinalClear && vanishPosition == null) {
+            renderVanishDirty()
+            vanishNeedsFinalClear = false
+            vanishLastPosition = null
+        }
             // If we just completed a box-path animation, drop the cached dirty rect after the first
             // post-animation draw clears the line.
             if (boxPathNeedsFinalClear && !boxPathActive) {
@@ -180,6 +191,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         vanishPosition = null
         vanishStep = null
         vanishStartMs = 0L
+        vanishLastPosition = null
+        vanishNeedsFinalClear = false
         isInitialized = true
         rebuildStaticFrameIfPossible()
         render()
@@ -255,6 +268,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val to = path.last()
         if (tiles[to.row][to.col] == Tile.WALL) {
             boxPositions = boxPositions - from
+            startVanishBoxAnimation(at = to)
+            triggerBlink(delayMs = 600L)
         } else {
             boxPositions = (boxPositions - from) + to
         }
@@ -446,7 +461,24 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun renderBoxPathOrFull() {
-        val dirty = boxPathDirtyRect
+        val viewport = lastViewport
+        if (viewport == null) {
+            render()
+            return
+        }
+        val boxDirty = boxPathDirtyRect
+        val vanishTarget = if (vanishPosition != null || vanishNeedsFinalClear) {
+            vanishPosition ?: vanishLastPosition
+        } else {
+            null
+        }
+        val vanishDirty = vanishTarget?.let { computeVanishDirtyRect(viewport, it) }
+        val dirty = when {
+            boxDirty != null && vanishDirty != null -> Rect(boxDirty).apply { union(vanishDirty) }
+            boxDirty != null -> boxDirty
+            vanishDirty != null -> vanishDirty
+            else -> null
+        }
         if (dirty == null) {
             render()
             return
@@ -457,12 +489,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private fun renderDirtyForBoxPath(requestedDirtyRect: Rect) {
         if (width <= 0 || height <= 0) return
         if (!isInitialized) return
-
-        // Keep vanish as full-render for now.
-        if (vanishPosition != null) {
-            render()
-            return
-        }
 
         val viewport = lastViewport
         if (viewport == null) {
@@ -549,10 +575,37 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         return rect
     }
 
+    private fun computeVanishDirtyRect(viewport: BoardViewport, position: Position): Rect {
+        val cellSize = viewport.cellSize
+        val offsetX = viewport.offsetX
+        val offsetY = viewport.offsetY
+        val left = offsetX + (position.col + 1) * cellSize
+        val top = offsetY + (position.row + 1) * cellSize
+        val right = left + cellSize
+        val bottom = top + cellSize
+        val paddingPx = 4f
+        return Rect(
+            (left - paddingPx).toInt(),
+            (top - paddingPx).toInt(),
+            (right + paddingPx).toInt(),
+            (bottom + paddingPx).toInt()
+        )
+    }
+
+    private fun renderVanishDirty() {
+        if (!isInitialized) return
+        val viewport = lastViewport ?: run {
+            render()
+            return
+        }
+        val position = vanishPosition ?: vanishLastPosition ?: return
+        renderDirty(computeVanishDirtyRect(viewport, position))
+    }
+
     private fun renderBlinkDirty() {
         if (!isInitialized) return
         if (boxPathActive || vanishPosition != null) {
-            render()
+            renderBoxPathOrFull()
             return
         }
         val viewport = lastViewport ?: run {
@@ -784,6 +837,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         vanishPosition = at
         vanishStartMs = SystemClock.elapsedRealtime()
         vanishStep = 0
+        vanishLastPosition = at
+        vanishNeedsFinalClear = false
         removeCallbacks(animationFrameRunnable)
         postOnAnimation(animationFrameRunnable)
     }
@@ -847,7 +902,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun updateVanishAnimation(nowMs: Long): Boolean {
-        if (vanishPosition == null) return false
+        val currentPosition = vanishPosition ?: return false
         val elapsed = nowMs - vanishStartMs
         var cumulative = 0L
 
@@ -866,6 +921,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (vanishStep != null) {
             vanishStep = null
             vanishPosition = null
+            vanishLastPosition = currentPosition
+            vanishNeedsFinalClear = true
             return true
         }
 
@@ -876,9 +933,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         return nowMs in blinkStartMs until blinkEndMs
     }
 
-    private fun triggerBlink() {
+    private fun triggerBlink(delayMs: Long = 400L) {
         val nowMs = SystemClock.elapsedRealtime()
-        val start = nowMs + 400L
+        val start = nowMs + delayMs
         blinkStartMs = start
         blinkEndMs = start + 300L
         lastBlinkActive = false
