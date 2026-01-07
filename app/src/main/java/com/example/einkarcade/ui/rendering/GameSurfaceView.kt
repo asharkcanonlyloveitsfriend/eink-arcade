@@ -250,7 +250,44 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun onBoxMoved(path: List<Position>) {
         if (!isInitialized) return
-        // Disabled: box movement is temporarily off while we validate player-only dirty renders.
+        if (path.size < 2) return
+        val from = path.first()
+        val to = path.last()
+        if (tiles[to.row][to.col] == Tile.WALL) {
+            boxPositions = boxPositions - from
+        } else {
+            boxPositions = (boxPositions - from) + to
+        }
+        for (i in path.size - 1 downTo 1) {
+            val prev = path[i - 1]
+            val curr = path[i]
+            if (curr.col != prev.col) {
+                pendingFacingLeft = curr.col < prev.col
+                break
+            }
+        }
+        val previousPlayer = playerPosition
+        playerPosition = path[path.size - 2]
+        displayedPlayerPosition = playerPosition
+        boxPath = emptyList()
+        boxPathActive = false
+        boxPathShrink = 0f
+        boxPathDirtyRect = null
+        boxPathNeedsFinalClear = false
+        val viewport = lastViewport
+        if (viewport == null) {
+            render()
+            return
+        }
+        val dirty = Rect(spriteDrawParams(viewport, from, 0.90f).dirtyRect)
+        if (tiles[to.row][to.col] != Tile.WALL) {
+            dirty.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
+        }
+        if (previousPlayer != null) {
+            dirty.union(spriteDrawParams(viewport, previousPlayer, 0.80f).dirtyRect)
+        }
+        dirty.union(spriteDrawParams(viewport, playerPosition ?: path[path.size - 2], 0.80f).dirtyRect)
+        renderDirty(dirty)
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
