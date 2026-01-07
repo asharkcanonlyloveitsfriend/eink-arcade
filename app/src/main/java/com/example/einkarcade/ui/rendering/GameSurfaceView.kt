@@ -20,7 +20,6 @@ import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import kotlin.math.roundToInt
-import androidx.core.graphics.withTranslation
 
 internal data class LevelInit(
     val tiles: List<List<Tile>>,
@@ -399,42 +398,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    private data class SpriteDrawParams(
-        val left: Float,
-        val top: Float,
-        val sizePx: Int,
-        val dirtyRect: Rect
-    )
-
-    private fun spriteDrawParams(
-        viewport: BoardViewport,
-        position: Position,
-        sizeFactor: Float
-    ): SpriteDrawParams {
-        val cellSize = viewport.cellSize
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
-
-        val origin = Position(position.row + 1, position.col + 1)
-            .toRenderPoint(cellSize, offsetX, offsetY)
-
-        val targetSize = snapToWholePixel(cellSize * sizeFactor)
-        val sizePx = targetSize.toInt().coerceAtLeast(1)
-        val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
-        val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
-
-        // Padding accounts for bitmap filtering, anti-aliasing, and pixel rounding.
-        val paddingPx = 6
-        val dirtyRect = Rect(
-            left.toInt() - paddingPx,
-            top.toInt() - paddingPx,
-            (left + sizePx).toInt() + paddingPx,
-            (top + sizePx).toInt() + paddingPx
-        )
-
-        return SpriteDrawParams(left = left, top = top, sizePx = sizePx, dirtyRect = dirtyRect)
-    }
-
     private fun rebuildStaticFrameIfPossible() {
         if (width <= 0 || height <= 0) return
         if (!isInitialized) return
@@ -516,15 +479,16 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     if (flashPos != null) {
                         val params = spriteDrawParams(viewport, flashPos, 0.80f)
                         val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
-                        val paint = if (elapsedMs <= 100L) playerFlashDarkPaint else playerFlashLightPaint
-                        drawSprite(
-                            canvas,
-                            body,
-                            params.left,
-                            params.top,
-                            params.sizePx,
-                            isFacingLeft,
-                            paint
+                        drawFlashedSprite(
+                            canvas = canvas,
+                            bitmap = body,
+                            left = params.left,
+                            top = params.top,
+                            sizePx = params.sizePx,
+                            flipX = isFacingLeft,
+                            elapsedMs = elapsedMs,
+                            darkPaint = playerFlashDarkPaint,
+                            lightPaint = playerFlashLightPaint
                         )
                     }
                 } else {
@@ -627,8 +591,15 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     if (flashPos != null) {
                         val params = spriteDrawParams(viewport, flashPos, 0.90f)
                         val bitmap = assets.getBitmap(R.drawable.box, params.sizePx)
-                        val paint = if (elapsedMs <= 100L) boxFlashDarkPaint else boxFlashLightPaint
-                        canvas.drawBitmap(bitmap, params.left, params.top, paint)
+                        drawFlashedBitmap(
+                            canvas = canvas,
+                            bitmap = bitmap,
+                            left = params.left,
+                            top = params.top,
+                            elapsedMs = elapsedMs,
+                            darkPaint = boxFlashDarkPaint,
+                            lightPaint = boxFlashLightPaint
+                        )
                     }
                 } else {
                     boxFlashPosition = null
@@ -643,19 +614,16 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     if (silhouettePosition != null) {
                         val params = spriteDrawParams(viewport, silhouettePosition, 0.80f)
                         val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
-                        val paint = if (elapsedMs <= 100L) {
-                            playerSilhouetteDarkPaint
-                        } else {
-                            playerSilhouetteLightPaint
-                        }
-                        drawSprite(
-                            canvas,
-                            body,
-                            params.left,
-                            params.top,
-                            params.sizePx,
-                            isFacingLeft,
-                            paint
+                        drawFlashedSprite(
+                            canvas = canvas,
+                            bitmap = body,
+                            left = params.left,
+                            top = params.top,
+                            sizePx = params.sizePx,
+                            flipX = isFacingLeft,
+                            elapsedMs = elapsedMs,
+                            darkPaint = playerSilhouetteDarkPaint,
+                            lightPaint = playerSilhouetteLightPaint
                         )
                     }
                 } else {
@@ -671,15 +639,16 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     if (flashPos != null) {
                         val params = spriteDrawParams(viewport, flashPos, 0.80f)
                         val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
-                        val paint = if (elapsedMs <= 100L) playerFlashDarkPaint else playerFlashLightPaint
-                        drawSprite(
-                            canvas,
-                            body,
-                            params.left,
-                            params.top,
-                            params.sizePx,
-                            isFacingLeft,
-                            paint
+                        drawFlashedSprite(
+                            canvas = canvas,
+                            bitmap = body,
+                            left = params.left,
+                            top = params.top,
+                            sizePx = params.sizePx,
+                            flipX = isFacingLeft,
+                            elapsedMs = elapsedMs,
+                            darkPaint = playerFlashDarkPaint,
+                            lightPaint = playerFlashLightPaint
                         )
                     }
                 } else {
@@ -691,74 +660,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             canvas.restore()
             holder.unlockCanvasAndPost(canvas)
         }
-    }
-
-    private fun computeBoxPathDirtyRect(
-        viewport: BoardViewport,
-        path: List<Position>,
-        displayedPlayer: Position,
-        pendingPlayer: Position
-    ): Rect {
-        require(path.size >= 2)
-
-        val cellSize = viewport.cellSize
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
-
-        val strokeWidth = cellSize * 0.2f
-        val tailWidth = snapToWholePixel(cellSize * 0.90f)
-        val tailHalfWidth = tailWidth / 2f
-        val pad = maxOf(strokeWidth / 2f, tailHalfWidth) + 10f
-
-        var minX = Float.POSITIVE_INFINITY
-        var minY = Float.POSITIVE_INFINITY
-        var maxX = Float.NEGATIVE_INFINITY
-        var maxY = Float.NEGATIVE_INFINITY
-
-        for (position in path) {
-            val cx = offsetX + (position.col + 1) * cellSize + cellSize / 2f
-            val cy = offsetY + (position.row + 1) * cellSize + cellSize / 2f
-            if (cx < minX) minX = cx
-            if (cy < minY) minY = cy
-            if (cx > maxX) maxX = cx
-            if (cy > maxY) maxY = cy
-        }
-
-        val rect = Rect(
-            (minX - pad).toInt(),
-            (minY - pad).toInt(),
-            (maxX + pad).toInt(),
-            (maxY + pad).toInt()
-        )
-
-        // Include moved box sprite bounds (from/to).
-        val from = path.first()
-        val to = path.last()
-        rect.union(spriteDrawParams(viewport, from, 0.90f).dirtyRect)
-        rect.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
-
-        // Include player sprite bounds (both displayed during animation and pending at end).
-        rect.union(spriteDrawParams(viewport, displayedPlayer, 0.80f).dirtyRect)
-        rect.union(spriteDrawParams(viewport, pendingPlayer, 0.80f).dirtyRect)
-
-        return rect
-    }
-
-    private fun computeVanishDirtyRect(viewport: BoardViewport, position: Position): Rect {
-        val cellSize = viewport.cellSize
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
-        val left = offsetX + (position.col + 1) * cellSize
-        val top = offsetY + (position.row + 1) * cellSize
-        val right = left + cellSize
-        val bottom = top + cellSize
-        val paddingPx = 4f
-        return Rect(
-            (left - paddingPx).toInt(),
-            (top - paddingPx).toInt(),
-            (right + paddingPx).toInt(),
-            (bottom + paddingPx).toInt()
-        )
     }
 
     private fun renderVanishDirty() {
@@ -905,23 +806,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-
-    private fun drawSprite(
-        canvas: Canvas,
-        bitmap: Bitmap,
-        left: Float,
-        top: Float,
-        sizePx: Int,
-        flipX: Boolean,
-        paint: Paint
-    ) {
-        canvas.withTranslation(left, top) {
-            if (flipX) {
-                scale(-1f, 1f, sizePx / 2f, sizePx / 2f)
-            }
-            drawBitmap(bitmap, 0f, 0f, paint)
-        }
-    }
 
     private fun drawBackground(canvas: Canvas) {
         val viewW = width
