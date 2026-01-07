@@ -92,6 +92,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         style = Paint.Style.FILL
     }
     private val vanishRect = RectF()
+    private val blinkStartRunnable = Runnable {
+        renderBlinkDirty()
+        postOnAnimation(animationFrameRunnable)
+    }
     private val animationFrameRunnable = object : Runnable {
         override fun run() {
             val now = SystemClock.elapsedRealtime()
@@ -102,7 +106,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (blinkActive != lastBlinkActive) {
                 lastBlinkActive = blinkActive
                 if (!changed && !vanishChanged) {
-                    // Keep blink behavior unchanged for now; if a box-path animation is active, use its dirty path.
                     if (boxPathActive || boxPathNeedsFinalClear) {
                         renderBoxPathOrFull()
                     } else {
@@ -113,18 +116,18 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (changed) {
                 renderBoxPathOrFull()
             }
-        if (vanishChanged && !changed) {
-            if (boxPathActive || boxPathNeedsFinalClear) {
-                renderBoxPathOrFull()
-            } else {
-                renderVanishDirty()
+            if (vanishChanged && !changed) {
+                if (boxPathActive || boxPathNeedsFinalClear) {
+                    renderBoxPathOrFull()
+                } else {
+                    renderVanishDirty()
+                }
             }
-        }
-        if (vanishNeedsFinalClear && vanishPosition == null) {
-            renderVanishDirty()
-            vanishNeedsFinalClear = false
-            vanishLastPosition = null
-        }
+            if (vanishNeedsFinalClear && vanishPosition == null) {
+                renderVanishDirty()
+                vanishNeedsFinalClear = false
+                vanishLastPosition = null
+            }
             // If we just completed a box-path animation, drop the cached dirty rect after the first
             // post-animation draw clears the line.
             if (boxPathNeedsFinalClear && !boxPathActive) {
@@ -267,7 +270,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (tiles[to.row][to.col] == Tile.WALL) {
             boxPositions = boxPositions - from
             startVanishBoxAnimation(at = to)
-            triggerBlink(delayMs = 600L)
         } else {
             boxPositions = (boxPositions - from) + to
         }
@@ -609,6 +611,27 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         renderDirty(Rect(left, top, right, bottom))
     }
 
+    private fun isBlinking(nowMs: Long): Boolean {
+        return nowMs in blinkStartMs until blinkEndMs
+    }
+
+    private fun triggerBlink(delayMs: Long = 400L) {
+        val nowMs = SystemClock.elapsedRealtime()
+        val start = nowMs + delayMs
+        blinkStartMs = start
+        blinkEndMs = start + 300L
+        lastBlinkActive = false
+        val delay = (blinkStartMs - nowMs).coerceAtLeast(0L)
+        removeCallbacks(animationFrameRunnable)
+        removeCallbacks(blinkStartRunnable)
+        if (delay == 0L) {
+            renderBlinkDirty()
+            postOnAnimation(animationFrameRunnable)
+        } else {
+            postDelayed(blinkStartRunnable, delay)
+        }
+    }
+
     private fun drawDynamicScene(
         canvas: Canvas,
         viewport: BoardViewport,
@@ -902,29 +925,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             vanishPosition = null
             vanishLastPosition = currentPosition
             vanishNeedsFinalClear = true
+            triggerBlink(delayMs = 0L)
             return true
         }
 
         return false
-    }
-
-    private fun isBlinking(nowMs: Long): Boolean {
-        return nowMs in blinkStartMs until blinkEndMs
-    }
-
-    private fun triggerBlink(delayMs: Long = 400L) {
-        val nowMs = SystemClock.elapsedRealtime()
-        val start = nowMs + delayMs
-        blinkStartMs = start
-        blinkEndMs = start + 300L
-        lastBlinkActive = false
-        val delay = (blinkStartMs - nowMs).coerceAtLeast(0L)
-        removeCallbacks(animationFrameRunnable)
-        if (boxPathActive || delay == 0L) {
-            postOnAnimation(animationFrameRunnable)
-        } else {
-            postDelayed(animationFrameRunnable, delay)
-        }
     }
 
     private fun drawBoxPathLine(
@@ -1004,30 +1009,22 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
-        val tileLeft = offsetX + paddedPosition.col * cellSize
-        val tileTop = offsetY + paddedPosition.row * cellSize
-        val baseSize = (cellSize * VanishVisualSpec.BASE_SIZE_FACTOR).roundToInt().toFloat()
-        val baseLeft = (tileLeft + (cellSize - baseSize) / 2f).roundToInt().toFloat()
-        val baseTop = (tileTop + (cellSize - baseSize) / 2f).roundToInt().toFloat()
-        val scale = VanishVisualSpec.scale(step)
-        val size = baseSize * scale
-        val left = baseLeft + (baseSize - size) / 2f
-        val top = baseTop + (baseSize - size) / 2f
-        val innerRadius = size * VanishVisualSpec.CORNER_RADIUS_FACTOR
 
-        if (VanishVisualSpec.isSpriteStep(step)) {
-            val origin = paddedPosition.toRenderPoint(cellSize, offsetX, offsetY)
-            val targetSize = snapToWholePixel(cellSize * 0.90f)
-            val sizePx = targetSize.toInt()
-            require(sizePx > 0)
-            val leftPx = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
-            val topPx = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
-            val bitmap = assets.getBitmap(R.drawable.box, sizePx)
-            canvas.drawBitmap(bitmap, leftPx, topPx, assets.bitmapPaint())
-        } else {
-            vanishRectPaint.color = VanishVisualSpec.colorArgb(step)
-            vanishRect.set(left, top, left + size, top + size)
-            canvas.drawRoundRect(vanishRect, innerRadius, innerRadius, vanishRectPaint)
-        }
+        val origin = paddedPosition.toRenderPoint(cellSize, offsetX, offsetY)
+        val targetSize = snapToWholePixel(cellSize * 0.90f)
+        val sizePx = targetSize.toInt()
+        require(sizePx > 0)
+        val leftPx = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
+        val topPx = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
+        val scale = VanishVisualSpec.scale(step)
+        val size = targetSize * scale
+        if (size <= 0f) return
+        val left = leftPx + (targetSize - size) / 2f
+        val top = topPx + (targetSize - size) / 2f
+        val bitmap = assets.getBitmap(R.drawable.box, sizePx)
+        canvas.save()
+        canvas.clipRect(left, top, left + size, top + size)
+        canvas.drawBitmap(bitmap, leftPx, topPx, assets.bitmapPaint())
+        canvas.restore()
     }
 }

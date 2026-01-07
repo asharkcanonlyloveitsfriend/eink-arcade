@@ -9,7 +9,8 @@ internal object VanishVisualSpec {
         2 -> 0.5f
         3 -> 0.3f
         4 -> 0.18f
-        5 -> 0.1f
+        5 -> 0.14f
+        6 -> 0.1f
         else -> error("Unsupported vanish step: $step")
     }
 
@@ -19,6 +20,7 @@ internal object VanishVisualSpec {
         3 -> 0xFF58616C.toInt()
         4 -> 0xFF58616C.toInt()
         5 -> 0xFF58616C.toInt()
+        6 -> 0xFF58616C.toInt()
         else -> error("No rect color for vanish step: $step")
     }
 
