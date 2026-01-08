@@ -71,6 +71,22 @@ internal class GameRenderer(
         tileDrawer.drawTiles(canvas, viewport, tiles)
     }
 
+    fun drawTransitionFrame(
+        canvas: Canvas,
+        viewWidth: Int,
+        viewHeight: Int,
+        viewport: BoardViewport,
+        transition: LevelTransition,
+        renderState: RenderStateSnapshot,
+        overlay: OverlayState?,
+        nowMs: Long,
+        drawPlayer: Boolean = true
+    ) {
+        backgroundDrawer.draw(canvas, viewWidth, viewHeight)
+        drawTransitionTiles(canvas, viewport, transition, nowMs)
+        drawTransitionEntities(canvas, viewport, transition, renderState, overlay, nowMs, drawPlayer)
+    }
+
     fun drawEntities(
         canvas: Canvas,
         viewport: BoardViewport,
