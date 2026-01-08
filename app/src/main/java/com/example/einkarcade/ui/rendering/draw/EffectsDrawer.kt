@@ -207,8 +207,6 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
     }
 }
 
-internal const val FLASH_PHASE_MS: Long = 50L
-
 internal fun drawSprite(
     canvas: Canvas,
     bitmap: Bitmap,
@@ -237,7 +235,7 @@ internal fun drawFlashedSprite(
     darkPaint: Paint,
     lightPaint: Paint
 ) {
-    val paint = if (elapsedMs <= FLASH_PHASE_MS) darkPaint else lightPaint
+    val paint = if (elapsedMs < RenderTimings.FLASH_PHASE_MS) darkPaint else lightPaint
     drawSprite(canvas, bitmap, left, top, sizePx, flipX, paint)
 }
 
@@ -250,6 +248,6 @@ internal fun drawFlashedBitmap(
     darkPaint: Paint,
     lightPaint: Paint
 ) {
-    val paint = if (elapsedMs <= FLASH_PHASE_MS) darkPaint else lightPaint
+    val paint = if (elapsedMs <= RenderTimings.FLASH_PHASE_MS) darkPaint else lightPaint
     canvas.drawBitmap(bitmap, left, top, paint)
 }
