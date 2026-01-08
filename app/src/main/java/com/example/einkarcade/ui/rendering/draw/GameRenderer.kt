@@ -1,6 +1,8 @@
 package com.example.einkarcade.ui.rendering.draw
 
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.LevelTransition
@@ -19,6 +21,17 @@ internal class GameRenderer(
     private val tileDrawer: TileDrawer,
     private val entityDrawer: EntityDrawer
 ) {
+    private val transitionFlashBlackPaint = Paint().apply {
+        color = Color.BLACK
+        style = Paint.Style.FILL
+        isAntiAlias = false
+    }
+    private val transitionFlashWhitePaint = Paint().apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+        isAntiAlias = false
+    }
+
     fun drawStaticFrame(
         canvas: Canvas,
         viewWidth: Int,
@@ -43,6 +56,7 @@ internal class GameRenderer(
     ) {
         backgroundDrawer.draw(canvas, viewWidth, viewHeight)
         drawTransitionTiles(canvas, viewport, transition, nowMs)
+        drawTransitionFlashOverlay(canvas, viewport, transition, nowMs)
         drawTransitionEntities(canvas, viewport, transition, renderState, overlay, nowMs, drawPlayer)
     }
 
@@ -92,6 +106,39 @@ internal class GameRenderer(
                         offsetY = offsetY
                     )
                 }
+            }
+        }
+    }
+
+    private fun drawTransitionFlashOverlay(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        transition: LevelTransition,
+        nowMs: Long
+    ) {
+        val cellSize = viewport.cellSize
+        val offsetX = viewport.offsetX
+        val offsetY = viewport.offsetY
+        val rows = transition.rows
+        val cols = transition.cols
+
+        for (rowIndex in 0 until rows) {
+            for (colIndex in 0 until cols) {
+                // Only flash for non-wall tiles (matches growScale behavior)
+                val newTile = transition.tileAt(transition.newTiles, rowIndex, colIndex)
+                if (newTile == Tile.WALL) continue
+
+                val phase = transition.flashPhase(nowMs, rowIndex, colIndex) ?: continue
+                val paint = when (phase) {
+                    com.example.einkarcade.ui.rendering.TransitionFlashPhase.BLACK -> transitionFlashBlackPaint
+                    com.example.einkarcade.ui.rendering.TransitionFlashPhase.WHITE -> transitionFlashWhitePaint
+                }
+
+                val left = offsetX + (colIndex + 1) * cellSize
+                val top = offsetY + (rowIndex + 1) * cellSize
+                val right = left + cellSize
+                val bottom = top + cellSize
+                canvas.drawRect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat(), paint)
             }
         }
     }

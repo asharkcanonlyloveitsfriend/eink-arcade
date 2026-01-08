@@ -2,6 +2,8 @@ package com.example.einkarcade.ui.rendering
 
 import com.example.einkarcade.sokoban.Tile
 
+internal enum class TransitionFlashPhase { BLACK, WHITE }
+
 internal data class LevelTransition(
     val oldTiles: List<List<Tile>>,
     val newTiles: List<List<Tile>>,
@@ -14,7 +16,7 @@ internal data class LevelTransition(
 
     fun isComplete(nowMs: Long): Boolean {
         val nowTick = RenderTimings.nowTick(nowMs)
-        val endTick = startTick + maxIndex * PER_TILE_DELAY_TICKS + totalDurationTicks()
+        val endTick = startTick + maxIndex * PER_TILE_DELAY_TICKS + totalDurationTicks() + FLASH_TOTAL_TICKS
         return nowTick >= endTick
     }
 
@@ -28,6 +30,20 @@ internal data class LevelTransition(
         val stepDuration = total.toFloat() / (stepCount - 1).toFloat()
         val stepIndex = (local.toFloat() / stepDuration).toInt().coerceIn(0, stepCount - 2)
         return GROW_SCALES[stepIndex]
+    }
+
+    fun flashPhase(nowMs: Long, row: Int, col: Int): TransitionFlashPhase? {
+        val local = localElapsedTicks(nowMs, row, col)
+        if (local < 0) return null
+        val growDone = totalDurationTicks()
+        if (local < growDone) return null
+        val flashElapsed = local - growDone
+        if (flashElapsed >= FLASH_TOTAL_TICKS) return null
+        return if (flashElapsed < FLASH_BLACK_TICKS) {
+            TransitionFlashPhase.BLACK
+        } else {
+            TransitionFlashPhase.WHITE
+        }
     }
 
     private fun localElapsedTicks(nowMs: Long, row: Int, col: Int): Long {
@@ -51,12 +67,14 @@ internal data class LevelTransition(
     fun isCellReady(nowMs: Long, row: Int, col: Int): Boolean {
         if (row < 0 || col < 0 || row >= rows || col >= cols) return false
         val local = localElapsedTicks(nowMs, row, col)
-        return local >= totalDurationTicks()
+        return local >= totalDurationTicks() + FLASH_TOTAL_TICKS
     }
 
     companion object {
         const val TRANSITION_DURATION_MULT: Float = 0.08f
         const val PER_TILE_DELAY_TICKS: Long = 2L
+        const val FLASH_TOTAL_TICKS: Long = 2L
+        const val FLASH_BLACK_TICKS: Long = 1L
         private val GROW_SCALES = floatArrayOf(0.18f, 0.32f, 0.50f, 0.70f, 1.00f)
     }
 }

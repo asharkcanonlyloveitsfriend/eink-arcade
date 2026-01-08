@@ -270,7 +270,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 pendingPlayer = renderState.playerPosition ?: path[path.size - 2],
                 displayedPlayer = renderState.displayedPlayerPosition ?: path[path.size - 2],
                 viewport = viewport,
-                suppressLine = path.size == 2,
                 nowMs = SystemClock.elapsedRealtime(),
                 renderState = renderState
             )
@@ -365,7 +364,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 effectsDrawer.drawVanishingBox(canvas, viewport, overlay)
             }
             val hidePlayer =
-                animationState.boxPathActive && !animationState.boxPathSuppressLine
+                animationState.boxPathActive && animationState.boxPath.size > 2
             renderer.drawEntities(
                 canvas = canvas,
                 viewport = viewport,
@@ -540,7 +539,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             }
 
             val hidePlayer =
-                animationState.boxPathActive && !animationState.boxPathSuppressLine
+                animationState.boxPathActive && animationState.boxPath.size > 2
             renderer.drawEntities(
                 canvas = canvas,
                 viewport = viewport,
@@ -575,7 +574,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private fun buildOverlayState(nowMs: Long): OverlayState {
         return OverlayState(
             boxPathActive = animationState.boxPathActive,
-            boxPathSuppressLine = animationState.boxPathSuppressLine,
             boxPath = animationState.boxPath,
             boxPathShrink = animationState.boxPathShrink,
             boxPathStartTick = animationState.boxPathStartTick,

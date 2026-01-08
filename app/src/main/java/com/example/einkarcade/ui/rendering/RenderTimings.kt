@@ -4,8 +4,8 @@ internal object RenderTimings {
     const val TICK_MS: Long = 50L
 
     const val BOX_PATH_DURATION_TICKS: Long = 5L
-    const val BOX_PATH_DELAY_TICKS: Long = 4L
-    const val FLASH_DURATION_TICKS: Long = 4L
+    const val BOX_PATH_DELAY_TICKS: Long = 2L
+    const val FLASH_DURATION_TICKS: Long = 2L
     const val FLASH_PHASE_TICKS: Long = 1L
     const val BLINK_DELAY_TICKS: Long = 8L
     const val BLINK_DURATION_TICKS: Long = 6L

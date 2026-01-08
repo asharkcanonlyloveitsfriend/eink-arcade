@@ -19,7 +19,6 @@ import com.example.einkarcade.ui.rendering.geom.toRenderPoint
 
 internal data class OverlayState(
     val boxPathActive: Boolean,
-    val boxPathSuppressLine: Boolean,
     val boxPath: List<Position>,
     val boxPathShrink: Float,
     val boxPathStartTick: Long,
@@ -64,8 +63,7 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
 
     fun drawBoxPathLine(canvas: Canvas, viewport: BoardViewport, overlay: OverlayState, nowMs: Long) {
         if (!overlay.boxPathActive) return
-        if (overlay.boxPath.size < 2) return
-        if (overlay.boxPathSuppressLine) return
+        if (overlay.boxPath.size <= 2) return
         val nowTick = RenderTimings.nowTick(nowMs)
         if (nowTick - overlay.boxPathStartTick < RenderTimings.BOX_PATH_DELAY_TICKS) return
         val cellSize = viewport.cellSize

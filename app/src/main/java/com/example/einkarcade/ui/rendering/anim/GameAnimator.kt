@@ -19,7 +19,6 @@ internal data class AnimationState(
     var boxPathStartTick: Long = 0L,
     var boxPathDirtyRect: Rect? = null,
     var boxPathNeedsFinalClear: Boolean = false,
-    var boxPathSuppressLine: Boolean = false,
     var playerSilhouettePosition: Position? = null,
     var playerSilhouetteStartTick: Long = 0L,
     var playerFlashPosition: Position? = null,
@@ -46,7 +45,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         state.boxPathStartTick = 0L
         state.boxPathDirtyRect = null
         state.boxPathNeedsFinalClear = false
-        state.boxPathSuppressLine = false
         state.playerSilhouettePosition = null
         state.playerSilhouetteStartTick = 0L
         state.playerFlashPosition = null
@@ -68,7 +66,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         pendingPlayer: Position,
         displayedPlayer: Position,
         viewport: BoardViewport?,
-        suppressLine: Boolean,
         nowMs: Long,
         renderState: RenderState
     ) {
@@ -80,7 +77,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         state.boxPathShrink = 0f
         state.boxPathActive = true
         state.boxPathNeedsFinalClear = false
-        state.boxPathSuppressLine = suppressLine
 
         state.boxPathDirtyRect = viewport?.let {
             computeBoxPathDirtyRect(it, path, displayedPlayer, pendingPlayer)
@@ -262,7 +258,8 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         if (!state.boxPathActive) return false
         val elapsedTicks = nowTick - state.boxPathStartTick
         if (elapsedTicks < RenderTimings.BOX_PATH_DELAY_TICKS) return false
-        val progress = if (state.boxPathSuppressLine) {
+        val suppressLine = state.boxPath.size <= 2
+        val progress = if (suppressLine) {
             1f
         } else {
             ((elapsedTicks - RenderTimings.BOX_PATH_DELAY_TICKS).toFloat() /
@@ -274,10 +271,9 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
             changed = true
         }
         if (elapsedTicks >= RenderTimings.BOX_PATH_DELAY_TICKS +
-            if (state.boxPathSuppressLine) 0L else RenderTimings.BOX_PATH_DURATION_TICKS) {
+            if (suppressLine) 0L else RenderTimings.BOX_PATH_DURATION_TICKS) {
             state.boxPathActive = false
             state.boxPathNeedsFinalClear = true
-            state.boxPathSuppressLine = false
             val pending = renderState.pendingPlayerPosition
             if (pending != null) {
                 renderState.displayedPlayerPosition = pending
