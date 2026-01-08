@@ -33,7 +33,7 @@ import com.example.einkarcade.ui.rendering.model.TransitionState
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
-    private val useAnimations = false
+    private val useOldAnimations = false
     private val useBlinkAnimation = true
     private val useFlashAnimation = true
     private val useBoxFlashAnimation = true
@@ -54,7 +54,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val renderer = GameRenderer(backgroundDrawer, tileDrawer, entityDrawer, effectsDrawer)
     private val animationFrameRunnable = object : Runnable {
         override fun run() {
-            if (!useAnimations && !useBlinkAnimation && !useFlashAnimation && !useBoxFlashAnimation) return
+            if (!useOldAnimations && !useBlinkAnimation && !useFlashAnimation && !useBoxFlashAnimation) return
             val now = SystemClock.elapsedRealtime()
             val tick = animator.tick(now, lastViewport, renderState)
             val transitionActive = transitionState.transition?.let { !it.isComplete(now) } == true
@@ -122,7 +122,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val nowMs = SystemClock.elapsedRealtime()
         val newTiles = init.tiles.map { it.toList() }
         val isSameLayout = renderState.isInitialized && renderState.tiles == newTiles
-        val shouldAnimate = useAnimations && init.tiles.isNotEmpty() && !isSameLayout
+        val shouldAnimate = useOldAnimations && init.tiles.isNotEmpty() && !isSameLayout
         if (shouldAnimate) {
             transitionState.transition = LevelTransition(
                 oldTiles = renderState.tiles,
@@ -181,9 +181,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         resetFacing()
         renderState.playerPosition = to
         renderState.displayedPlayerPosition = to
-        if (useAnimations || useFlashAnimation) {
+        if (useOldAnimations || useFlashAnimation) {
             val nowMs = SystemClock.elapsedRealtime()
-            if (useAnimations || useFlashAnimation) {
+            if (useOldAnimations || useFlashAnimation) {
                 animator.startPlayerFlash(from, nowMs)
             }
             removeCallbacks(animationFrameRunnable)
@@ -214,7 +214,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     fun onBoxMoved(path: List<Position>) {
         if (!renderState.isInitialized) return
         if (path.size < 2) return
-        if (!useAnimations) {
+        if (!useOldAnimations) {
             val from = path.first()
             val to = path.last()
             val prevPlayer = renderState.playerPosition
@@ -237,13 +237,39 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             renderState.pendingPlayerPosition = null
             renderState.pendingFacingLeft = null
 
-            val viewport = lastViewport
+            val viewport = lastViewport ?: run {
+                if (width > 0 && height > 0 &&
+                    renderState.tiles.isNotEmpty() &&
+                    renderState.tiles.first().isNotEmpty()) {
+                    computeBoardViewport(
+                        width.toFloat(),
+                        height.toFloat(),
+                        renderState.tiles.size,
+                        renderState.tiles.first().size
+                    )
+                } else {
+                    null
+                }
+            }
+            if (viewport != null) {
+                lastViewport = viewport
+                animator.startBoxPath(
+                    path = path,
+                    pendingPlayer = renderState.playerPosition ?: path[path.size - 2],
+                    displayedPlayer = renderState.displayedPlayerPosition ?: path[path.size - 2],
+                    viewport = viewport,
+                    suppressLine = path.size == 2,
+                    nowMs = SystemClock.elapsedRealtime(),
+                    renderState = renderState
+                )
+            }
+
             if (viewport != null && prevPlayer != null) {
                 val dirty = Rect(spriteDrawParams(viewport, from, 0.90f).dirtyRect)
                 dirty.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
                 dirty.union(spriteDrawParams(viewport, prevPlayer, 0.80f).dirtyRect)
                 dirty.union(spriteDrawParams(viewport, renderState.playerPosition!!, 0.80f).dirtyRect)
-                renderDirty(dirty)
+                renderDirtyForBoxPath(dirty)
             } else {
                 render()
             }
@@ -330,7 +356,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private fun render() {
         if (width <= 0 || height <= 0) return
         if (!renderState.isInitialized) return
-        val playerPosition = if (useAnimations && animationState.boxPathActive) {
+        val playerPosition = if (useOldAnimations && animationState.boxPathActive) {
             renderState.displayedPlayerPosition ?: renderState.playerPosition!!
         } else {
             renderState.playerPosition!!
@@ -344,7 +370,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val canvas = holder.lockCanvas() ?: return
         try {
             val nowMs = SystemClock.elapsedRealtime()
-            if (useAnimations) {
+            if (useOldAnimations) {
                 val transition = transitionState.transition?.takeUnless { it.isComplete(nowMs) }
                 if (transition == null) {
                     transitionState.transition = null
@@ -363,11 +389,15 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             } else {
                 rebuildStaticFrameIfPossible()
                 drawStaticFrame(canvas, viewport)
+                if (animationState.boxPathActive || animationState.boxPathNeedsFinalClear) {
+                    val overlay = buildOverlayState(nowMs)
+                    effectsDrawer.drawBoxPathLine(canvas, viewport, overlay, nowMs)
+                }
                 renderer.drawEntities(
                     canvas = canvas,
                     viewport = viewport,
                     renderState = buildRenderSnapshot(playerPosition),
-                    drawPlayer = true,
+                    drawPlayer = !animationState.boxPathActive,
                     blinkActive = useBlinkAnimation && animator.isBlinking(nowMs)
                 )
                 if (useFlashAnimation) {
@@ -434,7 +464,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (width <= 0 || height <= 0) return
         if (!renderState.isInitialized) return
 
-        if (useAnimations) {
+        if (useOldAnimations) {
             check(!animationState.boxPathActive) { "Dirty render requested during box path animation." }
         }
 
@@ -453,7 +483,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             canvas.clipRect(dirtyRect)
 
             val nowMs = nowMsOverride ?: SystemClock.elapsedRealtime()
-            if (useAnimations) {
+            if (useOldAnimations) {
                 val transition = transitionState.transition?.takeUnless { it.isComplete(nowMs) }
                 if (transition == null) {
                     transitionState.transition = null
@@ -503,7 +533,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun renderAnimatorTick(tick: TickResult, transitionActive: Boolean, nowMs: Long) {
-        if (!useAnimations && !useBlinkAnimation && !useFlashAnimation && !useBoxFlashAnimation) return
+        if (!useOldAnimations && !useBlinkAnimation && !useFlashAnimation && !useBoxFlashAnimation) return
         if (tick.forceFullRender) {
             render()
             return
@@ -531,8 +561,17 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun renderBoxPathOrFull(nowMs: Long) {
-        if (!useAnimations) {
-            render()
+        if (!useOldAnimations) {
+            val viewport = lastViewport ?: run {
+                render()
+                return
+            }
+            val dirty = animator.computeBoxPathDirtyUnion(nowMs, viewport)
+            if (dirty == null) {
+                render()
+                return
+            }
+            renderDirtyForBoxPath(dirty)
             return
         }
         val viewport = lastViewport ?: run {
@@ -548,8 +587,53 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun renderDirtyForBoxPath(requestedDirtyRect: Rect) {
-        if (!useAnimations) {
-            renderDirty(requestedDirtyRect)
+        if (!useOldAnimations) {
+            if (width <= 0 || height <= 0) return
+            if (!renderState.isInitialized) return
+
+            val viewport = lastViewport
+            checkNotNull(viewport) { "Dirty render requested without viewport." }
+
+            val dirtyRect = Rect(requestedDirtyRect)
+            if (!dirtyRect.intersect(0, 0, width, height)) return
+            if (!holder.surface.isValid) return
+
+            val playerPos = renderState.playerPosition ?: return
+            val canvas = holder.lockCanvas(dirtyRect) ?: return
+            try {
+                canvas.save()
+                canvas.clipRect(dirtyRect)
+
+                val nowMs = SystemClock.elapsedRealtime()
+                rebuildStaticFrameIfPossible()
+                drawStaticFrame(canvas, viewport)
+
+                val overlay = buildOverlayState(nowMs)
+                effectsDrawer.drawBoxPathLine(canvas, viewport, overlay, nowMs)
+
+                renderer.drawEntities(
+                    canvas = canvas,
+                    viewport = viewport,
+                    renderState = buildRenderSnapshot(playerPos),
+                    drawPlayer = !animationState.boxPathActive,
+                    blinkActive = useBlinkAnimation && animator.isBlinking(nowMs)
+                )
+                if (useFlashAnimation) {
+                    effectsDrawer.drawPlayerFlash(
+                        canvas = canvas,
+                        viewport = viewport,
+                        overlay = overlay,
+                        nowMs = nowMs,
+                        isFacingLeft = renderState.isFacingLeft
+                    )
+                }
+                if (useBoxFlashAnimation) {
+                    effectsDrawer.drawBoxFlash(canvas, viewport, overlay, nowMs)
+                }
+            } finally {
+                canvas.restore()
+                holder.unlockCanvasAndPost(canvas)
+            }
             return
         }
         if (width <= 0 || height <= 0) return
