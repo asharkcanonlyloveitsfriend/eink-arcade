@@ -4,24 +4,48 @@
     android:viewportWidth="100"
     android:viewportHeight="100">
 
-    <!-- Clear / background fill for left eye region -->
+    <!-- Clear / background fill for left eye region (split to remove center overlap) -->
     <path
-        android:pathData="M31,37h14v10h-14z"
+        android:pathData="M31,41h2v3h-2z"
+        android:fillColor="#9ca3af"/>
+    <path
+        android:pathData="M43,41h2v3h-2z"
+        android:fillColor="#9ca3af"/>
+    <path
+        android:pathData="M31,41h2v3h-2z"
+        android:fillColor="#9ca3af"/>
+    <path
+        android:pathData="M43,41h2v3h-2z"
         android:fillColor="#9ca3af"/>
 
-    <!-- Clear / background fill for right eye region -->
+    <!-- Clear / background fill for right eye region (split to remove center overlap) -->
     <path
-        android:pathData="M55,37h14v10h-14z"
+        android:pathData="M55,41h2v3h-2z"
+        android:fillColor="#9ca3af"/>
+    <path
+        android:pathData="M67,41h2v3h-2z"
+        android:fillColor="#9ca3af"/>
+    <path
+        android:pathData="M55,41h2v3h-2z"
+        android:fillColor="#9ca3af"/>
+    <path
+        android:pathData="M67,41h2v3h-2z"
         android:fillColor="#9ca3af"/>
 
-    <!-- Left open eye (original geometry) -->
+    <!-- Left open eye (split to remove center overlap) -->
     <path
-        android:pathData="M33,37h10v10h-10z"
+        android:pathData="M33,37h10v4h-10z"
+        android:fillColor="#020617"/>
+    <path
+        android:pathData="M33,44h10v3h-10z"
         android:fillColor="#020617"/>
 
-    <!-- Right open eye (original geometry) -->
+    <!-- Right open eye (split to remove center overlap) -->
     <path
-        android:pathData="M57,37h10v10h-10z"
+        android:pathData="M57,37h10v4h-10z"
+        android:fillColor="#020617"/>
+    <path
+        android:pathData="M57,44h10v3h-10z"
         android:fillColor="#020617"/>
 
 </vector>
