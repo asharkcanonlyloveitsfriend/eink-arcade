@@ -23,7 +23,11 @@ internal data class LevelTransition(
         if (local < 0) return null
         val total = totalDurationMs()
         if (local >= total) return 1.0f
-        return (local.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+        val stepCount = GROW_SCALES.size
+        if (stepCount <= 1) return 1.0f
+        val stepDuration = total.toFloat() / (stepCount - 1).toFloat()
+        val stepIndex = (local.toFloat() / stepDuration).toInt().coerceIn(0, stepCount - 2)
+        return GROW_SCALES[stepIndex]
     }
 
     private fun localElapsedMs(nowMs: Long, row: Int, col: Int): Long {
@@ -48,7 +52,8 @@ internal data class LevelTransition(
     }
 
     companion object {
-        const val PER_TILE_DELAY_MS: Long = 100L
-        const val TRANSITION_DURATION_MULT: Float = 0.6f
+        const val PER_TILE_DELAY_MS: Long = 65L
+        const val TRANSITION_DURATION_MULT: Float = 0.08f
+        private val GROW_SCALES = floatArrayOf(0.18f, 0.32f, 0.50f, 0.70f, 1.00f)
     }
 }
