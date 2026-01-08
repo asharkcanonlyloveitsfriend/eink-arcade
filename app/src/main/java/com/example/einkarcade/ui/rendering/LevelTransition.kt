@@ -5,7 +5,7 @@ import com.example.einkarcade.sokoban.Tile
 internal data class LevelTransition(
     val oldTiles: List<List<Tile>>,
     val newTiles: List<List<Tile>>,
-    val startMs: Long
+    val startTick: Long
 ) {
     val rows: Int = newTiles.size
     val cols: Int = newTiles.firstOrNull()?.size ?: 0
@@ -13,15 +13,15 @@ internal data class LevelTransition(
     private val maxIndex: Int = if (rows == 0 || cols == 0) 0 else (rows - 1) + (cols - 1)
 
     fun isComplete(nowMs: Long): Boolean {
-        val total = VanishSpec.totalDurationMs()
-        val endMs = startMs + maxIndex * PER_TILE_DELAY_MS + totalDurationMs()
-        return nowMs >= endMs
+        val nowTick = RenderTimings.nowTick(nowMs)
+        val endTick = startTick + maxIndex * PER_TILE_DELAY_TICKS + totalDurationTicks()
+        return nowTick >= endTick
     }
 
     fun growScale(nowMs: Long, row: Int, col: Int): Float? {
-        val local = localElapsedMs(nowMs, row, col)
+        val local = localElapsedTicks(nowMs, row, col)
         if (local < 0) return null
-        val total = totalDurationMs()
+        val total = totalDurationTicks()
         if (local >= total) return 1.0f
         val stepCount = GROW_SCALES.size
         if (stepCount <= 1) return 1.0f
@@ -30,13 +30,16 @@ internal data class LevelTransition(
         return GROW_SCALES[stepIndex]
     }
 
-    private fun localElapsedMs(nowMs: Long, row: Int, col: Int): Long {
+    private fun localElapsedTicks(nowMs: Long, row: Int, col: Int): Long {
+        val nowTick = RenderTimings.nowTick(nowMs)
         val index = (rows - 1 - row) + col
-        return nowMs - (startMs + index * PER_TILE_DELAY_MS)
+        return nowTick - (startTick + index * PER_TILE_DELAY_TICKS)
     }
 
-    private fun totalDurationMs(): Long {
-        return (VanishSpec.totalDurationMs() * TRANSITION_DURATION_MULT).toLong()
+    private fun totalDurationTicks(): Long {
+        return kotlin.math.ceil(
+            VanishSpec.totalDurationTicks().toDouble() * TRANSITION_DURATION_MULT
+        ).toLong()
     }
 
     fun tileAt(tiles: List<List<Tile>>, row: Int, col: Int): Tile {
@@ -47,13 +50,13 @@ internal data class LevelTransition(
 
     fun isCellReady(nowMs: Long, row: Int, col: Int): Boolean {
         if (row < 0 || col < 0 || row >= rows || col >= cols) return false
-        val local = localElapsedMs(nowMs, row, col)
-        return local >= totalDurationMs()
+        val local = localElapsedTicks(nowMs, row, col)
+        return local >= totalDurationTicks()
     }
 
     companion object {
-        const val PER_TILE_DELAY_MS: Long = 65L
         const val TRANSITION_DURATION_MULT: Float = 0.08f
+        const val PER_TILE_DELAY_TICKS: Long = 2L
         private val GROW_SCALES = floatArrayOf(0.18f, 0.32f, 0.50f, 0.70f, 1.00f)
     }
 }

@@ -22,15 +22,15 @@ internal data class OverlayState(
     val boxPathSuppressLine: Boolean,
     val boxPath: List<Position>,
     val boxPathShrink: Float,
-    val boxPathStartMs: Long,
+    val boxPathStartTick: Long,
     val vanishPosition: Position?,
     val vanishStep: Int?,
     val boxFlashPosition: Position?,
-    val boxFlashStartMs: Long,
+    val boxFlashStartTick: Long,
     val playerSilhouettePosition: Position?,
-    val playerSilhouetteStartMs: Long,
+    val playerSilhouetteStartTick: Long,
     val playerFlashPosition: Position?,
-    val playerFlashStartMs: Long,
+    val playerFlashStartTick: Long,
     val blinkActive: Boolean
 )
 
@@ -66,7 +66,8 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
         if (!overlay.boxPathActive) return
         if (overlay.boxPath.size < 2) return
         if (overlay.boxPathSuppressLine) return
-        if (nowMs - overlay.boxPathStartMs < RenderTimings.BOX_PATH_DELAY_MS) return
+        val nowTick = RenderTimings.nowTick(nowMs)
+        if (nowTick - overlay.boxPathStartTick < RenderTimings.BOX_PATH_DELAY_TICKS) return
         val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
@@ -152,8 +153,9 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
         nowMs: Long
     ) {
         if (overlay.boxFlashPosition == null) return
-        val elapsedMs = nowMs - overlay.boxFlashStartMs
-        if (elapsedMs > RenderTimings.FLASH_DURATION_MS) return
+        val nowTick = RenderTimings.nowTick(nowMs)
+        val elapsedTicks = nowTick - overlay.boxFlashStartTick
+        if (elapsedTicks >= RenderTimings.FLASH_DURATION_TICKS) return
         val params = spriteDrawParams(viewport, overlay.boxFlashPosition, 0.90f)
         val bitmap = assets.getBitmap(R.drawable.box, params.sizePx)
         drawFlashedBitmap(
@@ -161,7 +163,7 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
             bitmap = bitmap,
             left = params.left,
             top = params.top,
-            elapsedMs = elapsedMs,
+            elapsedTicks = elapsedTicks,
             darkPaint = boxFlashDarkPaint,
             lightPaint = boxFlashLightPaint
         )
@@ -174,8 +176,9 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
         nowMs: Long
     ) {
         if (!overlay.boxPathActive || overlay.playerSilhouettePosition == null) return
-        val elapsedMs = nowMs - overlay.playerSilhouetteStartMs
-        if (elapsedMs > RenderTimings.FLASH_DURATION_MS) return
+        val nowTick = RenderTimings.nowTick(nowMs)
+        val elapsedTicks = nowTick - overlay.playerSilhouetteStartTick
+        if (elapsedTicks >= RenderTimings.FLASH_DURATION_TICKS) return
         val params = spriteDrawParams(viewport, overlay.playerSilhouettePosition, 0.90f)
         val bitmap = assets.getBitmap(R.drawable.box, params.sizePx)
         canvas.drawBitmap(bitmap, params.left, params.top, boxFlashLightPaint)
@@ -189,8 +192,9 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
         isFacingLeft: Boolean
     ) {
         if (overlay.playerFlashPosition == null) return
-        val elapsedMs = nowMs - overlay.playerFlashStartMs
-        if (elapsedMs > RenderTimings.FLASH_DURATION_MS) return
+        val nowTick = RenderTimings.nowTick(nowMs)
+        val elapsedTicks = nowTick - overlay.playerFlashStartTick
+        if (elapsedTicks >= RenderTimings.FLASH_DURATION_TICKS) return
         val params = spriteDrawParams(viewport, overlay.playerFlashPosition, 0.80f)
         val body = assets.getBitmap(R.drawable.player_slime, params.sizePx)
         drawFlashedSprite(
@@ -200,7 +204,7 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
             top = params.top,
             sizePx = params.sizePx,
             flipX = isFacingLeft,
-            elapsedMs = elapsedMs,
+            elapsedTicks = elapsedTicks,
             darkPaint = playerFlashDarkPaint,
             lightPaint = playerFlashLightPaint
         )
@@ -231,11 +235,11 @@ internal fun drawFlashedSprite(
     top: Float,
     sizePx: Int,
     flipX: Boolean,
-    elapsedMs: Long,
+    elapsedTicks: Long,
     darkPaint: Paint,
     lightPaint: Paint
 ) {
-    val paint = if (elapsedMs < RenderTimings.FLASH_PHASE_MS) darkPaint else lightPaint
+    val paint = if (elapsedTicks < RenderTimings.FLASH_PHASE_TICKS) darkPaint else lightPaint
     drawSprite(canvas, bitmap, left, top, sizePx, flipX, paint)
 }
 
@@ -244,10 +248,10 @@ internal fun drawFlashedBitmap(
     bitmap: Bitmap,
     left: Float,
     top: Float,
-    elapsedMs: Long,
+    elapsedTicks: Long,
     darkPaint: Paint,
     lightPaint: Paint
 ) {
-    val paint = if (elapsedMs <= RenderTimings.FLASH_PHASE_MS) darkPaint else lightPaint
+    val paint = if (elapsedTicks < RenderTimings.FLASH_PHASE_TICKS) darkPaint else lightPaint
     canvas.drawBitmap(bitmap, left, top, paint)
 }

@@ -48,31 +48,36 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val entityDrawer = EntityDrawer(assets)
     private val effectsDrawer = EffectsDrawer(assets)
     private val renderer = GameRenderer(backgroundDrawer, tileDrawer, entityDrawer)
+    private fun clampDelayMs(delayMs: Long): Long {
+        return if (delayMs <= 0L) RenderTimings.TICK_MS else delayMs
+    }
+
+    private fun nextTickDelayMs(nowMs: Long): Long {
+        return clampDelayMs(RenderTimings.msUntilNextTick(nowMs))
+    }
     private val animationFrameRunnable = object : Runnable {
         override fun run() {
             val now = SystemClock.elapsedRealtime()
             val tick = animator.tick(now, lastViewport, renderState)
-            val transitionActive = transitionState.transition?.let { !it.isComplete(now) } == true
+            val transition = transitionState.transition
+            val transitionComplete = transition?.isComplete(now) == true
+            val transitionActive = transition != null && !transitionComplete
 
             renderAnimatorTick(tick, transitionActive, now)
 
-            if (transitionState.transition?.isComplete(now) == true) {
+            if (transitionComplete) {
                 transitionState.transition = null
                 render()
             }
 
             if (transitionActive) {
-                postOnAnimation(this)
+                postDelayed(this, nextTickDelayMs(now))
                 return
             }
 
             if (tick.needsNextFrame) {
-                val delay = tick.nextFrameDelayMs
-                if (delay != null) {
-                    postDelayed(this, delay)
-                } else {
-                    postOnAnimation(this)
-                }
+                val delayMs = tick.nextFrameDelayMs ?: nextTickDelayMs(now)
+                postDelayed(this, clampDelayMs(delayMs))
             }
         }
     }
@@ -115,6 +120,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun loadLevel(init: LevelInit) {
         val nowMs = SystemClock.elapsedRealtime()
+        val nowTick = RenderTimings.nowTick(nowMs)
         val newTiles = init.tiles.map { it.toList() }
         val isSameLayout = renderState.isInitialized && renderState.tiles == newTiles
         val shouldAnimate = init.tiles.isNotEmpty() && !isSameLayout
@@ -122,10 +128,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             transitionState.transition = LevelTransition(
                 oldTiles = renderState.tiles,
                 newTiles = newTiles,
-                startMs = nowMs
+                startTick = nowTick
             )
             removeCallbacks(animationFrameRunnable)
-            postOnAnimation(animationFrameRunnable)
+            postDelayed(animationFrameRunnable, nextTickDelayMs(nowMs))
         } else {
             transitionState.transition = null
         }
@@ -179,7 +185,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val nowMs = SystemClock.elapsedRealtime()
         animator.startPlayerFlash(from, nowMs)
         removeCallbacks(animationFrameRunnable)
-        postOnAnimation(animationFrameRunnable)
+        postDelayed(animationFrameRunnable, nextTickDelayMs(nowMs))
 
         checkNotNull(from) { "Dirty render requested without previous player position." }
         val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
@@ -218,7 +224,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             animator.startVanish(at = to, nowMs = nowMs)
         }
         removeCallbacks(animationFrameRunnable)
-        postOnAnimation(animationFrameRunnable)
+        postDelayed(animationFrameRunnable, nextTickDelayMs(nowMs))
         if (isWall) {
             renderState.boxPositions -= from
         } else {
@@ -572,15 +578,15 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             boxPathSuppressLine = animationState.boxPathSuppressLine,
             boxPath = animationState.boxPath,
             boxPathShrink = animationState.boxPathShrink,
-            boxPathStartMs = animationState.boxPathStartMs,
+            boxPathStartTick = animationState.boxPathStartTick,
             vanishPosition = animationState.vanishPosition,
             vanishStep = animationState.vanishStep,
             boxFlashPosition = animationState.boxFlashPosition,
-            boxFlashStartMs = animationState.boxFlashStartMs,
+            boxFlashStartTick = animationState.boxFlashStartTick,
             playerSilhouettePosition = animationState.playerSilhouettePosition,
-            playerSilhouetteStartMs = animationState.playerSilhouetteStartMs,
+            playerSilhouetteStartTick = animationState.playerSilhouetteStartTick,
             playerFlashPosition = animationState.playerFlashPosition,
-            playerFlashStartMs = animationState.playerFlashStartMs,
+            playerFlashStartTick = animationState.playerFlashStartTick,
             blinkActive = animator.isBlinking(nowMs)
         )
     }
@@ -594,11 +600,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         renderer.drawStaticFrame(canvas, width, height, viewport, renderState.tiles)
     }
 
-    private fun triggerBlink(delayMs: Long = RenderTimings.BLINK_DELAY_MS) {
+    private fun triggerBlink(delayTicks: Long = RenderTimings.BLINK_DELAY_TICKS) {
         val nowMs = SystemClock.elapsedRealtime()
-        animator.triggerBlink(nowMs, delayMs)
+        animator.triggerBlink(nowMs, delayTicks)
         removeCallbacks(animationFrameRunnable)
-        postOnAnimation(animationFrameRunnable)
+        postDelayed(animationFrameRunnable, nextTickDelayMs(nowMs))
     }
 
     private fun resetFacing() {
