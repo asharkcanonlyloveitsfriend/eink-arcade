@@ -289,7 +289,7 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
             state.vanishPosition = null
             state.vanishLastPosition = currentPosition
             state.vanishNeedsFinalClear = true
-            triggerBlink(nowMs, delayMs = 0L)
+            triggerBlink(nowMs, delayMs = RenderTimings.BLINK_DELAY_MS)
             return true
         }
 

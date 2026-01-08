@@ -226,6 +226,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             val from = path.first()
             val to = path.last()
             val prevPlayer = renderState.playerPosition
+            val isWall = renderState.tiles[to.row][to.col] == Tile.WALL
             val nowMs = SystemClock.elapsedRealtime()
             if (useBoxFlashAnimation) {
                 animator.startBoxFlash(from, nowMs)
@@ -233,14 +234,14 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (useFlashAnimation) {
                 animator.startPlayerFlash(prevPlayer, nowMs)
             }
-            if (useVanishAnimation && renderState.tiles[to.row][to.col] == Tile.WALL) {
+            if (useVanishAnimation && isWall) {
                 animator.startVanish(at = to, nowMs = nowMs)
             }
             if (useBoxFlashAnimation || useFlashAnimation || useVanishAnimation) {
                 removeCallbacks(animationFrameRunnable)
                 postOnAnimation(animationFrameRunnable)
             }
-            if (renderState.tiles[to.row][to.col] == Tile.WALL) {
+            if (isWall) {
                 renderState.boxPositions -= from
             } else {
                 renderState.boxPositions = (renderState.boxPositions - from) + to
@@ -264,7 +265,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     null
                 }
             }
-            if (viewport != null) {
+            if (viewport != null && !isWall) {
                 lastViewport = viewport
                 animator.startBoxPath(
                     path = path,
@@ -282,7 +283,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 dirty.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
                 dirty.union(spriteDrawParams(viewport, prevPlayer, 0.80f).dirtyRect)
                 dirty.union(spriteDrawParams(viewport, renderState.playerPosition!!, 0.80f).dirtyRect)
-                renderDirtyForBoxPath(dirty)
+                if (isWall) {
+                    renderDirty(dirty)
+                } else {
+                    renderDirtyForBoxPath(dirty)
+                }
             } else {
                 render()
             }
@@ -409,11 +414,13 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 if (useVanishAnimation && overlay.vanishPosition != null) {
                     effectsDrawer.drawVanishingBox(canvas, viewport, overlay)
                 }
+                val hidePlayer =
+                    animationState.boxPathActive && !animationState.boxPathSuppressLine
                 renderer.drawEntities(
                     canvas = canvas,
                     viewport = viewport,
                     renderState = buildRenderSnapshot(playerPosition),
-                    drawPlayer = !animationState.boxPathActive,
+                    drawPlayer = !hidePlayer,
                     blinkActive = useBlinkAnimation && animator.isBlinking(nowMs)
                 )
                 if (useFlashAnimation) {
@@ -637,11 +644,13 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     effectsDrawer.drawVanishingBox(canvas, viewport, overlay)
                 }
 
+                val hidePlayer =
+                    animationState.boxPathActive && !animationState.boxPathSuppressLine
                 renderer.drawEntities(
                     canvas = canvas,
                     viewport = viewport,
                     renderState = buildRenderSnapshot(playerPos),
-                    drawPlayer = !animationState.boxPathActive,
+                    drawPlayer = !hidePlayer,
                     blinkActive = useBlinkAnimation && animator.isBlinking(nowMs)
                 )
                 if (useFlashAnimation) {
