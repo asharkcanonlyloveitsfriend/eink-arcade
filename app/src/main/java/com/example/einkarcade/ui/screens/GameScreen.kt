@@ -18,18 +18,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
-import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.GameSurfaceView
 
@@ -150,16 +149,17 @@ fun GameScreen(
                         KeyEventType.KeyDown -> true
                         KeyEventType.KeyUp -> {
                             GameInputHandler.handleBackKeyUp(
-                                gameController = gameController
+                                gameController = gameController,
                             )
                             true
                         }
+
                         else -> false
                     }
                 } else {
                     false
                 }
-            }
+            },
     ) {
         AndroidView(
             modifier = Modifier
@@ -334,7 +334,7 @@ fun GameScreen(
                                 handler.post {
                                     syncSuccess.value = true
                                 }
-                            } catch (t: Throwable) {
+                            } catch (_: Throwable) {
                                 handler.post {
                                     syncError.value = "Sync failed."
                                     syncSuccess.value = false
@@ -365,7 +365,6 @@ fun GameScreen(
                         .focusProperties { canFocus = false }
                 )
 
-                // --- X (dislike) ---
                 BottomIconButton(
                     onClick = {
                         syncSuccess.value = false
@@ -376,7 +375,6 @@ fun GameScreen(
                     contentDescription = "Dislike level"
                 )
 
-                // --- Heart (like) ---
                 BottomIconButton(
                     onClick = {
                         syncSuccess.value = false

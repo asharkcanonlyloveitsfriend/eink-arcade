@@ -49,12 +49,6 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
         color = 0xFFD3D3D3.toInt()
         style = Paint.Style.FILL
     }
-    private val playerSilhouetteDarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        colorFilter = PorterDuffColorFilter(0xFF8E8E8E.toInt(), PorterDuff.Mode.SRC_IN)
-    }
-    private val playerSilhouetteLightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        colorFilter = PorterDuffColorFilter(0xFFF2F2F2.toInt(), PorterDuff.Mode.SRC_IN)
-    }
     private val playerFlashDarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         colorFilter = PorterDuffColorFilter(0xFF8E8E8E.toInt(), PorterDuff.Mode.SRC_IN)
     }
@@ -177,8 +171,7 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
         canvas: Canvas,
         viewport: BoardViewport,
         overlay: OverlayState,
-        nowMs: Long,
-        isFacingLeft: Boolean
+        nowMs: Long
     ) {
         if (!overlay.boxPathActive || overlay.playerSilhouettePosition == null) return
         val elapsedMs = nowMs - overlay.playerSilhouetteStartMs

@@ -140,24 +140,24 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
             if (!changed && !vanishChanged) {
                 requestedRender = true
                 dirtyRect = if (state.boxPathActive || state.boxPathNeedsFinalClear) {
-                    union(dirtyRect, computeBoxPathDirtyUnion(nowMs, viewport))
+                    computeBoxPathDirtyUnion(nowMs, viewport)
                 } else {
-                    union(dirtyRect, computeBlinkDirtyRect(viewport, renderState))
+                    computeBlinkDirtyRect(viewport, renderState)
                 }
             }
         }
 
         if (changed) {
             requestedRender = true
-            dirtyRect = union(dirtyRect, computeBoxPathDirtyUnion(nowMs, viewport))
+            dirtyRect = computeBoxPathDirtyUnion(nowMs, viewport)
         }
 
         if (vanishChanged && !changed) {
             requestedRender = true
             dirtyRect = if (state.boxPathActive || state.boxPathNeedsFinalClear) {
-                union(dirtyRect, computeBoxPathDirtyUnion(nowMs, viewport))
+                computeBoxPathDirtyUnion(nowMs, viewport)
             } else {
-                union(dirtyRect, computeVanishDirtyRect(viewport))
+                computeVanishDirtyRect(viewport)
             }
         }
 
@@ -366,10 +366,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
 
     private fun union(base: Rect?, extra: Rect?): Rect? {
         if (extra == null) return base
-        return if (base == null) {
-            Rect(extra)
-        } else {
-            base.apply { union(extra) }
-        }
+        return base?.apply { union(extra) } ?: Rect(extra)
     }
 }

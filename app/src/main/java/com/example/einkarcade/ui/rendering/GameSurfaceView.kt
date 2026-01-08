@@ -47,7 +47,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val tileDrawer = TileDrawer()
     private val entityDrawer = EntityDrawer(assets)
     private val effectsDrawer = EffectsDrawer(assets)
-    private val renderer = GameRenderer(backgroundDrawer, tileDrawer, entityDrawer, effectsDrawer)
+    private val renderer = GameRenderer(backgroundDrawer, tileDrawer, entityDrawer)
     private val animationFrameRunnable = object : Runnable {
         override fun run() {
             val now = SystemClock.elapsedRealtime()
@@ -348,8 +348,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     canvas = canvas,
                     viewport = viewport,
                     overlay = overlay,
-                    nowMs = nowMs,
-                    isFacingLeft = renderState.isFacingLeft
+                    nowMs = nowMs
                 )
             }
             if (overlay.vanishPosition != null) {
@@ -497,19 +496,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    private fun renderBoxPathOrFull(nowMs: Long) {
-        val viewport = lastViewport ?: run {
-            render()
-            return
-        }
-        val dirty = animator.computeBoxPathDirtyUnion(nowMs, viewport)
-        if (dirty == null) {
-            render()
-            return
-        }
-        renderDirtyForBoxPath(dirty)
-    }
-
     private fun renderDirtyForBoxPath(requestedDirtyRect: Rect) {
         if (width <= 0 || height <= 0) return
         if (!renderState.isInitialized) return
@@ -537,8 +523,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 canvas = canvas,
                 viewport = viewport,
                 overlay = overlay,
-                nowMs = nowMs,
-                isFacingLeft = renderState.isFacingLeft
+                nowMs = nowMs
             )
             if (overlay.vanishPosition != null) {
                 effectsDrawer.drawVanishingBox(canvas, viewport, overlay)

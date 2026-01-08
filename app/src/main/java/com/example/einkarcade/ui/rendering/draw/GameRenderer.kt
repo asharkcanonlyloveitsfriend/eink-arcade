@@ -17,49 +17,8 @@ internal data class RenderStateSnapshot(
 internal class GameRenderer(
     private val backgroundDrawer: BackgroundDrawer,
     private val tileDrawer: TileDrawer,
-    private val entityDrawer: EntityDrawer,
-    private val effectsDrawer: EffectsDrawer
+    private val entityDrawer: EntityDrawer
 ) {
-    fun drawScene(
-        canvas: Canvas,
-        viewWidth: Int,
-        viewHeight: Int,
-        viewport: BoardViewport,
-        renderState: RenderStateSnapshot,
-        transition: LevelTransition?,
-        overlay: OverlayState?,
-        nowMs: Long,
-        drawPlayer: Boolean = true
-    ) {
-        backgroundDrawer.draw(canvas, viewWidth, viewHeight)
-
-        if (transition != null) {
-            drawTransitionTiles(canvas, viewport, transition, nowMs)
-            drawTransitionEntities(canvas, viewport, transition, renderState, overlay, nowMs, drawPlayer)
-            return
-        }
-
-        tileDrawer.drawTiles(canvas, viewport, renderState.tiles)
-
-        if (overlay != null) {
-            effectsDrawer.drawBoxPathLine(canvas, viewport, overlay, nowMs)
-            if (overlay.vanishPosition != null) {
-                effectsDrawer.drawVanishingBox(canvas, viewport, overlay)
-            }
-        }
-
-        entityDrawer.drawBoxes(canvas, viewport, renderState.boxPositions, renderState.selectedBox)
-        if (drawPlayer) {
-            entityDrawer.drawPlayer(
-                canvas = canvas,
-                viewport = viewport,
-                playerPosition = renderState.playerPosition,
-                isFacingLeft = renderState.isFacingLeft,
-                blinkActive = overlay?.blinkActive == true
-            )
-        }
-    }
-
     fun drawStaticFrame(
         canvas: Canvas,
         viewWidth: Int,
