@@ -34,6 +34,7 @@ import com.example.einkarcade.ui.rendering.model.TransitionState
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
     private val useAnimations = false
+    private val useBlinkAnimation = true
     private val renderState = RenderState()
     private val transitionState = TransitionState()
     private var onTapCell: ((Position) -> Unit)? = null
@@ -51,12 +52,12 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val renderer = GameRenderer(backgroundDrawer, tileDrawer, entityDrawer, effectsDrawer)
     private val animationFrameRunnable = object : Runnable {
         override fun run() {
-            if (!useAnimations) return
+            if (!useAnimations && !useBlinkAnimation) return
             val now = SystemClock.elapsedRealtime()
             val tick = animator.tick(now, lastViewport, renderState)
             val transitionActive = transitionState.transition?.let { !it.isComplete(now) } == true
 
-            renderAnimatorTick(tick, transitionActive)
+            renderAnimatorTick(tick, transitionActive, now)
 
             if (transitionState.transition?.isComplete(now) == true) {
                 transitionState.transition = null
@@ -196,18 +197,14 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun onMoveRejected() {
         if (!renderState.isInitialized) return
-        if (useAnimations) {
+        if (useBlinkAnimation) {
             triggerBlink()
         }
     }
 
     fun onGameWon(isClean: Boolean) {
         if (!renderState.isInitialized) return
-        if (!isClean) {
-            if (useAnimations) {
-                triggerBlink()
-            }
-        }
+        if (!isClean) return
     }
 
     fun onBoxMoved(path: List<Position>) {
@@ -356,7 +353,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     canvas = canvas,
                     viewport = viewport,
                     renderState = buildRenderSnapshot(playerPosition),
-                    drawPlayer = true
+                    drawPlayer = true,
+                    blinkActive = useBlinkAnimation && animator.isBlinking(nowMs)
                 )
             }
         } finally {
@@ -398,7 +396,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         staticFrameTiles = renderState.tiles
     }
 
-    private fun renderDirty(requestedDirtyRect: Rect) {
+    private fun renderDirty(requestedDirtyRect: Rect, blinkActive: Boolean = false) {
         if (width <= 0 || height <= 0) return
         if (!renderState.isInitialized) return
 
@@ -446,7 +444,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                     canvas = canvas,
                     viewport = viewport,
                     renderState = buildRenderSnapshot(playerPos),
-                    drawPlayer = true
+                    drawPlayer = true,
+                    blinkActive = blinkActive
                 )
             }
         } finally {
@@ -455,8 +454,8 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    private fun renderAnimatorTick(tick: TickResult, transitionActive: Boolean) {
-        if (!useAnimations) return
+    private fun renderAnimatorTick(tick: TickResult, transitionActive: Boolean, nowMs: Long) {
+        if (!useAnimations && !useBlinkAnimation) return
         if (tick.forceFullRender) {
             render()
             return
@@ -467,7 +466,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (animationState.boxPathActive || animationState.boxPathNeedsFinalClear) {
                 renderDirtyForBoxPath(dirty)
             } else {
-                renderDirty(dirty)
+                renderDirty(dirty, blinkActive = useBlinkAnimation && animator.isBlinking(nowMs))
             }
             return
         }
