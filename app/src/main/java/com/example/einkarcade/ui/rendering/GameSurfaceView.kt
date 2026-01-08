@@ -33,6 +33,7 @@ import com.example.einkarcade.ui.rendering.model.TransitionState
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
+    private val useAnimations = false
     private val renderState = RenderState()
     private val transitionState = TransitionState()
     private var onTapCell: ((Position) -> Unit)? = null
@@ -42,6 +43,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val animationState: AnimationState
         get() = animator.state
     private var staticFrameBitmap: Bitmap? = null
+    private var staticFrameTiles: List<List<Tile>>? = null
     private val backgroundDrawer = BackgroundDrawer(context)
     private val tileDrawer = TileDrawer()
     private val entityDrawer = EntityDrawer(assets)
@@ -49,6 +51,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private val renderer = GameRenderer(backgroundDrawer, tileDrawer, entityDrawer, effectsDrawer)
     private val animationFrameRunnable = object : Runnable {
         override fun run() {
+            if (!useAnimations) return
             val now = SystemClock.elapsedRealtime()
             val tick = animator.tick(now, lastViewport, renderState)
             val transitionActive = transitionState.transition?.let { !it.isComplete(now) } == true
@@ -116,7 +119,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val nowMs = SystemClock.elapsedRealtime()
         val newTiles = init.tiles.map { it.toList() }
         val isSameLayout = renderState.isInitialized && renderState.tiles == newTiles
-        val shouldAnimate = init.tiles.isNotEmpty() && !isSameLayout
+        val shouldAnimate = useAnimations && init.tiles.isNotEmpty() && !isSameLayout
         if (shouldAnimate) {
             transitionState.transition = LevelTransition(
                 oldTiles = renderState.tiles,
@@ -172,13 +175,15 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (!renderState.isInitialized) return
 
         val from = renderState.playerPosition
-        val nowMs = SystemClock.elapsedRealtime()
         resetFacing()
         renderState.playerPosition = to
         renderState.displayedPlayerPosition = to
-        animator.startPlayerFlash(from, nowMs)
-        removeCallbacks(animationFrameRunnable)
-        postOnAnimation(animationFrameRunnable)
+        if (useAnimations) {
+            val nowMs = SystemClock.elapsedRealtime()
+            animator.startPlayerFlash(from, nowMs)
+            removeCallbacks(animationFrameRunnable)
+            postOnAnimation(animationFrameRunnable)
+        }
 
         checkNotNull(from) { "Dirty render requested without previous player position." }
         val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
@@ -191,19 +196,49 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     fun onMoveRejected() {
         if (!renderState.isInitialized) return
-        triggerBlink()
+        if (useAnimations) {
+            triggerBlink()
+        }
     }
 
     fun onGameWon(isClean: Boolean) {
         if (!renderState.isInitialized) return
         if (!isClean) {
-            triggerBlink()
+            if (useAnimations) {
+                triggerBlink()
+            }
         }
     }
 
     fun onBoxMoved(path: List<Position>) {
         if (!renderState.isInitialized) return
         if (path.size < 2) return
+        if (!useAnimations) {
+            val from = path.first()
+            val to = path.last()
+            val prevPlayer = renderState.playerPosition
+            if (renderState.tiles[to.row][to.col] == Tile.WALL) {
+                renderState.boxPositions -= from
+            } else {
+                renderState.boxPositions = (renderState.boxPositions - from) + to
+            }
+            renderState.playerPosition = path[path.size - 2]
+            renderState.displayedPlayerPosition = renderState.playerPosition
+            renderState.pendingPlayerPosition = null
+            renderState.pendingFacingLeft = null
+
+            val viewport = lastViewport
+            if (viewport != null && prevPlayer != null) {
+                val dirty = Rect(spriteDrawParams(viewport, from, 0.90f).dirtyRect)
+                dirty.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
+                dirty.union(spriteDrawParams(viewport, prevPlayer, 0.80f).dirtyRect)
+                dirty.union(spriteDrawParams(viewport, renderState.playerPosition!!, 0.80f).dirtyRect)
+                renderDirty(dirty)
+            } else {
+                render()
+            }
+            return
+        }
         val from = path.first()
         val to = path.last()
         if (renderState.tiles[to.row][to.col] == Tile.WALL) {
@@ -277,13 +312,14 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         removeCallbacks(animationFrameRunnable)
         staticFrameBitmap?.recycle()
         staticFrameBitmap = null
+        staticFrameTiles = null
         backgroundDrawer.recycle()
     }
 
     private fun render() {
         if (width <= 0 || height <= 0) return
         if (!renderState.isInitialized) return
-        val playerPosition = if (animationState.boxPathActive) {
+        val playerPosition = if (useAnimations && animationState.boxPathActive) {
             renderState.displayedPlayerPosition ?: renderState.playerPosition!!
         } else {
             renderState.playerPosition!!
@@ -297,21 +333,32 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val canvas = holder.lockCanvas() ?: return
         try {
             val nowMs = SystemClock.elapsedRealtime()
-            val transition = transitionState.transition?.takeUnless { it.isComplete(nowMs) }
-            if (transition == null) {
-                transitionState.transition = null
+            if (useAnimations) {
+                val transition = transitionState.transition?.takeUnless { it.isComplete(nowMs) }
+                if (transition == null) {
+                    transitionState.transition = null
+                }
+                renderer.drawScene(
+                    canvas = canvas,
+                    viewWidth = width,
+                    viewHeight = height,
+                    viewport = viewport,
+                    renderState = buildRenderSnapshot(playerPosition),
+                    transition = transition,
+                    overlay = buildOverlayState(nowMs),
+                    nowMs = nowMs,
+                    drawPlayer = true
+                )
+            } else {
+                rebuildStaticFrameIfPossible()
+                drawStaticFrame(canvas, viewport)
+                renderer.drawEntities(
+                    canvas = canvas,
+                    viewport = viewport,
+                    renderState = buildRenderSnapshot(playerPosition),
+                    drawPlayer = true
+                )
             }
-            renderer.drawScene(
-                canvas = canvas,
-                viewWidth = width,
-                viewHeight = height,
-                viewport = viewport,
-                renderState = buildRenderSnapshot(playerPosition),
-                transition = transition,
-                overlay = buildOverlayState(nowMs),
-                nowMs = nowMs,
-                drawPlayer = true
-            )
         } finally {
             holder.unlockCanvasAndPost(canvas)
         }
@@ -325,7 +372,12 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         if (firstRow.isEmpty()) return
 
         val existing = staticFrameBitmap
-        if (existing != null && !existing.isRecycled && existing.width == width && existing.height == height) {
+        if (existing != null &&
+            !existing.isRecycled &&
+            existing.width == width &&
+            existing.height == height &&
+            staticFrameTiles == renderState.tiles
+        ) {
             return
         }
 
@@ -343,13 +395,16 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         renderer.drawStaticFrame(bitmapCanvas, width, height, viewport, renderState.tiles)
 
         staticFrameBitmap = bitmap
+        staticFrameTiles = renderState.tiles
     }
 
     private fun renderDirty(requestedDirtyRect: Rect) {
         if (width <= 0 || height <= 0) return
         if (!renderState.isInitialized) return
 
-        check(!animationState.boxPathActive) { "Dirty render requested during box path animation." }
+        if (useAnimations) {
+            check(!animationState.boxPathActive) { "Dirty render requested during box path animation." }
+        }
 
         val viewport = lastViewport
         checkNotNull(viewport) { "Dirty render requested without viewport." }
@@ -366,23 +421,34 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             canvas.clipRect(dirtyRect)
 
             val nowMs = SystemClock.elapsedRealtime()
-            val transition = transitionState.transition?.takeUnless { it.isComplete(nowMs) }
-            if (transition == null) {
-                transitionState.transition = null
+            if (useAnimations) {
+                val transition = transitionState.transition?.takeUnless { it.isComplete(nowMs) }
+                if (transition == null) {
+                    transitionState.transition = null
+                }
+                val overlay = buildOverlayState(nowMs)
+                renderer.drawScene(
+                    canvas = canvas,
+                    viewWidth = width,
+                    viewHeight = height,
+                    viewport = viewport,
+                    renderState = buildRenderSnapshot(playerPos),
+                    transition = transition,
+                    overlay = overlay,
+                    nowMs = nowMs,
+                    drawPlayer = true
+                )
+                effectsDrawer.drawPlayerFlash(canvas, viewport, overlay, nowMs, renderState.isFacingLeft)
+            } else {
+                rebuildStaticFrameIfPossible()
+                drawStaticFrame(canvas, viewport)
+                renderer.drawEntities(
+                    canvas = canvas,
+                    viewport = viewport,
+                    renderState = buildRenderSnapshot(playerPos),
+                    drawPlayer = true
+                )
             }
-            val overlay = buildOverlayState(nowMs)
-            renderer.drawScene(
-                canvas = canvas,
-                viewWidth = width,
-                viewHeight = height,
-                viewport = viewport,
-                renderState = buildRenderSnapshot(playerPos),
-                transition = transition,
-                overlay = overlay,
-                nowMs = nowMs,
-                drawPlayer = true
-            )
-            effectsDrawer.drawPlayerFlash(canvas, viewport, overlay, nowMs, renderState.isFacingLeft)
         } finally {
             canvas.restore()
             holder.unlockCanvasAndPost(canvas)
@@ -390,6 +456,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun renderAnimatorTick(tick: TickResult, transitionActive: Boolean) {
+        if (!useAnimations) return
         if (tick.forceFullRender) {
             render()
             return
@@ -411,6 +478,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun renderBoxPathOrFull(nowMs: Long) {
+        if (!useAnimations) {
+            render()
+            return
+        }
         val viewport = lastViewport ?: run {
             render()
             return
@@ -424,6 +495,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     private fun renderDirtyForBoxPath(requestedDirtyRect: Rect) {
+        if (!useAnimations) {
+            renderDirty(requestedDirtyRect)
+            return
+        }
         if (width <= 0 || height <= 0) return
         if (!renderState.isInitialized) return
 
@@ -512,6 +587,14 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         )
     }
 
+    private fun drawStaticFrame(canvas: Canvas, viewport: BoardViewport) {
+        val bitmap = staticFrameBitmap
+        if (bitmap != null && !bitmap.isRecycled) {
+            canvas.drawBitmap(bitmap, 0f, 0f, null)
+            return
+        }
+        renderer.drawStaticFrame(canvas, width, height, viewport, renderState.tiles)
+    }
 
     private fun triggerBlink(delayMs: Long = RenderTimings.BLINK_DELAY_MS) {
         val nowMs = SystemClock.elapsedRealtime()

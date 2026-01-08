@@ -71,6 +71,25 @@ internal class GameRenderer(
         tileDrawer.drawTiles(canvas, viewport, tiles)
     }
 
+    fun drawEntities(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        renderState: RenderStateSnapshot,
+        drawPlayer: Boolean = true,
+        blinkActive: Boolean = false
+    ) {
+        entityDrawer.drawBoxes(canvas, viewport, renderState.boxPositions, renderState.selectedBox)
+        if (drawPlayer) {
+            entityDrawer.drawPlayer(
+                canvas = canvas,
+                viewport = viewport,
+                playerPosition = renderState.playerPosition,
+                isFacingLeft = renderState.isFacingLeft,
+                blinkActive = blinkActive
+            )
+        }
+    }
+
     private fun drawTransitionTiles(
         canvas: Canvas,
         viewport: BoardViewport,
