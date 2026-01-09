@@ -266,6 +266,9 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
                 RenderTimings.BOX_PATH_DURATION_TICKS.toFloat()).coerceAtMost(1f)
         }
         var changed = false
+        if (elapsedTicks == RenderTimings.BOX_PATH_DELAY_TICKS) {
+            changed = true
+        }
         if (progress != state.boxPathShrink) {
             state.boxPathShrink = progress
             changed = true
