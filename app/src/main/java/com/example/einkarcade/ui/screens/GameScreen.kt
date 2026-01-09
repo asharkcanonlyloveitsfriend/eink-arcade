@@ -6,7 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -39,28 +38,20 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalContext
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.GameSurfaceView
+import androidx.compose.ui.viewinterop.AndroidView
 
 
 @Composable
@@ -71,9 +62,14 @@ fun GameScreen(
     gameController.revision.value
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
     val surfaceViewRef = remember { mutableStateOf<GameSurfaceView?>(null) }
-    val currentGameController = rememberUpdatedState(gameController)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val surfaceView = remember {
+        GameSurfaceView(context)
+    }
+    if (surfaceViewRef.value == null) {
+        surfaceViewRef.value = surfaceView
+    }
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
 
@@ -90,13 +86,10 @@ fun GameScreen(
         }
     }
 
-
     BackHandler(enabled = true) {
-        // handled manually via key events below
-    }
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+        GameInputHandler.handleBackKeyUp(
+            gameController = gameController
+        )
     }
 
     @Composable
@@ -126,8 +119,7 @@ fun GameScreen(
                     indication = null,
                     onClick = onClick
                 )
-                .padding(horizontal = 12.dp)
-                .focusProperties { canFocus = false },
+                .padding(horizontal = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -140,54 +132,27 @@ fun GameScreen(
 
     Box(
         modifier = modifier
-            .fillMaxSize()
-            .focusRequester(focusRequester)
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.key == Key.Back) {
-                    when (event.type) {
-                        KeyEventType.KeyDown -> true
-                        KeyEventType.KeyUp -> {
-                            GameInputHandler.handleBackKeyUp(
-                                gameController = gameController,
-                            )
-                            true
-                        }
-
-                        else -> false
-                    }
-                } else {
-                    false
-                }
-            },
+            .fillMaxSize(),
     ) {
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("gameCanvas"),
-            factory = { context ->
-                val view = GameSurfaceView(context)
+            factory = {
                 val selection = object : GameInputHandler.BoxSelection {
-                    override fun getSelectedBox(): Position? = view.getSelectedBox()
-
+                    override fun getSelectedBox(): Position? = surfaceView.getSelectedBox()
                     override fun setSelectedBox(position: Position?) {
-                        view.setSelectedBox(position)
+                        surfaceView.setSelectedBox(position)
                     }
                 }
-                view.setOnTapCell { pos ->
+                surfaceView.setOnTapCell { pos ->
                     GameInputHandler.handleTap(
                         tappedPosition = pos,
-                        gameController = currentGameController.value,
+                        gameController = gameController,
                         selection = selection
                     )
                 }
-                surfaceViewRef.value = view
-                view
-            },
-            update = { view ->
-                if (surfaceViewRef.value !== view) {
-                    surfaceViewRef.value = view
-                }
+                surfaceView
             }
         )
 
@@ -362,7 +327,6 @@ fun GameScreen(
                             indication = null,
                             onClick = { gameController.nextLevel() }
                         )
-                        .focusProperties { canFocus = false }
                 )
 
                 BottomIconButton(

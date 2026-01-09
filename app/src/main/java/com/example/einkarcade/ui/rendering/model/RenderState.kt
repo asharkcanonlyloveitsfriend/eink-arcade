@@ -12,9 +12,11 @@ internal data class RenderState(
     var pendingPlayerPosition: Position? = null,
     var selectedBox: Position? = null,
     var isFacingLeft: Boolean = false,
-    var pendingFacingLeft: Boolean? = null,
-    var isInitialized: Boolean = false
-)
+    var pendingFacingLeft: Boolean? = null
+) {
+    val isReady: Boolean
+        get() = tiles.isNotEmpty() && playerPosition != null
+}
 
 internal data class TransitionState(
     var transition: LevelTransition? = null

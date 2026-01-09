@@ -122,7 +122,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val nowMs = SystemClock.elapsedRealtime()
         val nowTick = RenderTimings.nowTick(nowMs)
         val newTiles = init.tiles.map { it.toList() }
-        val isSameLayout = renderState.isInitialized && renderState.tiles == newTiles
+        val isSameLayout = renderState.isReady && renderState.tiles == newTiles
         val shouldAnimate = init.tiles.isNotEmpty() && !isSameLayout
         if (shouldAnimate) {
             transitionState.transition = LevelTransition(
@@ -143,13 +143,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         renderState.selectedBox = null
         resetFacing()
         animator.reset()
-        renderState.isInitialized = true
         rebuildStaticFrameIfPossible()
         render()
     }
 
     fun setSelectedBox(selected: Position?) {
-        if (!renderState.isInitialized) return
         val previous = renderState.selectedBox
         if (previous == selected) return
 
@@ -176,9 +174,9 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     fun getSelectedBox(): Position? = renderState.selectedBox
 
     fun onPlayerMoved(to: Position) {
-        if (!renderState.isInitialized) return
-
-        val from = renderState.playerPosition
+        val from = checkNotNull(renderState.playerPosition) {
+            "Dirty render requested without previous player position."
+        }
         resetFacing()
         renderState.playerPosition = to
         renderState.displayedPlayerPosition = to
@@ -187,7 +185,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         removeCallbacks(animationFrameRunnable)
         postDelayed(animationFrameRunnable, nextTickDelayMs(nowMs))
 
-        checkNotNull(from) { "Dirty render requested without previous player position." }
         val viewport = checkNotNull(lastViewport) { "Dirty render requested without viewport." }
         val fromParams = spriteDrawParams(viewport, from, 0.80f)
         val toParams = spriteDrawParams(viewport, to, 0.80f)
@@ -197,19 +194,16 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     fun onMoveRejected() {
-        if (!renderState.isInitialized) return
         triggerBlink()
     }
 
     fun onGameWon(isClean: Boolean) {
-        if (!renderState.isInitialized) return
         if (!isClean) {
             triggerBlink()
         }
     }
 
     fun onBoxMoved(path: List<Position>) {
-        if (!renderState.isInitialized) return
         if (path.size < 2) return
         val from = path.first()
         val to = path.last()
@@ -249,22 +243,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         renderState.displayedPlayerPosition = renderState.playerPosition
         renderState.pendingPlayerPosition = null
 
-        val viewport = lastViewport ?: run {
-            if (width > 0 && height > 0 &&
-                renderState.tiles.isNotEmpty() &&
-                renderState.tiles.first().isNotEmpty()) {
-                computeBoardViewport(
-                    width.toFloat(),
-                    height.toFloat(),
-                    renderState.tiles.size,
-                    renderState.tiles.first().size
-                )
-            } else {
-                null
-            }
+        val viewport = checkNotNull(lastViewport) {
+            "BoxMoved received without viewport"
         }
-        if (viewport != null && !isWall) {
-            lastViewport = viewport
+
+        if (!isWall) {
             animator.startBoxPath(
                 path = path,
                 pendingPlayer = renderState.playerPosition ?: path[path.size - 2],
@@ -278,7 +261,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             }
         }
 
-        if (viewport != null && prevPlayer != null) {
+        if (prevPlayer != null) {
             val dirty = Rect(spriteDrawParams(viewport, from, 0.90f).dirtyRect)
             dirty.union(spriteDrawParams(viewport, to, 0.90f).dirtyRect)
             dirty.union(spriteDrawParams(viewport, prevPlayer, 0.80f).dirtyRect)
@@ -295,14 +278,14 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        if (renderState.isInitialized) {
+        if (renderState.isReady) {
             rebuildStaticFrameIfPossible()
             render()
         }
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        if (renderState.isInitialized) {
+        if (renderState.isReady) {
             rebuildStaticFrameIfPossible()
             render()
         }
@@ -318,7 +301,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     private fun render() {
         if (width <= 0 || height <= 0) return
-        if (!renderState.isInitialized) return
         val playerPosition = renderState.playerPosition!!
         val innerRows = renderState.tiles.size
         val innerCols = renderState.tiles.first().size
@@ -387,7 +369,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     private fun rebuildStaticFrameIfPossible() {
         if (width <= 0 || height <= 0) return
-        if (!renderState.isInitialized) return
         if (renderState.tiles.isEmpty()) return
         val firstRow = renderState.tiles.firstOrNull() ?: return
         if (firstRow.isEmpty()) return
@@ -421,7 +402,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     private fun renderDirty(requestedDirtyRect: Rect, nowMsOverride: Long? = null) {
         if (width <= 0 || height <= 0) return
-        if (!renderState.isInitialized) return
 
         val viewport = lastViewport
         checkNotNull(viewport) { "Dirty render requested without viewport." }
@@ -507,7 +487,6 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
 
     private fun renderDirtyForBoxPath(requestedDirtyRect: Rect) {
         if (width <= 0 || height <= 0) return
-        if (!renderState.isInitialized) return
 
         val viewport = lastViewport
         checkNotNull(viewport) { "Dirty render requested without viewport." }
