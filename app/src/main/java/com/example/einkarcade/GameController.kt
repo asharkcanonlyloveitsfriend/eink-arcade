@@ -100,13 +100,13 @@ class GameController(
     private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
     private fun persistSelection() {
-        lastSelectionStore.save(levelSets[currentSetIndex].id, level.name)
+        lastSelectionStore.save(levelSets[currentSetIndex].id, level.puzzleId)
     }
 
-    val availableSetOptions: List<Pair<String, String>>
+    val availableSetOptions: List<Pair<Int, String>>
         get() = levelSets.map { it.id to it.name }
 
-    fun selectSetById(setId: String) {
+    fun selectSetById(setId: Int) {
         val idx = levelSets.indexOfFirst { it.id == setId }
         if (idx == -1) return
         currentSetIndex = idx
@@ -221,19 +221,22 @@ class GameController(
         currentSetIndex = 0
         currentLevelIndex = 0
         if (levelSets.isEmpty()) return
+        restoreLastSelection()
+        gameEngine = GameEngine(level)
+        persistSelection()
+    }
+
+    private fun restoreLastSelection() {
         level = levelsInCurrentSet[currentLevelIndex]
-        lastSelectionStore.load()?.let { (savedSetId, savedLevelName) ->
-            val setIdx = levelSets.indexOfFirst { it.id == savedSetId }
-            if (setIdx != -1) {
-                currentSetIndex = setIdx
-            }
-            val levelIdx = levelsInCurrentSet.indexOfFirst { it.name == savedLevelName }
+        val (savedSetId, savedPuzzleId) = lastSelectionStore.load()
+        val setIdx = levelSets.indexOfFirst { it.id == savedSetId }
+        if (setIdx != -1) {
+            currentSetIndex = setIdx
+            val levelIdx = levelsInCurrentSet.indexOfFirst { it.puzzleId == savedPuzzleId }
             if (levelIdx != -1) {
                 currentLevelIndex = levelIdx
             }
-            level = levelsInCurrentSet[currentLevelIndex]
         }
-        gameEngine = GameEngine(level)
-        persistSelection()
+        level = levelsInCurrentSet[currentLevelIndex]
     }
 }

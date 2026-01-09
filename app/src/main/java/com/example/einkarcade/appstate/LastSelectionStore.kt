@@ -9,22 +9,21 @@ class LastSelectionStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "eink_arcade_prefs"
         private const val KEY_SET_ID = "current_set_id"
-        private const val KEY_LEVEL_NAME = "current_level_name"
+        private const val KEY_PUZZLE_ID = "current_puzzle_id"
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun save(setId: String, levelName: String) {
+    fun save(setId: Int, puzzleId: Int) {
         prefs.edit {
-            putString(KEY_SET_ID, setId)
-                .putString(KEY_LEVEL_NAME, levelName)
+            putInt(KEY_SET_ID, setId)
+                .putInt(KEY_PUZZLE_ID, puzzleId)
         }
     }
 
-    fun load(): Pair<String, String>? {
-        val savedSetId = prefs.getString(KEY_SET_ID, null)
-        val savedLevelName = prefs.getString(KEY_LEVEL_NAME, null)
-        if (savedSetId == null || savedLevelName == null) return null
-        return savedSetId to savedLevelName
+    fun load(): Pair<Int, Int> {
+        val savedSetId = prefs.getInt(KEY_SET_ID, 0)
+        val savedPuzzleId = prefs.getInt(KEY_PUZZLE_ID, 0)
+        return savedSetId to savedPuzzleId
     }
 }

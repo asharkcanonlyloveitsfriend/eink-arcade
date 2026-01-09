@@ -46,7 +46,7 @@ class LevelsRepository(private val context: Context) {
                 level
             }
             LevelSet(
-                id = set.levelSet.id.toString(),
+                id = set.levelSet.id,
                 name = set.levelSet.title,
                 levels = levels
             )
