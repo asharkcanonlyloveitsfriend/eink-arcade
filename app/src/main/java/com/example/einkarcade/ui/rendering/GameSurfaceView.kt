@@ -11,7 +11,6 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.core.graphics.createBitmap
 import com.example.einkarcade.GameController
-import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.anim.AnimationState
@@ -29,6 +28,7 @@ import com.example.einkarcade.ui.rendering.draw.OverlayState
 import com.example.einkarcade.ui.rendering.draw.RenderStateSnapshot
 import com.example.einkarcade.ui.rendering.draw.TileDrawer
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
+import com.example.einkarcade.ui.rendering.geom.ResolvedBoardGeometry
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import com.example.einkarcade.ui.rendering.geom.computeVanishDirtyRect
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
@@ -53,6 +53,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         get() = animator.state
     private var staticFrameBitmap: Bitmap? = null
     private var staticFrameTiles: List<List<Tile>>? = null
+    private var resolvedBoardGeometry: ResolvedBoardGeometry? = null
     private val backgroundDrawer = BackgroundDrawer(context)
     private val tileDrawer = TileDrawer()
     private val entityDrawer = EntityDrawer(assets)
@@ -421,6 +422,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val viewport = computeBoardViewport(width.toFloat(), height.toFloat(), innerRows, innerCols)
         // Keep this consistent with full render so touch mapping stays correct.
         lastViewport = viewport
+        resolvedBoardGeometry = ResolvedBoardGeometry.compute(
+            tileSizePx = viewport.cellSize,
+            assets = assets
+        )
 
         renderer.drawStaticFrame(bitmapCanvas, width, height, viewport, renderState.tiles)
 
@@ -495,11 +500,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
-    private fun renderBlinkDirty(rect: Rect, blinkActive: Boolean) {
+    private fun drawPlayerEyesOverlay(rect: Rect, blinkActive: Boolean) {
         if (width <= 0 || height <= 0) return
 
         val viewport = lastViewport
-        checkNotNull(viewport) { "Dirty render requested without viewport." }
+        checkNotNull(viewport) { "Render requested without viewport." }
 
         val dirtyRect = Rect(rect)
         if (!dirtyRect.intersect(0, 0, width, height)) return
@@ -511,14 +516,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             canvas.save()
             canvas.clipRect(dirtyRect)
 
-            rebuildStaticFrameIfPossible()
-            drawStaticFrame(canvas, viewport)
-            renderer.drawEntities(
+            effectsDrawer.drawPlayerEyes(
                 canvas = canvas,
                 viewport = viewport,
-                renderState = buildRenderSnapshot(playerPos),
-                drawPlayer = true,
-                blinkActive = blinkActive
+                playerPosition = playerPos,
+                eyesClosed = blinkActive
             )
         } finally {
             canvas.restore()
@@ -728,17 +730,16 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         )
     }
 
-    private fun computeBlinkDirtyRect(viewport: BoardViewport, playerPos: Position): Rect {
+    private fun computeBlinkDirtyRect(
+        viewport: BoardViewport,
+        playerPos: Position,
+        eyesOpaqueBoundsPx: Rect
+    ): Rect {
         val params = spriteDrawParams(viewport, playerPos, 0.80f)
-        val bounds = Rect(assets.getOpaqueBounds(R.drawable.player_eyes_open, params.sizePx))
-        if (bounds.isEmpty) {
-            error("Dirty render requested with empty blink bounds.")
-        }
-        val paddingPx = 2
-        val left = params.left.toInt() + bounds.left - paddingPx
-        val top = params.top.toInt() + bounds.top - paddingPx
-        val right = params.left.toInt() + bounds.right + paddingPx
-        val bottom = params.top.toInt() + bounds.bottom + paddingPx
+        val left = params.left.toInt() + eyesOpaqueBoundsPx.left
+        val top = params.top.toInt() + eyesOpaqueBoundsPx.top
+        val right = params.left.toInt() + eyesOpaqueBoundsPx.right
+        val bottom = params.top.toInt() + eyesOpaqueBoundsPx.bottom - 1
         return Rect(left, top, right, bottom)
     }
 
@@ -780,14 +781,18 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private fun enqueueBlink() {
         val viewport = lastViewport ?: return
         val playerPos = renderState.playerPosition ?: return
-        val blinkDirtyRect = computeBlinkDirtyRect(viewport, playerPos)
-
+        val resolvedGeometry = resolvedBoardGeometry ?: return
+        val blinkDirtyRect = computeBlinkDirtyRect(
+            viewport = viewport,
+            playerPos = playerPos,
+            eyesOpaqueBoundsPx = resolvedGeometry.playerEyesOpaqueBoundsPx
+        )
         queuedAnimator.enqueue(
             BlinkAnimation(
                 delayTicks = RenderTimings.BLINK_DELAY_TICKS,
                 blinkTicks = RenderTimings.BLINK_DURATION_TICKS,
                 dirtyRect = blinkDirtyRect,
-                renderBlinkDirty = ::renderBlinkDirty
+                renderBlinkDirty = ::drawPlayerEyesOverlay
             )
         )
     }

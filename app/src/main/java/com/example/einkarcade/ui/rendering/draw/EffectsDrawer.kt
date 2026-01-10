@@ -207,6 +207,22 @@ internal class EffectsDrawer(private val assets: AndroidGameAssets) {
             lightPaint = playerFlashLightPaint
         )
     }
+
+    fun drawPlayerEyes(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        playerPosition: Position,
+        eyesClosed: Boolean
+    ) {
+        val params = spriteDrawParams(viewport, playerPosition, 1.0f)
+        val resId = if (eyesClosed) {
+            R.drawable.player_eyes_blink
+        } else {
+            R.drawable.player_eyes_open
+        }
+        val bitmap = assets.getBitmap(resId, params.sizePx)
+        canvas.drawBitmap(bitmap, params.left, params.top, assets.bitmapPaint())
+    }
 }
 
 internal fun drawSprite(
