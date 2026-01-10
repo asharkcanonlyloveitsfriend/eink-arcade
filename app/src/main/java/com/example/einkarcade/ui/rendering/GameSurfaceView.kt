@@ -11,11 +11,14 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.core.graphics.createBitmap
 import com.example.einkarcade.GameController
+import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.anim.AnimationState
 import com.example.einkarcade.ui.rendering.anim.GameAnimator
 import com.example.einkarcade.ui.rendering.anim.TickResult
+import com.example.einkarcade.ui.rendering.anim.QueuedAnimator
+import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EffectsDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
@@ -39,6 +42,11 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
     private var lastViewport: BoardViewport? = null
     private val assets = AndroidGameAssets(context)
     private val animator = GameAnimator(assets)
+    private val queuedAnimator = QueuedAnimator(
+        tickDelayMs = RenderTimings.TICK_MS,
+        postTick = { runnable, delayMs -> postDelayed(runnable, delayMs) },
+        cancelTicks = { runnable -> removeCallbacks(runnable) }
+    )
     private val animationState: AnimationState
         get() = animator.state
     private var staticFrameBitmap: Bitmap? = null
@@ -168,7 +176,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             }
         }
         if (dirty == null) return
-        renderDirty(dirty)
+        renderDirtyStateful(dirty)
     }
 
     fun getSelectedBox(): Position? = renderState.selectedBox
@@ -190,16 +198,24 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         val toParams = spriteDrawParams(viewport, to, 0.80f)
         val dirty = Rect(fromParams.dirtyRect)
         dirty.union(toParams.dirtyRect)
-        renderDirty(dirty)
+        renderDirtyStateful(dirty)
     }
 
     fun onMoveRejected() {
-        triggerBlink()
+        if (useQueuedAnimator) {
+            enqueueBlink()
+        } else {
+            triggerBlink()
+        }
     }
 
     fun onGameWon(isClean: Boolean) {
         if (!isClean) {
-            triggerBlink()
+            if (useQueuedAnimator) {
+                enqueueBlink()
+            } else {
+                triggerBlink()
+            }
         }
     }
 
@@ -267,7 +283,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             dirty.union(spriteDrawParams(viewport, prevPlayer, 0.80f).dirtyRect)
             dirty.union(spriteDrawParams(viewport, renderState.playerPosition!!, 0.80f).dirtyRect)
             if (isWall) {
-                renderDirty(dirty)
+                renderDirtyStateful(dirty)
             } else {
                 renderDirtyForBoxPath(dirty)
             }
@@ -352,7 +368,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 viewport = viewport,
                 renderState = buildRenderSnapshot(playerPosition),
                 drawPlayer = !hidePlayer,
-                blinkActive = animator.isBlinking(nowMs)
+                blinkActive = false
             )
             effectsDrawer.drawPlayerFlash(
                 canvas = canvas,
@@ -400,7 +416,10 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         staticFrameTiles = renderState.tiles
     }
 
-    private fun renderDirty(requestedDirtyRect: Rect, nowMsOverride: Long? = null) {
+    private fun renderDirtyStateful(
+        requestedDirtyRect: Rect,
+        nowMsOverride: Long? = null
+    ) {
         if (width <= 0 || height <= 0) return
 
         val viewport = lastViewport
@@ -448,7 +467,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 viewport = viewport,
                 renderState = buildRenderSnapshot(playerPos),
                 drawPlayer = true,
-                blinkActive = animator.isBlinking(nowMs)
+                blinkActive = false
             )
             effectsDrawer.drawPlayerFlash(
                 canvas = canvas,
@@ -464,6 +483,38 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         }
     }
 
+    private fun renderDirty(requestedDirtyRect: Rect, blinkActive: Boolean) {
+        if (width <= 0 || height <= 0) return
+
+        val viewport = lastViewport
+        checkNotNull(viewport) { "Dirty render requested without viewport." }
+
+        val dirtyRect = Rect(requestedDirtyRect)
+        if (!dirtyRect.intersect(0, 0, width, height)) return
+        if (!holder.surface.isValid) return
+
+        val playerPos = renderState.playerPosition ?: return
+        val canvas = holder.lockCanvas(dirtyRect) ?: return
+        try {
+            canvas.save()
+            canvas.clipRect(dirtyRect)
+
+            rebuildStaticFrameIfPossible()
+            drawStaticFrame(canvas, viewport)
+            renderer.drawEntities(
+                canvas = canvas,
+                viewport = viewport,
+                renderState = buildRenderSnapshot(playerPos),
+                drawPlayer = true,
+                blinkActive = blinkActive
+            )
+        } finally {
+            canvas.restore()
+            holder.unlockCanvasAndPost(canvas)
+        }
+    }
+
+
     private fun renderAnimatorTick(tick: TickResult, transitionActive: Boolean, nowMs: Long) {
         if (tick.forceFullRender) {
             render()
@@ -475,7 +526,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             if (animationState.boxPathActive || animationState.boxPathNeedsFinalClear) {
                 renderDirtyForBoxPath(dirty)
             } else {
-                renderDirty(requestedDirtyRect = dirty, nowMsOverride = nowMs)
+                renderDirtyStateful(requestedDirtyRect = dirty, nowMsOverride = nowMs)
             }
             return
         }
@@ -524,7 +575,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
                 viewport = viewport,
                 renderState = buildRenderSnapshot(playerPos),
                 drawPlayer = !hidePlayer,
-                blinkActive = animator.isBlinking(nowMs)
+                blinkActive = false
             )
             effectsDrawer.drawPlayerFlash(
                 canvas = canvas,
@@ -550,6 +601,20 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         )
     }
 
+    private fun computeBlinkDirtyRect(viewport: BoardViewport, playerPos: Position): Rect {
+        val params = spriteDrawParams(viewport, playerPos, 0.80f)
+        val bounds = Rect(assets.getOpaqueBounds(R.drawable.player_eyes_open, params.sizePx))
+        if (bounds.isEmpty) {
+            error("Dirty render requested with empty blink bounds.")
+        }
+        val paddingPx = 2
+        val left = params.left.toInt() + bounds.left - paddingPx
+        val top = params.top.toInt() + bounds.top - paddingPx
+        val right = params.left.toInt() + bounds.right + paddingPx
+        val bottom = params.top.toInt() + bounds.bottom + paddingPx
+        return Rect(left, top, right, bottom)
+    }
+
     private fun buildOverlayState(nowMs: Long): OverlayState {
         return OverlayState(
             boxPathActive = animationState.boxPathActive,
@@ -564,7 +629,7 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
             playerSilhouetteStartTick = animationState.playerSilhouetteStartTick,
             playerFlashPosition = animationState.playerFlashPosition,
             playerFlashStartTick = animationState.playerFlashStartTick,
-            blinkActive = animator.isBlinking(nowMs)
+            blinkActive = false
         )
     }
 
@@ -577,11 +642,27 @@ internal class GameSurfaceView(context: Context) : SurfaceView(context), Surface
         renderer.drawStaticFrame(canvas, width, height, viewport, renderState.tiles)
     }
 
-    private fun triggerBlink(delayTicks: Long = RenderTimings.BLINK_DELAY_TICKS) {
-        val nowMs = SystemClock.elapsedRealtime()
-        animator.triggerBlink(nowMs, delayTicks)
-        removeCallbacks(animationFrameRunnable)
-        postDelayed(animationFrameRunnable, nextTickDelayMs(nowMs))
+    private fun triggerBlink() {
+        if (!useQueuedAnimator) {
+            val nowMs = SystemClock.elapsedRealtime()
+            removeCallbacks(animationFrameRunnable)
+            postDelayed(animationFrameRunnable, nextTickDelayMs(nowMs))
+        }
+    }
+
+    private fun enqueueBlink() {
+        val viewport = lastViewport ?: return
+        val playerPos = renderState.playerPosition ?: return
+        val blinkDirtyRect = computeBlinkDirtyRect(viewport, playerPos)
+
+        queuedAnimator.enqueue(
+            BlinkAnimation(
+                delayTicks = RenderTimings.BLINK_DELAY_TICKS,
+                blinkTicks = RenderTimings.BLINK_DURATION_TICKS,
+                dirtyRect = blinkDirtyRect,
+                renderBlinkDirty = ::renderDirty
+            )
+        )
     }
 
     private fun resetFacing() {

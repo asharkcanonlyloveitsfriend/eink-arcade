@@ -1,7 +1,6 @@
 package com.example.einkarcade.ui.rendering.anim
 
 import android.graphics.Rect
-import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
 import com.example.einkarcade.ui.rendering.RenderTimings
@@ -25,9 +24,6 @@ internal data class AnimationState(
     var playerFlashStartTick: Long = 0L,
     var boxFlashPosition: Position? = null,
     var boxFlashStartTick: Long = 0L,
-    var blinkStartTick: Long = 0L,
-    var blinkEndTick: Long = 0L,
-    var lastBlinkActive: Boolean = false,
     var vanishPosition: Position? = null,
     var vanishStartTick: Long = 0L,
     var vanishStep: Int? = null,
@@ -51,9 +47,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         state.playerFlashStartTick = 0L
         state.boxFlashPosition = null
         state.boxFlashStartTick = 0L
-        state.blinkStartTick = 0L
-        state.blinkEndTick = 0L
-        state.lastBlinkActive = false
         state.vanishPosition = null
         state.vanishStartTick = 0L
         state.vanishStep = null
@@ -110,31 +103,10 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         state.playerSilhouetteStartTick = nowTick
     }
 
-    private fun triggerBlinkAtTick(
-        nowTick: Long,
-        delayTicks: Long = RenderTimings.BLINK_DELAY_TICKS
-    ) {
-        val startTick = nowTick + delayTicks
-        state.blinkStartTick = startTick
-        state.blinkEndTick = startTick + RenderTimings.BLINK_DURATION_TICKS
-        state.lastBlinkActive = false
-    }
-
-    fun triggerBlink(nowMs: Long, delayTicks: Long = RenderTimings.BLINK_DELAY_TICKS) {
-        triggerBlinkAtTick(RenderTimings.nowTick(nowMs), delayTicks)
-    }
-
-    fun isBlinking(nowMs: Long): Boolean {
-        val nowTick = RenderTimings.nowTick(nowMs)
-        return nowTick in state.blinkStartTick until state.blinkEndTick
-    }
-
     fun tick(nowMs: Long, viewport: BoardViewport?, renderState: RenderState): TickResult {
         val nowTick = RenderTimings.nowTick(nowMs)
         val changed = updateBoxPathAnimation(nowTick, renderState)
         val vanishChanged = updateVanishAnimation(nowTick)
-        val blinkActive = nowTick in state.blinkStartTick until state.blinkEndTick
-        val pendingBlink = !blinkActive && state.blinkStartTick > nowTick
         val playerFlashActive =
             state.playerFlashPosition != null &&
                 (nowTick - state.playerFlashStartTick) < RenderTimings.FLASH_DURATION_TICKS
@@ -146,18 +118,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
 
         var dirtyRect: Rect? = null
         var requestedRender = false
-
-        if (blinkActive != state.lastBlinkActive) {
-            state.lastBlinkActive = blinkActive
-            if (!changed && !vanishChanged) {
-                requestedRender = true
-                dirtyRect = if (state.boxPathActive || state.boxPathNeedsFinalClear) {
-                    computeBoxPathDirtyUnion(nowTick, viewport)
-                } else {
-                    computeBlinkDirtyRect(viewport, renderState)
-                }
-            }
-        }
 
         if (changed) {
             requestedRender = true
@@ -173,12 +133,12 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
             }
         }
 
-        if (!changed && !vanishChanged && !blinkActive && playerFlashActive) {
+        if (!changed && !vanishChanged && playerFlashActive) {
             requestedRender = true
             dirtyRect = union(dirtyRect, computePlayerFlashDirtyRect(viewport))
         }
 
-        if (!changed && !vanishChanged && !blinkActive && boxFlashActive) {
+        if (!changed && !vanishChanged && boxFlashActive) {
             requestedRender = true
             val position = state.boxFlashPosition
             if (position != null && viewport != null) {
@@ -220,15 +180,10 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
 
         val vanishActive = state.vanishPosition != null
         var needsNextFrame =
-            state.boxPathActive || blinkActive || vanishActive || playerFlashActive || boxFlashActive
+            state.boxPathActive || vanishActive || playerFlashActive || boxFlashActive
         var nextFrameDelayMs: Long? = null
 
-        if (!needsNextFrame && pendingBlink) {
-            needsNextFrame = true
-        }
-
         nextFrameDelayMs = when {
-            pendingBlink -> RenderTimings.msUntilTick(state.blinkStartTick, nowMs)
             boxPathInDelay -> RenderTimings.msUntilTick(boxPathDelayEndTick, nowMs)
             needsNextFrame -> RenderTimings.msUntilNextTick(nowMs)
             else -> null
@@ -313,7 +268,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
             state.vanishPosition = null
             state.vanishLastPosition = currentPosition
             state.vanishNeedsFinalClear = true
-            triggerBlinkAtTick(nowTick, delayTicks = RenderTimings.BLINK_DELAY_TICKS)
             return true
         }
 
@@ -367,25 +321,6 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         if (viewport == null) return null
         val position = state.playerFlashPosition ?: return null
         return spriteDrawParams(viewport, position, 0.80f).dirtyRect
-    }
-
-    private fun computeBlinkDirtyRect(viewport: BoardViewport?, renderState: RenderState): Rect? {
-        if (viewport == null) return null
-        val playerPos = renderState.playerPosition ?: return null
-        val params = spriteDrawParams(viewport, playerPos, 0.80f)
-
-        // Assumption: open/blink eye sprites share identical bounds.
-        val bounds = Rect(assets.getOpaqueBounds(R.drawable.player_eyes_open, params.sizePx))
-        if (bounds.isEmpty) {
-            error("Dirty render requested with empty blink bounds.")
-        }
-
-        val paddingPx = 2
-        val left = params.left.toInt() + bounds.left - paddingPx
-        val top = params.top.toInt() + bounds.top - paddingPx
-        val right = params.left.toInt() + bounds.right + paddingPx
-        val bottom = params.top.toInt() + bounds.bottom + paddingPx
-        return Rect(left, top, right, bottom)
     }
 
     private fun union(base: Rect?, extra: Rect?): Rect? {
