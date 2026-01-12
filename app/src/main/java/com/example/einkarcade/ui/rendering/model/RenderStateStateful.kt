@@ -4,7 +4,7 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.LevelTransition
 
-internal data class RenderState(
+internal data class RenderStateStateful(
     var tiles: List<List<Tile>> = emptyList(),
     var boxPositions: Set<Position> = emptySet(),
     var playerPosition: Position? = null,

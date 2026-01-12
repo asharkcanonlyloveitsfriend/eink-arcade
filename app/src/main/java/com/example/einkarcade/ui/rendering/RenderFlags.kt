@@ -1,3 +1,3 @@
 package com.example.einkarcade.ui.rendering
 
-internal const val useQueuedAnimator: Boolean = true
+internal const val useQueuedAnimator: Boolean = false

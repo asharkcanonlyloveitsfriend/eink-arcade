@@ -9,7 +9,7 @@ import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.computeBoxPathDirtyRect
 import com.example.einkarcade.ui.rendering.geom.computeVanishDirtyRect
 import com.example.einkarcade.ui.rendering.geom.spriteDrawParams
-import com.example.einkarcade.ui.rendering.model.RenderState
+import com.example.einkarcade.ui.rendering.model.RenderStateStateful
 
 internal data class AnimationState(
     var boxPath: List<Position> = emptyList(),
@@ -60,12 +60,12 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         displayedPlayer: Position,
         viewport: BoardViewport?,
         nowMs: Long,
-        renderState: RenderState
+        renderStateStateful: RenderStateStateful
     ) {
         require(path.size >= 2) { "Box path requires at least two points." }
         val nowTick = RenderTimings.nowTick(nowMs)
         state.boxPath = path
-        renderState.pendingPlayerPosition = pendingPlayer
+        renderStateStateful.pendingPlayerPosition = pendingPlayer
         state.boxPathStartTick = nowTick
         state.boxPathShrink = 0f
         state.boxPathActive = true
@@ -103,9 +103,9 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         state.playerSilhouetteStartTick = nowTick
     }
 
-    fun tick(nowMs: Long, viewport: BoardViewport?, renderState: RenderState): TickResult {
+    fun tick(nowMs: Long, viewport: BoardViewport?, renderStateStateful: RenderStateStateful): TickResult {
         val nowTick = RenderTimings.nowTick(nowMs)
-        val changed = updateBoxPathAnimation(nowTick, renderState)
+        val changed = updateBoxPathAnimation(nowTick, renderStateStateful)
         val vanishChanged = updateVanishAnimation(nowTick)
         val playerFlashActive =
             state.playerFlashPosition != null &&
@@ -209,7 +209,7 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
         return computeBoxPathDirtyUnionInternal(nowTick, viewport)
     }
 
-    private fun updateBoxPathAnimation(nowTick: Long, renderState: RenderState): Boolean {
+    private fun updateBoxPathAnimation(nowTick: Long, renderStateStateful: RenderStateStateful): Boolean {
         if (!state.boxPathActive) return false
         val elapsedTicks = nowTick - state.boxPathStartTick
         if (elapsedTicks < RenderTimings.BOX_PATH_DELAY_TICKS) return false
@@ -232,15 +232,15 @@ internal class GameAnimator(private val assets: AndroidGameAssets) {
             if (suppressLine) 0L else RenderTimings.BOX_PATH_DURATION_TICKS) {
             state.boxPathActive = false
             state.boxPathNeedsFinalClear = true
-            val pending = renderState.pendingPlayerPosition
+            val pending = renderStateStateful.pendingPlayerPosition
             if (pending != null) {
-                renderState.displayedPlayerPosition = pending
-                renderState.pendingPlayerPosition = null
+                renderStateStateful.displayedPlayerPosition = pending
+                renderStateStateful.pendingPlayerPosition = null
             }
-            renderState.pendingFacingLeft?.let { facing ->
-                renderState.isFacingLeft = facing
+            renderStateStateful.pendingFacingLeft?.let { facing ->
+                renderStateStateful.isFacingLeft = facing
             }
-            renderState.pendingFacingLeft = null
+            renderStateStateful.pendingFacingLeft = null
             changed = true
         }
         return changed

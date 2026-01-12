@@ -47,11 +47,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.ui.rendering.GameSurfaceView
-import androidx.compose.ui.viewinterop.AndroidView
+import com.example.einkarcade.ui.rendering.GameSurface
+import com.example.einkarcade.ui.rendering.GameBoardView
+
+private fun createGameSurface(context: android.content.Context): GameSurface =
+    GameBoardView(context)
 
 
 @Composable
@@ -62,21 +65,21 @@ fun GameScreen(
     gameController.revision.value
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
-    val surfaceViewRef = remember { mutableStateOf<GameSurfaceView?>(null) }
+    val surfaceRef = remember { mutableStateOf<GameSurface?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val surfaceView = remember {
-        GameSurfaceView(context)
+    val surface = remember {
+        createGameSurface(context)
     }
-    if (surfaceViewRef.value == null) {
-        surfaceViewRef.value = surfaceView
+    if (surfaceRef.value == null) {
+        surfaceRef.value = surface
     }
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
 
-    DisposableEffect(surfaceViewRef.value) {
-        val surfaceView = surfaceViewRef.value
+    DisposableEffect(surfaceRef.value) {
+        val surface = surfaceRef.value
         val sink: (GameController.RenderDelta) -> Unit = { delta ->
-            surfaceView?.applyDelta(delta)
+            surface?.applyDelta(delta)
         }
         gameController.onRenderDelta = sink
         onDispose {
@@ -140,19 +143,23 @@ fun GameScreen(
                 .testTag("gameCanvas"),
             factory = {
                 val selection = object : GameInputHandler.BoxSelection {
-                    override fun getSelectedBox(): Position? = surfaceView.getSelectedBox()
+                    override fun getSelectedBox(): Position? =
+                        surface.getSelectedBox()
+
                     override fun setSelectedBox(position: Position?) {
-                        surfaceView.setSelectedBox(position)
+                        surface.setSelectedBox(position)
                     }
                 }
-                surfaceView.setOnTapCell { pos ->
+
+                surface.setOnTapCell { pos ->
                     GameInputHandler.handleTap(
                         tappedPosition = pos,
                         gameController = gameController,
                         selection = selection
                     )
                 }
-                surfaceView
+
+                surface.asView()
             }
         )
 

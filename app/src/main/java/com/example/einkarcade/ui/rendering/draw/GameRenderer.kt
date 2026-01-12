@@ -1,178 +1,171 @@
 package com.example.einkarcade.ui.rendering.draw
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
+import android.graphics.Rect
+import androidx.core.graphics.createBitmap
+import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
-import com.example.einkarcade.ui.rendering.LevelTransition
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
-
-internal data class RenderStateSnapshot(
-    val tiles: List<List<Tile>>,
-    val boxPositions: Set<Position>,
-    val playerPosition: Position,
-    val selectedBox: Position?,
-    val isFacingLeft: Boolean
-)
+import com.example.einkarcade.ui.rendering.geom.ResolvedEntityGeometry
+import com.example.einkarcade.ui.rendering.geom.toRenderPoint
+import kotlin.math.ceil
+import kotlin.math.floor
 
 internal class GameRenderer(
     private val backgroundDrawer: BackgroundDrawer,
     private val tileDrawer: TileDrawer,
     private val entityDrawer: EntityDrawer
 ) {
-    private val transitionFlashBlackPaint = Paint().apply {
-        color = Color.BLACK
-        style = Paint.Style.FILL
-        isAntiAlias = false
-    }
-    private val transitionFlashWhitePaint = Paint().apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
-        isAntiAlias = false
-    }
+    private var staticFrameBitmap: Bitmap? = null
+    private var staticFrameOriginPx: Rect? = null
 
-    fun drawStaticFrame(
-        canvas: Canvas,
+    fun rebuildStaticFrame(
         viewWidth: Int,
         viewHeight: Int,
         viewport: BoardViewport,
         tiles: List<List<Tile>>
     ) {
-        backgroundDrawer.draw(canvas, viewWidth, viewHeight)
-        tileDrawer.drawTiles(canvas, viewport, tiles)
+        val boardRect = computeBoardRectPx(viewport)
+
+        // Render background + tiles, then crop to the board bounds.
+        val fullBitmap = createBitmap(viewWidth, viewHeight)
+        val fullCanvas = Canvas(fullBitmap)
+
+        backgroundDrawer.draw(fullCanvas, viewWidth, viewHeight)
+        tileDrawer.drawTiles(fullCanvas, viewport, tiles)
+
+        val cropped = Bitmap.createBitmap(
+            fullBitmap,
+            boardRect.left,
+            boardRect.top,
+            boardRect.width(),
+            boardRect.height()
+        )
+
+        staticFrameBitmap = cropped
+        staticFrameOriginPx = boardRect
     }
 
-    fun drawTransitionFrame(
+    fun drawStaticFrame(
         canvas: Canvas,
         viewWidth: Int,
-        viewHeight: Int,
-        viewport: BoardViewport,
-        transition: LevelTransition,
-        renderState: RenderStateSnapshot,
-        overlay: OverlayState?,
-        nowMs: Long,
-        drawPlayer: Boolean = true
+        viewHeight: Int
     ) {
+        // Background first, then cached board frame.
         backgroundDrawer.draw(canvas, viewWidth, viewHeight)
-        drawTransitionTiles(canvas, viewport, transition, nowMs)
-        drawTransitionFlashOverlay(canvas, viewport, transition, nowMs)
-        drawTransitionEntities(canvas, viewport, transition, renderState, overlay, nowMs, drawPlayer)
+
+        val origin = staticFrameOriginPx ?: error("Static frame origin not initialized")
+        blitStaticFrame(canvas, origin)
     }
 
     fun drawEntities(
         canvas: Canvas,
         viewport: BoardViewport,
-        renderState: RenderStateSnapshot,
-        drawPlayer: Boolean = true,
-        blinkActive: Boolean = false
+        geometry: ResolvedEntityGeometry,
+        boxPositions: Set<Position>,
+        playerPosition: Position,
+        selectedBox: Position?
     ) {
-        entityDrawer.drawBoxes(canvas, viewport, renderState.boxPositions, renderState.selectedBox)
-        if (drawPlayer) {
-            entityDrawer.drawPlayer(
+        entityDrawer.drawBoxes(canvas, viewport, geometry, boxPositions)
+
+        if (selectedBox != null) {
+            entityDrawer.drawBox(
                 canvas = canvas,
                 viewport = viewport,
-                playerPosition = renderState.playerPosition,
-                isFacingLeft = renderState.isFacingLeft,
-                blinkActive = blinkActive
-            )
-        }
-    }
-
-    private fun drawTransitionTiles(
-        canvas: Canvas,
-        viewport: BoardViewport,
-        transition: LevelTransition,
-        nowMs: Long
-    ) {
-        val cellSize = viewport.cellSize
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
-        val rows = transition.rows
-        val cols = transition.cols
-        for (rowIndex in 0 until rows) {
-            for (colIndex in 0 until cols) {
-                val newTile = transition.tileAt(transition.newTiles, rowIndex, colIndex)
-                val growScale = if (newTile != Tile.WALL) transition.growScale(nowMs, rowIndex, colIndex) else null
-                if (growScale != null) {
-                    tileDrawer.drawScaledTile(
-                        canvas = canvas,
-                        tile = newTile,
-                        rowIndex = rowIndex,
-                        colIndex = colIndex,
-                        scale = growScale,
-                        cellSize = cellSize,
-                        offsetX = offsetX,
-                        offsetY = offsetY
-                    )
-                }
-            }
-        }
-    }
-
-    private fun drawTransitionFlashOverlay(
-        canvas: Canvas,
-        viewport: BoardViewport,
-        transition: LevelTransition,
-        nowMs: Long
-    ) {
-        val cellSize = viewport.cellSize
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
-        val rows = transition.rows
-        val cols = transition.cols
-
-        for (rowIndex in 0 until rows) {
-            for (colIndex in 0 until cols) {
-                // Only flash for non-wall tiles (matches growScale behavior)
-                val newTile = transition.tileAt(transition.newTiles, rowIndex, colIndex)
-                if (newTile == Tile.WALL) continue
-
-                val phase = transition.flashPhase(nowMs, rowIndex, colIndex) ?: continue
-                val paint = when (phase) {
-                    com.example.einkarcade.ui.rendering.TransitionFlashPhase.BLACK -> transitionFlashBlackPaint
-                    com.example.einkarcade.ui.rendering.TransitionFlashPhase.WHITE -> transitionFlashWhitePaint
-                }
-
-                val left = offsetX + (colIndex + 1) * cellSize
-                val top = offsetY + (rowIndex + 1) * cellSize
-                val right = left + cellSize
-                val bottom = top + cellSize
-                canvas.drawRect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat(), paint)
-            }
-        }
-    }
-
-    private fun drawTransitionEntities(
-        canvas: Canvas,
-        viewport: BoardViewport,
-        transition: LevelTransition,
-        renderState: RenderStateSnapshot,
-        overlay: OverlayState?,
-        nowMs: Long,
-        drawPlayer: Boolean = true
-    ) {
-        for (position in renderState.boxPositions) {
-            if (!transition.isCellReady(nowMs, position.row, position.col)) continue
-            entityDrawer.drawBoxes(
-                canvas = canvas,
-                viewport = viewport,
-                boxPositions = setOf(position),
-                selectedBox = renderState.selectedBox
+                geometry = geometry,
+                position = selectedBox,
+                resId = R.drawable.box_selected
             )
         }
 
-        if (drawPlayer) {
-            val playerPos = renderState.playerPosition
-            if (transition.isCellReady(nowMs, playerPos.row, playerPos.col)) {
-                entityDrawer.drawPlayer(
-                    canvas = canvas,
-                    viewport = viewport,
-                    playerPosition = playerPos,
-                    isFacingLeft = renderState.isFacingLeft,
-                    blinkActive = overlay?.blinkActive == true
-                )
-            }
+        entityDrawer.drawPlayer(
+            canvas = canvas,
+            viewport = viewport,
+            playerPosition = playerPosition
+        )
+    }
+
+    fun computeBoxRect(
+        viewport: BoardViewport,
+        geometry: ResolvedEntityGeometry,
+        position: Position
+    ): Rect {
+        val origin = Position(position.row + 1, position.col + 1)
+            .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+        val bounds = geometry.boxBoundsPx
+
+        val left = (origin.x + bounds.left).toInt() - 1
+        val top = (origin.y + bounds.top).toInt() - 1
+        val right = left + bounds.width() + 2
+        val bottom = top + bounds.height() + 2
+
+        return Rect(left, top, right, bottom)
+    }
+
+    fun computePlayerRect(
+        viewport: BoardViewport,
+        geometry: ResolvedEntityGeometry,
+        position: Position
+    ): Rect {
+        val origin = Position(position.row + 1, position.col + 1)
+            .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+        val bounds = geometry.playerBoundsPx
+
+        val left = (origin.x + bounds.left).toInt() - 1
+        val top = (origin.y + bounds.top).toInt() - 1
+        val right = left + bounds.width() + 2
+        val bottom = top + bounds.height() + 2
+
+        return Rect(left, top, right, bottom)
+    }
+
+    fun computeDirtyRect(
+        viewport: BoardViewport,
+        geometry: ResolvedEntityGeometry,
+        boxPositions: Iterable<Position> = emptyList(),
+        playerPositions: Iterable<Position> = emptyList()
+    ): Rect {
+        var dirty: Rect? = null
+
+        for (pos in boxPositions) {
+            val r = computeBoxRect(viewport, geometry, pos)
+            dirty = dirty?.apply { union(r) } ?: r
         }
+
+        for (pos in playerPositions) {
+            val r = computePlayerRect(viewport, geometry, pos)
+            dirty = dirty?.apply { union(r) } ?: r
+        }
+
+        return dirty ?: error("computeDirtyRect called with no positions")
+    }
+
+    private fun computeBoardRectPx(viewport: BoardViewport): Rect {
+        val rows = viewport.rows
+        val cols = viewport.cols
+
+        val left = floor(viewport.offsetX).toInt()
+        val top = floor(viewport.offsetY).toInt()
+        val right = ceil(viewport.offsetX + (viewport.cellSize * cols)).toInt()
+        val bottom = ceil(viewport.offsetY + (viewport.cellSize * rows)).toInt()
+
+        return Rect(left, top, right, bottom)
+    }
+
+    private fun blitStaticFrame(canvas: Canvas, dstRectPx: Rect) {
+        val bitmap = staticFrameBitmap ?: error("Static frame bitmap not initialized")
+        val origin = staticFrameOriginPx ?: error("Static frame origin not initialized")
+
+        // Source rect is destination rect in cached-bitmap coordinates.
+        val src = Rect(
+            dstRectPx.left - origin.left,
+            dstRectPx.top - origin.top,
+            dstRectPx.right - origin.left,
+            dstRectPx.bottom - origin.top
+        )
+
+        canvas.drawBitmap(bitmap, src, dstRectPx, null)
     }
 }

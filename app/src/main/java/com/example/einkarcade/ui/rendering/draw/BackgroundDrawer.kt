@@ -12,12 +12,21 @@ import kotlin.math.roundToInt
 internal class BackgroundDrawer(context: Context) {
     private val resources = context.resources
     private var backgroundBitmap: Bitmap? = null
+    private var cachedScreenBitmap: Bitmap? = null
+    private var cachedScreenW: Int = 0
+    private var cachedScreenH: Int = 0
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
     private val backgroundSrcRect = Rect()
     private val backgroundDstRect = Rect()
 
     fun draw(canvas: Canvas, viewW: Int, viewH: Int) {
         require(viewW > 0 && viewH > 0)
+
+        val cached = cachedScreenBitmap
+        if (cached != null && !cached.isRecycled && cachedScreenW == viewW && cachedScreenH == viewH) {
+            canvas.drawBitmap(cached, 0f, 0f, null)
+            return
+        }
 
         val bitmap = requireBackgroundBitmap()
         val bmpW = bitmap.width
@@ -39,13 +48,29 @@ internal class BackgroundDrawer(context: Context) {
             backgroundSrcRect.set(0, top, bmpW, top + srcH)
         }
 
+        // Render the fitted background into a cached screen-sized bitmap
+        val screenBitmap = Bitmap.createBitmap(viewW, viewH, Bitmap.Config.ARGB_8888)
+        val screenCanvas = Canvas(screenBitmap)
+
         backgroundDstRect.set(0, 0, viewW, viewH)
-        canvas.drawBitmap(bitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
+        screenCanvas.drawBitmap(bitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
+
+        cachedScreenBitmap?.recycle()
+        cachedScreenBitmap = screenBitmap
+        cachedScreenW = viewW
+        cachedScreenH = viewH
+
+        canvas.drawBitmap(screenBitmap, 0f, 0f, null)
     }
 
     fun recycle() {
         backgroundBitmap?.recycle()
         backgroundBitmap = null
+
+        cachedScreenBitmap?.recycle()
+        cachedScreenBitmap = null
+        cachedScreenW = 0
+        cachedScreenH = 0
     }
 
     private fun requireBackgroundBitmap(): Bitmap {

@@ -2,15 +2,18 @@ package com.example.einkarcade.ui.rendering.geom
 
 import android.graphics.Rect
 import com.example.einkarcade.R
-import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
 
 /**
  * Immutable, resolved geometry derived from the current BoardViewport.
  * Valid until the level layout or surface size changes.
  */
-class ResolvedBoardGeometry(
-    val playerEyesOpaqueBoundsPx: Rect
+class ResolvedEntityGeometry(
+    val boxBoundsPx: Rect,
+    val boxSizePx: Int,
+    val playerEyesOpaqueBoundsPx: Rect,
+    val playerBoundsPx: Rect,
+    val playerSizePx: Int
 ) {
 
     companion object {
@@ -23,13 +26,52 @@ class ResolvedBoardGeometry(
         internal fun compute(
             tileSizePx: Float,
             assets: AndroidGameAssets
-        ): ResolvedBoardGeometry {
-            return ResolvedBoardGeometry(
+        ): ResolvedEntityGeometry {
+            val (boxSizePx, boxBoundsPx) = computeBoxGeometry(tileSizePx)
+            val (playerSizePx, playerBoundsPx) = computePlayerGeometry(tileSizePx)
+
+            return ResolvedEntityGeometry(
+                boxBoundsPx = boxBoundsPx,
+                boxSizePx = boxSizePx,
                 playerEyesOpaqueBoundsPx = computePlayerEyesOpaqueBounds(
                     tileSizePx = tileSizePx,
                     assets = assets
-                )
+                ),
+                playerBoundsPx = playerBoundsPx,
+                playerSizePx = playerSizePx
             )
+        }
+
+        private fun computeBoxGeometry(tileSizePx: Float): Pair<Int, Rect> {
+            val boxSizePx = snapToWholePixel(tileSizePx * 0.90f)
+                .toInt()
+                .coerceAtLeast(1)
+
+            val boxInsetPx = snapToWholePixel((tileSizePx - boxSizePx) / 2f)
+                .toInt()
+
+            val boxBoundsPx = Rect(
+                boxInsetPx,
+                boxInsetPx,
+                boxInsetPx + boxSizePx,
+                boxInsetPx + boxSizePx
+            )
+
+            return boxSizePx to boxBoundsPx
+        }
+
+        private fun computePlayerGeometry(tileSizePx: Float): Pair<Int, Rect> {
+            val playerSizePx = snapToWholePixel(tileSizePx).toInt().coerceAtLeast(1)
+            val insetPx = snapToWholePixel((tileSizePx - playerSizePx) / 2f).toInt()
+
+            val boundsPx = Rect(
+                insetPx,
+                insetPx,
+                insetPx + playerSizePx,
+                insetPx + playerSizePx
+            )
+
+            return playerSizePx to boundsPx
         }
 
         /**
