@@ -6,7 +6,6 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.ResolvedEntityGeometry
-import com.example.einkarcade.ui.rendering.geom.snapToWholePixel
 import com.example.einkarcade.ui.rendering.geom.toRenderPoint
 
 internal class EntityDrawer(private val assets: AndroidGameAssets) {
@@ -18,16 +17,23 @@ internal class EntityDrawer(private val assets: AndroidGameAssets) {
     ) {
         val bitmapPaint = assets.bitmapPaint()
         for (position in boxPositions) {
-            drawBox(canvas, viewport, geometry, position, R.drawable.box, bitmapPaint)
+            drawBox(
+                canvas = canvas,
+                viewport = viewport,
+                position = position,
+                resId = R.drawable.box,
+                geometry = geometry,
+                bitmapPaint = bitmapPaint
+            )
         }
     }
 
     fun drawBox(
         canvas: Canvas,
         viewport: BoardViewport,
-        geometry: ResolvedEntityGeometry,
         position: Position,
         resId: Int,
+        geometry: ResolvedEntityGeometry,
         bitmapPaint: android.graphics.Paint = assets.bitmapPaint()
     ) {
         val offsetX = viewport.offsetX
@@ -47,21 +53,20 @@ internal class EntityDrawer(private val assets: AndroidGameAssets) {
     fun drawPlayer(
         canvas: Canvas,
         viewport: BoardViewport,
-        playerPosition: Position
+        playerPosition: Position,
+        geometry: ResolvedEntityGeometry
     ) {
         val bitmapPaint = assets.bitmapPaint()
-        val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
 
         val origin = Position(playerPosition.row + 1, playerPosition.col + 1)
-            .toRenderPoint(cellSize, offsetX, offsetY)
-        val targetSize = snapToWholePixel(cellSize * 0.80f)
-        val sizePx = targetSize.toInt()
-        require(sizePx > 0)
-        val left = snapToWholePixel(origin.x + (cellSize - targetSize) / 2f)
-        val top = snapToWholePixel(origin.y + (cellSize - targetSize) / 2f)
-        val body = assets.getBitmap(R.drawable.player_slime, sizePx)
+            .toRenderPoint(viewport.cellSize, offsetX, offsetY)
+
+        val left = origin.x + geometry.playerInsetPx
+        val top = origin.y + geometry.playerInsetPx
+
+        val body = assets.getBitmap(R.drawable.player_slime, geometry.playerSizePx)
         canvas.drawBitmap(body, left, top, bitmapPaint)
     }
 }

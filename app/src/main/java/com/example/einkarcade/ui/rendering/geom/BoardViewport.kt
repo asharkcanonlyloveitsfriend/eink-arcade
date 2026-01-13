@@ -1,6 +1,5 @@
 package com.example.einkarcade.ui.rendering.geom
 
-import android.graphics.Rect
 import com.example.einkarcade.sokoban.Position
 import kotlin.math.min
 
@@ -56,12 +55,4 @@ internal fun BoardViewport.screenToInnerCell(x: Float, y: Float): Position? {
     }
 
     return Position(innerRow, innerCol)
-}
-
-internal fun BoardViewport.innerCellRect(pos: Position): Rect {
-    val screenCol = pos.col + 1
-    val screenRow = pos.row + 1
-    val left = (offsetX + (screenCol * cellSize)).toInt()
-    val top = (offsetY + (screenRow * cellSize)).toInt()
-    return Rect(left, top, left + cellSize.toInt(), top + cellSize.toInt())
 }

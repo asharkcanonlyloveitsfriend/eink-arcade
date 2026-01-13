@@ -4,7 +4,7 @@ import android.view.View
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.GameController
 
-interface GameSurface {
+interface GameBoardPresenter {
 
     /** Apply a render delta produced by the GameController. */
     fun applyDelta(delta: GameController.RenderDelta)

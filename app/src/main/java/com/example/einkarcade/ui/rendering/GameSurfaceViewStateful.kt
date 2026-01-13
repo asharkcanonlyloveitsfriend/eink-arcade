@@ -41,7 +41,7 @@ import com.example.einkarcade.ui.rendering.model.TransitionState
 @SuppressLint("ClickableViewAccessibility")
 internal class GameSurfaceViewStateful(
     context: Context
-) : SurfaceView(context), SurfaceHolder.Callback, GameSurface {
+) : SurfaceView(context), SurfaceHolder.Callback, GameBoardPresenter {
     private val renderStateStateful = RenderStateStateful()
     private val transitionState = TransitionState()
     private var onTapCell: ((Position) -> Unit)? = null

@@ -13,7 +13,8 @@ class ResolvedEntityGeometry(
     val boxSizePx: Int,
     val playerEyesOpaqueBoundsPx: Rect,
     val playerBoundsPx: Rect,
-    val playerSizePx: Int
+    val playerSizePx: Int,
+    val playerInsetPx: Int
 ) {
 
     companion object {
@@ -28,17 +29,19 @@ class ResolvedEntityGeometry(
             assets: AndroidGameAssets
         ): ResolvedEntityGeometry {
             val (boxSizePx, boxBoundsPx) = computeBoxGeometry(tileSizePx)
-            val (playerSizePx, playerBoundsPx) = computePlayerGeometry(tileSizePx)
+            val (playerSizePx, playerBoundsPx, playerInsetPx) =
+                computePlayerGeometry(tileSizePx)
 
             return ResolvedEntityGeometry(
                 boxBoundsPx = boxBoundsPx,
                 boxSizePx = boxSizePx,
                 playerEyesOpaqueBoundsPx = computePlayerEyesOpaqueBounds(
-                    tileSizePx = tileSizePx,
+                    sizePx = playerSizePx,
                     assets = assets
                 ),
                 playerBoundsPx = playerBoundsPx,
-                playerSizePx = playerSizePx
+                playerSizePx = playerSizePx,
+                playerInsetPx = playerInsetPx
             )
         }
 
@@ -60,9 +63,16 @@ class ResolvedEntityGeometry(
             return boxSizePx to boxBoundsPx
         }
 
-        private fun computePlayerGeometry(tileSizePx: Float): Pair<Int, Rect> {
-            val playerSizePx = snapToWholePixel(tileSizePx).toInt().coerceAtLeast(1)
-            val insetPx = snapToWholePixel((tileSizePx - playerSizePx) / 2f).toInt()
+        private fun computePlayerGeometry(
+            tileSizePx: Float
+        ): Triple<Int, Rect, Int> {
+            val playerSizePx = snapToWholePixel(tileSizePx)
+                .toInt()
+                .coerceAtLeast(1)
+
+            val insetPx = snapToWholePixel(
+                (tileSizePx - playerSizePx) / 2f
+            ).toInt()
 
             val boundsPx = Rect(
                 insetPx,
@@ -71,7 +81,7 @@ class ResolvedEntityGeometry(
                 insetPx + playerSizePx
             )
 
-            return playerSizePx to boundsPx
+            return Triple(playerSizePx, boundsPx, insetPx)
         }
 
         /**
@@ -79,10 +89,9 @@ class ResolvedEntityGeometry(
          * tile origin (0,0), in pixel coordinates.
          */
         private fun computePlayerEyesOpaqueBounds(
-            tileSizePx: Float,
+            sizePx: Int,
             assets: AndroidGameAssets
         ): Rect {
-            val sizePx = snapToWholePixel(tileSizePx * 0.80f).toInt().coerceAtLeast(1)
             val cached = playerEyesOpaqueBoundsCache[sizePx]
             if (cached != null) {
                 return Rect(cached)

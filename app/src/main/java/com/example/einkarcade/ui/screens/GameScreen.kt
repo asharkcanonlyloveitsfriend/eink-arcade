@@ -50,10 +50,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.ui.rendering.GameSurface
+import com.example.einkarcade.ui.rendering.GameBoardPresenter
 import com.example.einkarcade.ui.rendering.GameBoardView
 
-private fun createGameSurface(context: android.content.Context): GameSurface =
+private fun createGameSurface(context: android.content.Context): GameBoardPresenter =
     GameBoardView(context)
 
 
@@ -65,7 +65,7 @@ fun GameScreen(
     gameController.revision.value
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
-    val surfaceRef = remember { mutableStateOf<GameSurface?>(null) }
+    val surfaceRef = remember { mutableStateOf<GameBoardPresenter?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val surface = remember {
         createGameSurface(context)

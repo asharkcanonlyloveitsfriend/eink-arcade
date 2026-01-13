@@ -11,21 +11,23 @@ import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.GameRenderer
 import com.example.einkarcade.ui.rendering.draw.TileDrawer
+import com.example.einkarcade.ui.rendering.effects.BlinkEffect
+import com.example.einkarcade.ui.rendering.effects.Effect
+import com.example.einkarcade.ui.rendering.effects.WaitEffect
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
-import com.example.einkarcade.ui.rendering.geom.ResolvedEntityGeometry
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameBoardView(
     context: Context
-) : View(context), GameSurface {
+) : View(context), GameBoardPresenter {
 
-    private val assets = AndroidGameAssets(context)
     private val renderer = GameRenderer(
+        assets = AndroidGameAssets(context),
         backgroundDrawer = BackgroundDrawer(context),
         tileDrawer = TileDrawer(),
-        entityDrawer = EntityDrawer(assets)
+        entityDrawer = EntityDrawer(AndroidGameAssets(context))
     )
 
     private var tiles: List<List<Tile>> = emptyList()
@@ -36,7 +38,10 @@ internal class GameBoardView(
     private var selectedBox: Position? = null
 
     private var lastViewport: BoardViewport? = null
-    private var resolvedEntityGeometry: ResolvedEntityGeometry? = null
+
+    private val effectQueue = ArrayDeque<Effect>()
+    private var activeEffect: Effect? = null
+    private var activeEffectStartMs: Long = 0L
 
     init {
         setOnTouchListener { _, event ->
@@ -61,8 +66,7 @@ internal class GameBoardView(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        lastViewport = null
-        resolvedEntityGeometry = null
+        rebuildStaticLayout()
         invalidate()
     }
 
@@ -76,18 +80,17 @@ internal class GameBoardView(
         val previous = selectedBox
         selectedBox = position
 
-        val dirty = renderer.computeDirtyRect(
-            viewport = lastViewport!!,
-            geometry = resolvedEntityGeometry!!,
-            boxPositions = listOfNotNull(previous, position)
-        )
+        val viewport = lastViewport!!
 
-        postInvalidateOnAnimation(
-            dirty.left,
-            dirty.top,
-            dirty.right,
-            dirty.bottom
-        )
+        previous?.let {
+            val r = renderer.computeBoxRect(viewport, it)
+            invalidateRectOnAnimation(r)
+        }
+
+        position?.let {
+            val r = renderer.computeBoxRect(viewport, it)
+            invalidateRectOnAnimation(r)
+        }
     }
 
     override fun applyDelta(delta: GameController.RenderDelta) {
@@ -101,15 +104,102 @@ internal class GameBoardView(
             }
             is GameController.RenderDelta.PlayerMoved -> onPlayerMoved(to = delta.to)
             is GameController.RenderDelta.BoxMoved -> onBoxMoved(path = delta.path)
-            is GameController.RenderDelta.MoveRejected -> Unit
+            is GameController.RenderDelta.MoveRejected -> onMoveRejected()
             is GameController.RenderDelta.GameWon -> Unit
         }
     }
 
     private fun drawInternal(canvas: android.graphics.Canvas) {
         val playerPos = playerPosition ?: return
-        if (tiles.isEmpty()) return
+        val viewport = lastViewport ?: return
+
+        renderer.drawStaticFrame(canvas)
+
+        renderer.drawEntities(
+            canvas = canvas,
+            viewport = viewport,
+            boxPositions = boxPositions,
+            playerPosition = playerPos,
+            selectedBox = selectedBox
+        )
+
+        activeEffect?.draw(canvas)
+    }
+
+    private fun onLevelLoaded(
+        tiles: List<List<Tile>>,
+        boxPositions: Set<Position>,
+        playerPosition: Position
+    ) {
+        val tilesChanged = this.tiles != tiles
+
+        this.tiles = tiles
+        this.boxPositions = boxPositions
+        this.playerPosition = playerPosition
+        selectedBox = null
+
+        if (tilesChanged) {
+            rebuildStaticLayout()
+        }
+
+        invalidate()
+    }
+
+    private fun onPlayerMoved(to: Position) {
+        val viewport = lastViewport!!
+
+        val previous = playerPosition!!
+        playerPosition = to
+
+        var rect = renderer.computePlayerRect(viewport, previous)
+        invalidateRectOnAnimation(rect)
+
+        rect = renderer.computePlayerRect(viewport, to)
+        invalidateRectOnAnimation(rect)
+    }
+
+    private fun onBoxMoved(path: List<Position>) {
+        val viewport = lastViewport!!
+        val previousPlayer = playerPosition!!
+
+        val boxFrom = path.first()
+        val boxTo = path.last()
+        val newPlayer = path[path.size - 2]
+
+        boxPositions = boxPositions - boxFrom + boxTo
+        playerPosition = newPlayer
+
+        var rect = renderer.computeBoxRect(viewport, boxFrom)
+        invalidateRectOnAnimation(rect)
+
+        rect = renderer.computeBoxRect(viewport, boxTo)
+        invalidateRectOnAnimation(rect)
+
+        rect = renderer.computePlayerRect(viewport, previousPlayer)
+        invalidateRectOnAnimation(rect)
+
+        rect = renderer.computePlayerRect(viewport, newPlayer)
+        invalidateRectOnAnimation(rect)
+    }
+
+    private fun onMoveRejected() {
+        val viewport = lastViewport ?: return
+        val playerPos = playerPosition ?: return
+
+        enqueueEffect(WaitEffect(durationMs = 400L))
+        enqueueEffect(
+            BlinkEffect(
+                durationMs = 300L,
+                renderer = renderer,
+                viewport = viewport,
+                playerPos = playerPos
+            )
+        )
+    }
+
+    private fun rebuildStaticLayout() {
         if (width <= 0 || height <= 0) return
+        if (tiles.isEmpty()) return
 
         val viewport = computeBoardViewport(
             surfaceWidth = width.toFloat(),
@@ -118,89 +208,50 @@ internal class GameBoardView(
             innerCols = tiles[0].size
         )
         lastViewport = viewport
-        resolvedEntityGeometry = ResolvedEntityGeometry.compute(
-            viewport.cellSize,
-            assets = assets
-        )
 
-        renderer.rebuildStaticFrame(
+        renderer.rebuildStaticLayout(
             viewWidth = width,
             viewHeight = height,
             viewport = viewport,
             tiles = tiles
         )
-
-        renderer.drawStaticFrame(
-            canvas = canvas,
-            viewWidth = width,
-            viewHeight = height
-        )
-
-        val geometry = resolvedEntityGeometry ?: return
-        renderer.drawEntities(
-            canvas = canvas,
-            viewport = viewport,
-            geometry = geometry,
-            boxPositions = boxPositions,
-            playerPosition = playerPos,
-            selectedBox = selectedBox
-        )
     }
 
-    private fun onLevelLoaded(
-        tiles: List<List<Tile>>,
-        boxPositions: Set<Position>,
-        playerPosition: Position
-    ) {
-        this.tiles = tiles
-        this.boxPositions = boxPositions
-        this.playerPosition = playerPosition
-        selectedBox = null
-        invalidate()
+    private fun invalidateRectOnAnimation(rect: android.graphics.Rect) {
+        postInvalidateOnAnimation(rect.left, rect.top, rect.right, rect.bottom)
     }
 
-    private fun onPlayerMoved(to: Position) {
-        val viewport = lastViewport!!
-        val previous = playerPosition!!
-        playerPosition = to
-
-        val dirty = renderer.computeDirtyRect(
-            viewport = viewport,
-            geometry = resolvedEntityGeometry!!,
-            playerPositions = listOf(previous, to)
-        )
-
-        postInvalidateOnAnimation(
-            dirty.left,
-            dirty.top,
-            dirty.right,
-            dirty.bottom
-        )
+    private fun enqueueEffect(effect: Effect) {
+        effectQueue.addLast(effect)
+        startNextEffectIfIdle()
     }
 
-    private fun onBoxMoved(path: List<Position>) {
-        val viewport = lastViewport!!
-        val geometry = resolvedEntityGeometry!!
-        val previousPlayer = playerPosition!!
+    private fun startNextEffectIfIdle() {
+        if (activeEffect != null) return
+        startNextEffect()
+    }
 
-        val boxFrom = path.first()
-        val boxTo = path.last()
-        val playerPosition = path[path.size - 2]
+    private fun startNextEffect() {
+        val previous = activeEffect
+        val next = effectQueue.removeFirstOrNull()
 
-        boxPositions = boxPositions - boxFrom + boxTo
+        activeEffect = null
 
-        val dirty = renderer.computeDirtyRect(
-            viewport = viewport,
-            geometry = geometry,
-            boxPositions = listOf(boxFrom, boxTo),
-            playerPositions = listOf(previousPlayer, playerPosition)
-        )
+        // Invalidate region that is no longer active
+        previous?.dirtyRect()?.let { invalidateRectOnAnimation(it) }
 
-        postInvalidateOnAnimation(
-            dirty.left,
-            dirty.top,
-            dirty.right,
-            dirty.bottom
+        if (next == null) return
+
+        // Activate next
+        activeEffect = next
+
+        // Invalidate region for newly active effect
+        next.dirtyRect()?.let { invalidateRectOnAnimation(it) }
+
+        // Schedule transition to following effect
+        postDelayed(
+            { startNextEffect() },
+            next.durationMs
         )
     }
 }
