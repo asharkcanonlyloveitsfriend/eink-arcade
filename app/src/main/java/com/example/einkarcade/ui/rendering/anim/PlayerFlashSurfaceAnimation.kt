@@ -5,12 +5,12 @@ import android.os.SystemClock
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.RenderTimings
 
-class PlayerFlashAnimation(
+class PlayerFlashSurfaceAnimation(
     private val flashPosition: Position,
     private val dirtyRect: Rect,
     private val flashStartTick: Long,
     private val renderPlayerFlashDirty: (Rect, Position, Long, Long, Boolean) -> Unit
-) : Animation {
+) : SurfaceAnimation {
 
     private var tick: Long = 0L
 

@@ -14,6 +14,12 @@ internal class BlinkEffect(
     private val playerPos: Position
 ) : Effect {
 
+    override fun dirtyRect(): Rect = eyesRect
+
+    override fun draw(canvas: Canvas) {
+        canvas.drawBitmap(eyesBitmap, null, spriteRect, null)
+    }
+
     private val eyesRect: Rect by lazy {
         renderer.computePlayerEyesRect(viewport, playerPos)
     }
@@ -24,11 +30,5 @@ internal class BlinkEffect(
 
     private val spriteRect: Rect by lazy {
         renderer.computePlayerRect(viewport, playerPos)
-    }
-
-    override fun dirtyRect(): Rect = eyesRect
-
-    override fun draw(canvas: Canvas) {
-        canvas.drawBitmap(eyesBitmap, null, spriteRect, null)
     }
 }

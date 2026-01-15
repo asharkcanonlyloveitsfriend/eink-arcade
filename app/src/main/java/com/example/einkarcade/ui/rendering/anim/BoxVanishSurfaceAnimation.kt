@@ -4,11 +4,11 @@ import android.graphics.Rect
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.VanishSpec
 
-class BoxVanishAnimation(
+class BoxVanishSurfaceAnimation(
     private val vanishPosition: Position,
     private val dirtyRect: Rect,
     private val renderVanishDirty: (Rect, Position, Int, Boolean) -> Unit
-) : Animation {
+) : SurfaceAnimation {
 
     private var elapsedTicks: Long = 0L
     private var lastStep: Int? = null

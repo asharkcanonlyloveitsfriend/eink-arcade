@@ -5,7 +5,7 @@ class QueuedAnimator(
     private val postTick: (Runnable, Long) -> Unit,
 ) {
 
-    private val queue: ArrayDeque<Animation> = ArrayDeque()
+    private val queue: ArrayDeque<SurfaceAnimation> = ArrayDeque()
     private var ticking = false
 
     private val tickRunnable = object : Runnable {
@@ -30,8 +30,8 @@ class QueuedAnimator(
         }
     }
 
-    fun enqueue(animation: Animation) {
-        queue.addLast(animation)
+    fun enqueue(surfaceAnimation: SurfaceAnimation) {
+        queue.addLast(surfaceAnimation)
 
         if (!ticking) {
             ticking = true

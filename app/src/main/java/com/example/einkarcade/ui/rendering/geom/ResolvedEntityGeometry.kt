@@ -98,7 +98,7 @@ class ResolvedEntityGeometry(
             }
             val computed = Rect(
                 assets.getOpaqueBounds(
-                    R.drawable.player_eyes_open,
+                    R.drawable.player_eyes_blink,
                     sizePx
                 )
             )

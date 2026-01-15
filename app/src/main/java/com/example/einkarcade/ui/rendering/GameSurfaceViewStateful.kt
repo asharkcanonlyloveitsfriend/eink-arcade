@@ -18,9 +18,9 @@ import com.example.einkarcade.ui.rendering.anim.AnimationState
 import com.example.einkarcade.ui.rendering.anim.GameAnimator
 import com.example.einkarcade.ui.rendering.anim.TickResult
 import com.example.einkarcade.ui.rendering.anim.QueuedAnimator
-import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
-import com.example.einkarcade.ui.rendering.anim.PlayerFlashAnimation
-import com.example.einkarcade.ui.rendering.anim.BoxVanishAnimation
+import com.example.einkarcade.ui.rendering.anim.BlinkSurfaceAnimation
+import com.example.einkarcade.ui.rendering.anim.PlayerFlashSurfaceAnimation
+import com.example.einkarcade.ui.rendering.anim.BoxVanishSurfaceAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EffectsDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawerStateful
@@ -793,7 +793,7 @@ internal class GameSurfaceViewStateful(
             eyesOpaqueBoundsPx = resolvedGeometry.playerEyesOpaqueBoundsPx
         )
         queuedAnimator.enqueue(
-            BlinkAnimation(
+            BlinkSurfaceAnimation(
                 delayTicks = RenderTimings.BLINK_DELAY_TICKS,
                 blinkTicks = RenderTimings.BLINK_DURATION_TICKS,
                 dirtyRect = blinkDirtyRect,
@@ -809,7 +809,7 @@ internal class GameSurfaceViewStateful(
         val startTick = RenderTimings.nowTick(nowMs)
 
         queuedAnimator.enqueue(
-            PlayerFlashAnimation(
+            PlayerFlashSurfaceAnimation(
                 flashPosition = position,
                 dirtyRect = Rect(dirtyRect),
                 flashStartTick = startTick,
@@ -822,7 +822,7 @@ internal class GameSurfaceViewStateful(
         val dirtyRect = computeVanishDirtyRect(viewport, position)
 
         queuedAnimator.enqueue(
-            BoxVanishAnimation(
+            BoxVanishSurfaceAnimation(
                 vanishPosition = position,
                 dirtyRect = Rect(dirtyRect),
                 renderVanishDirty = ::renderVanishDirty

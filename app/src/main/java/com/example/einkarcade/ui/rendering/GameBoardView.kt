@@ -7,13 +7,12 @@ import android.view.View
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
+import com.example.einkarcade.ui.rendering.anim.AnimationRunner
+import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.GameRenderer
 import com.example.einkarcade.ui.rendering.draw.TileDrawer
-import com.example.einkarcade.ui.rendering.effects.BlinkEffect
-import com.example.einkarcade.ui.rendering.effects.Effect
-import com.example.einkarcade.ui.rendering.effects.WaitEffect
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
@@ -39,9 +38,10 @@ internal class GameBoardView(
 
     private var lastViewport: BoardViewport? = null
 
-    private val effectQueue = ArrayDeque<Effect>()
-    private var activeEffect: Effect? = null
-    private var activeEffectStartMs: Long = 0L
+    private val animationRunner = AnimationRunner(
+        invalidateRect = { rect -> invalidateRectOnAnimation(rect) },
+        postDelayed = { runnable, delayMs -> postDelayed(runnable, delayMs) }
+    )
 
     init {
         setOnTouchListener { _, event ->
@@ -123,7 +123,7 @@ internal class GameBoardView(
             selectedBox = selectedBox
         )
 
-        activeEffect?.draw(canvas)
+        animationRunner.draw(canvas)
     }
 
     private fun onLevelLoaded(
@@ -186,15 +186,7 @@ internal class GameBoardView(
         val viewport = lastViewport ?: return
         val playerPos = playerPosition ?: return
 
-        enqueueEffect(WaitEffect(durationMs = 400L))
-        enqueueEffect(
-            BlinkEffect(
-                durationMs = 300L,
-                renderer = renderer,
-                viewport = viewport,
-                playerPos = playerPos
-            )
-        )
+        animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
     }
 
     private fun rebuildStaticLayout() {
@@ -219,39 +211,5 @@ internal class GameBoardView(
 
     private fun invalidateRectOnAnimation(rect: android.graphics.Rect) {
         postInvalidateOnAnimation(rect.left, rect.top, rect.right, rect.bottom)
-    }
-
-    private fun enqueueEffect(effect: Effect) {
-        effectQueue.addLast(effect)
-        startNextEffectIfIdle()
-    }
-
-    private fun startNextEffectIfIdle() {
-        if (activeEffect != null) return
-        startNextEffect()
-    }
-
-    private fun startNextEffect() {
-        val previous = activeEffect
-        val next = effectQueue.removeFirstOrNull()
-
-        activeEffect = null
-
-        // Invalidate region that is no longer active
-        previous?.dirtyRect()?.let { invalidateRectOnAnimation(it) }
-
-        if (next == null) return
-
-        // Activate next
-        activeEffect = next
-
-        // Invalidate region for newly active effect
-        next.dirtyRect()?.let { invalidateRectOnAnimation(it) }
-
-        // Schedule transition to following effect
-        postDelayed(
-            { startNextEffect() },
-            next.durationMs
-        )
     }
 }
