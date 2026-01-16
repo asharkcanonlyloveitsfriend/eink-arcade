@@ -40,6 +40,8 @@ internal class AnimationRunner(
 
     fun hidesPlayer(): Boolean = active?.hidesPlayer() == true
 
+    fun hidesBoard(): Boolean = active?.hidesBoard() == true
+
     private fun startNext() {
         val previous = active
         val next: Animation? = queue.pollFirst()

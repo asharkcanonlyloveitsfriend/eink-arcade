@@ -11,6 +11,7 @@ import com.example.einkarcade.ui.rendering.anim.AnimationRunner
 import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxMoveAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxVanishAnimation
+import com.example.einkarcade.ui.rendering.anim.LevelTransitionAnimation
 import com.example.einkarcade.ui.rendering.anim.PlayerFlashAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
@@ -116,6 +117,11 @@ internal class GameBoardView(
         val playerPos = playerPosition ?: return
         val viewport = lastViewport ?: return
 
+        if (animationRunner.hidesBoard()) {
+            animationRunner.drawOverEntities(canvas)
+            return
+        }
+
         renderer.drawStaticFrame(canvas)
 
         animationRunner.drawUnderEntities(canvas)
@@ -143,7 +149,8 @@ internal class GameBoardView(
         boxPositions: Set<Position>,
         playerPosition: Position
     ) {
-        val tilesChanged = this.tiles != tiles
+        val previousTiles = this.tiles
+        val tilesChanged = previousTiles != tiles
 
         this.tiles = tiles
         this.boxPositions = boxPositions
@@ -152,6 +159,21 @@ internal class GameBoardView(
 
         if (tilesChanged) {
             rebuildStaticLayout()
+            if (previousTiles.isNotEmpty() && tiles.isNotEmpty()) {
+                val viewport = lastViewport ?: return
+                animationRunner.enqueue(
+                    LevelTransitionAnimation(
+                        renderer = renderer,
+                        viewport = viewport,
+                        oldTiles = previousTiles,
+                        newTiles = tiles,
+                        boxPositions = boxPositions,
+                        playerPosition = playerPosition,
+                        viewWidth = width,
+                        viewHeight = height
+                    )
+                )
+            }
         }
 
         invalidate()

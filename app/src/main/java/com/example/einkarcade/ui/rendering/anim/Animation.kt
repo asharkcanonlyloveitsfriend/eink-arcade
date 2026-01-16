@@ -18,6 +18,9 @@ interface Animation {
     /** Return true when the animation should hide the player sprite. */
     fun hidesPlayer(): Boolean = false
 
+    /** Return true when the animation should hide the entire board. */
+    fun hidesBoard(): Boolean = false
+
     /**
      * Number of animation ticks until the next state change.
      * Return null when the animation is complete.

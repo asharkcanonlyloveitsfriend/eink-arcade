@@ -50,6 +50,10 @@ internal class GameRenderer(
         canvas.drawBitmap(bitmap, 0f, 0f, null)
     }
 
+    fun drawBackground(canvas: Canvas, viewWidth: Int, viewHeight: Int) {
+        backgroundDrawer.draw(canvas, viewWidth, viewHeight)
+    }
+
     fun drawEntities(
         canvas: Canvas,
         viewport: BoardViewport,
@@ -106,6 +110,26 @@ internal class GameRenderer(
             viewport = viewport,
             geometry = geometry,
             playerPosition = playerPosition
+        )
+    }
+
+    fun drawScaledTile(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        tile: Tile,
+        rowIndex: Int,
+        colIndex: Int,
+        scale: Float
+    ) {
+        tileDrawer.drawScaledTile(
+            canvas = canvas,
+            tile = tile,
+            rowIndex = rowIndex,
+            colIndex = colIndex,
+            scale = scale,
+            cellSize = viewport.cellSize,
+            offsetX = viewport.offsetX,
+            offsetY = viewport.offsetY
         )
     }
 
