@@ -19,7 +19,7 @@ internal class GameRenderer(
     private val entityDrawer: EntityDrawer
 ) {
     private var staticFrameBitmap: Bitmap? = null
-    private var geometry: ResolvedEntityGeometry? = null
+    private lateinit var geometry: ResolvedEntityGeometry
 
     fun rebuildStaticLayout(
         viewWidth: Int,
@@ -53,8 +53,6 @@ internal class GameRenderer(
         playerPosition: Position,
         selectedBox: Position?
     ) {
-        val geometry = geometry ?: error("Geometry not initialized")
-
         entityDrawer.drawBoxes(canvas, viewport, geometry, boxPositions)
 
         if (selectedBox != null) {
@@ -79,8 +77,6 @@ internal class GameRenderer(
         viewport: BoardViewport,
         position: Position
     ): Rect {
-        val geometry = geometry ?: error("Geometry not initialized")
-
         val origin = Position(position.row + 1, position.col + 1)
             .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
         val bounds = geometry.boxBoundsPx
@@ -97,8 +93,6 @@ internal class GameRenderer(
         viewport: BoardViewport,
         position: Position
     ): Rect {
-        val geometry = geometry ?: error("Geometry not initialized")
-
         val origin = Position(position.row + 1, position.col + 1)
             .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
         val bounds = geometry.playerBoundsPx
@@ -112,7 +106,6 @@ internal class GameRenderer(
     }
 
     fun getPlayerBodyBitmap(): Bitmap {
-        val geometry = geometry ?: error("Geometry not initialized")
         return assets.getBitmap(R.drawable.player_slime, geometry.playerSizePx)
     }
 
@@ -120,8 +113,6 @@ internal class GameRenderer(
         viewport: BoardViewport,
         position: Position
     ): Rect {
-        val geometry = geometry ?: error("Geometry not initialized")
-
         val origin = Position(position.row + 1, position.col + 1)
             .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
 
@@ -137,7 +128,6 @@ internal class GameRenderer(
     }
 
     fun getPlayerEyesBlinkBitmap(): Bitmap {
-        val geometry = geometry ?: error("Geometry not initialized")
         return assets.getBitmap(R.drawable.player_eyes_blink, geometry.playerSizePx)
     }
 }

@@ -18,6 +18,8 @@ class ResolvedEntityGeometry(
 ) {
 
     companion object {
+        private const val BOX_SCALE = 0.90f
+        private const val PLAYER_SCALE = 0.80f
         private val playerEyesOpaqueBoundsCache = mutableMapOf<Int, Rect>()
 
         /**
@@ -46,7 +48,7 @@ class ResolvedEntityGeometry(
         }
 
         private fun computeBoxGeometry(tileSizePx: Float): Pair<Int, Rect> {
-            val boxSizePx = snapToWholePixel(tileSizePx * 0.90f)
+            val boxSizePx = snapToWholePixel(tileSizePx * BOX_SCALE)
                 .toInt()
                 .coerceAtLeast(1)
 
@@ -66,7 +68,7 @@ class ResolvedEntityGeometry(
         private fun computePlayerGeometry(
             tileSizePx: Float
         ): Triple<Int, Rect, Int> {
-            val playerSizePx = snapToWholePixel(tileSizePx)
+            val playerSizePx = snapToWholePixel(tileSizePx * PLAYER_SCALE)
                 .toInt()
                 .coerceAtLeast(1)
 
