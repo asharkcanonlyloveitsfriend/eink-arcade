@@ -9,6 +9,7 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.anim.AnimationRunner
 import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
+import com.example.einkarcade.ui.rendering.anim.BoxMoveAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxVanishAnimation
 import com.example.einkarcade.ui.rendering.anim.PlayerFlashAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
@@ -117,15 +118,24 @@ internal class GameBoardView(
 
         renderer.drawStaticFrame(canvas)
 
-        renderer.drawEntities(
+        animationRunner.drawUnderEntities(canvas)
+
+        renderer.drawBoxes(
             canvas = canvas,
             viewport = viewport,
             boxPositions = boxPositions,
-            playerPosition = playerPos,
             selectedBox = selectedBox
         )
 
-        animationRunner.draw(canvas)
+        if (!animationRunner.hidesPlayer()) {
+            renderer.drawPlayer(
+                canvas = canvas,
+                viewport = viewport,
+                playerPosition = playerPos
+            )
+        }
+
+        animationRunner.drawOverEntities(canvas)
     }
 
     private fun onLevelLoaded(
@@ -170,6 +180,7 @@ internal class GameBoardView(
         val boxTo = path.last()
         val newPlayer = path[path.size - 2]
         val isWall = tiles[boxTo.row][boxTo.col] == Tile.WALL
+        val isLongMove = path.size > 2
 
         boxPositions = if (isWall) {
             boxPositions - boxFrom
@@ -193,6 +204,15 @@ internal class GameBoardView(
         if (isWall) {
             animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, boxTo))
             animationRunner.enqueue(BlinkAnimation(renderer, viewport, newPlayer))
+        } else if (isLongMove) {
+            animationRunner.enqueue(
+                BoxMoveAnimation(
+                    renderer = renderer,
+                    viewport = viewport,
+                    playerFrom = previousPlayer,
+                    path = path
+                )
+            )
         }
     }
 

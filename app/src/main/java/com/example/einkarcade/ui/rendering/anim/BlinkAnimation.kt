@@ -40,7 +40,7 @@ internal class BlinkAnimation(
         }
     }
 
-    override fun draw(canvas: Canvas) {
+    override fun drawOverEntities(canvas: Canvas) {
         when (phase) {
             Phase.WAITING -> {
                 // Do nothing, then advance to BLINKING

@@ -77,6 +77,38 @@ internal class GameRenderer(
         )
     }
 
+    fun drawBoxes(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        boxPositions: Set<Position>,
+        selectedBox: Position?
+    ) {
+        entityDrawer.drawBoxes(canvas, viewport, geometry, boxPositions)
+
+        if (selectedBox != null) {
+            entityDrawer.drawBox(
+                canvas = canvas,
+                viewport = viewport,
+                geometry = geometry,
+                position = selectedBox,
+                resId = R.drawable.box_selected
+            )
+        }
+    }
+
+    fun drawPlayer(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        playerPosition: Position
+    ) {
+        entityDrawer.drawPlayer(
+            canvas = canvas,
+            viewport = viewport,
+            geometry = geometry,
+            playerPosition = playerPosition
+        )
+    }
+
     fun computeBoxRect(
         viewport: BoardViewport,
         position: Position
@@ -111,6 +143,10 @@ internal class GameRenderer(
 
     fun getPlayerBodyBitmap(): Bitmap {
         return assets.getBitmap(R.drawable.player_slime, geometry.playerSizePx)
+    }
+
+    fun getBoxBitmap(): Bitmap {
+        return assets.getBitmap(R.drawable.box, geometry.boxSizePx)
     }
 
     fun computePlayerEyesRect(

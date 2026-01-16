@@ -40,7 +40,7 @@ internal class PlayerFlashAnimation(
         return spriteRect
     }
 
-    override fun draw(canvas: Canvas) {
+    override fun drawOverEntities(canvas: Canvas) {
         when (phase) {
             Phase.LIGHT -> {
                 canvas.drawBitmap(bodyBitmap, null, spriteRect, lightPaint)

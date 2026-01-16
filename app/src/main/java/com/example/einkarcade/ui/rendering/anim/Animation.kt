@@ -9,8 +9,14 @@ interface Animation {
     /** Region affected at the current state, or null if none. */
     fun dirtyRect(): Rect?
 
-    /** Draw in the current state. */
-    fun draw(canvas: Canvas)
+    /** Draw elements that should appear below entities. */
+    fun drawUnderEntities(canvas: Canvas) {}
+
+    /** Draw elements that should appear above entities. */
+    fun drawOverEntities(canvas: Canvas) {}
+
+    /** Return true when the animation should hide the player sprite. */
+    fun hidesPlayer(): Boolean = false
 
     /**
      * Number of animation ticks until the next state change.

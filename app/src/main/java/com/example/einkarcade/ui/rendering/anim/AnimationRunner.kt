@@ -29,9 +29,16 @@ internal class AnimationRunner(
     }
 
     /** Called by the View during onDraw. */
-    fun draw(canvas: Canvas) {
-        active?.draw(canvas)
+    fun drawUnderEntities(canvas: Canvas) {
+        active?.drawUnderEntities(canvas)
     }
+
+    /** Called by the View during onDraw. */
+    fun drawOverEntities(canvas: Canvas) {
+        active?.drawOverEntities(canvas)
+    }
+
+    fun hidesPlayer(): Boolean = active?.hidesPlayer() == true
 
     private fun startNext() {
         val previous = active

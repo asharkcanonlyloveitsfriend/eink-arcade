@@ -11,11 +11,12 @@ internal class BoxVanishAnimation(
     private val viewport: BoardViewport,
     private val position: Position
 ) : Animation {
-    override fun dirtyRect(): Rect {
+    override fun dirtyRect(): Rect? {
         return boxRect
     }
 
-    override fun draw(canvas: Canvas) {
+    override fun drawOverEntities(canvas: Canvas) {
+        if (phaseIndex >= PHASES.size) return
         val phase = PHASES[phaseIndex]
         renderer.drawVanishingBox(canvas, viewport, position, phase.scale)
         phaseIndex++
