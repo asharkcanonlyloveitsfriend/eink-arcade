@@ -9,6 +9,7 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.anim.AnimationRunner
 import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
+import com.example.einkarcade.ui.rendering.anim.PlayerFlashAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.GameRenderer
@@ -156,6 +157,8 @@ internal class GameBoardView(
 
         rect = renderer.computePlayerRect(viewport, to)
         invalidateRectOnAnimation(rect)
+
+        animationRunner.enqueue(PlayerFlashAnimation(renderer, viewport, previous))
     }
 
     private fun onBoxMoved(path: List<Position>) {

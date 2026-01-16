@@ -111,6 +111,11 @@ internal class GameRenderer(
         return Rect(left, top, right, bottom)
     }
 
+    fun getPlayerBodyBitmap(): Bitmap {
+        val geometry = geometry ?: error("Geometry not initialized")
+        return assets.getBitmap(R.drawable.player_slime, geometry.playerSizePx)
+    }
+
     fun computePlayerEyesRect(
         viewport: BoardViewport,
         position: Position
