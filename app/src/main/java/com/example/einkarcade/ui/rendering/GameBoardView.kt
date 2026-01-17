@@ -9,10 +9,10 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.anim.AnimationRunner
 import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
-import com.example.einkarcade.ui.rendering.anim.BoxMoveAnimation
+import com.example.einkarcade.ui.rendering.anim.BoxPathAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxVanishAnimation
+import com.example.einkarcade.ui.rendering.anim.EntityFlashAnimation
 import com.example.einkarcade.ui.rendering.anim.LevelTransitionAnimation
-import com.example.einkarcade.ui.rendering.anim.PlayerFlashAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.GameRenderer
@@ -199,7 +199,14 @@ internal class GameBoardView(
         rect = renderer.computePlayerRect(viewport, to)
         invalidateRectOnAnimation(rect)
 
-        animationRunner.enqueue(PlayerFlashAnimation(renderer, viewport, previous))
+        animationRunner.enqueue(
+            EntityFlashAnimation(
+                renderer = renderer,
+                viewport = viewport,
+                playerPosition = previous,
+                boxPosition = null
+            )
+        )
     }
 
     private fun onBoxMoved(path: List<Position>) {
@@ -236,10 +243,17 @@ internal class GameBoardView(
             animationRunner.enqueue(BlinkAnimation(renderer, viewport, newPlayer))
         } else if (isLongMove) {
             animationRunner.enqueue(
-                BoxMoveAnimation(
+                EntityFlashAnimation(
                     renderer = renderer,
                     viewport = viewport,
-                    playerFrom = previousPlayer,
+                    playerPosition = previousPlayer,
+                    boxPosition = boxFrom,
+                    hidePlayer = true
+                )
+            )
+            animationRunner.enqueue(
+                BoxPathAnimation(
+                    viewport = viewport,
                     path = path
                 )
             )
