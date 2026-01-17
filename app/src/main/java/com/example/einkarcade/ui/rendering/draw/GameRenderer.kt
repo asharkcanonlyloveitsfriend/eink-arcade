@@ -8,7 +8,6 @@ import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
-import com.example.einkarcade.ui.rendering.anim.AnimationRequirements
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.ResolvedEntityGeometry
 import com.example.einkarcade.ui.rendering.geom.toRenderPoint
@@ -27,14 +26,12 @@ internal class GameRenderer(
         viewWidth: Int,
         viewHeight: Int,
         viewport: BoardViewport,
-        tiles: List<List<Tile>>,
-        animationRequirements: AnimationRequirements
+        tiles: List<List<Tile>>
     ) {
         geometry = ResolvedEntityGeometry.compute(
             viewport.cellSize,
             assets = assets
         )
-        prewarmBoxBitmaps(animationRequirements.boxScaleFactors)
 
         val bitmap = createBitmap(viewWidth, viewHeight)
         val canvas = Canvas(bitmap)
@@ -215,13 +212,6 @@ internal class GameRenderer(
 
     fun getPlayerEyesBlinkBitmap(): Bitmap {
         return assets.getBitmap(R.drawable.player_eyes_blink, geometry.playerSizePx)
-    }
-
-    fun prewarmBoxBitmaps(scales: Collection<Float>) {
-        for (scale in scales) {
-            val sizePx = (geometry.boxSizePx * scale).roundToInt().coerceAtLeast(1)
-            assets.getBitmap(R.drawable.box, sizePx)
-        }
     }
 
     fun drawVanishingBox(

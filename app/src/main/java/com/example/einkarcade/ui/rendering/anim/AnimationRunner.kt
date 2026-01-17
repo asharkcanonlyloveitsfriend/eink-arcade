@@ -16,11 +16,6 @@ internal class AnimationRunner(
 
     private val queue = ArrayDeque<Animation>()
     private var active: Animation? = null
-    private val requirements: AnimationRequirements by lazy { buildRequirements() }
-
-    fun requirements(): AnimationRequirements = requirements
-
-    /** Enqueue an animation and start immediately if idle. */
     fun enqueue(animation: Animation) {
         queue.addLast(animation)
         if (active == null) {
@@ -28,12 +23,10 @@ internal class AnimationRunner(
         }
     }
 
-    /** Called by the View during onDraw. */
     fun drawUnderEntities(canvas: Canvas) {
         active?.drawUnderEntities(canvas)
     }
 
-    /** Called by the View during onDraw. */
     fun drawOverEntities(canvas: Canvas) {
         active?.drawOverEntities(canvas)
     }
@@ -78,8 +71,4 @@ internal class AnimationRunner(
         scheduleNextStep()
     }
 
-    private fun buildRequirements(): AnimationRequirements {
-        val boxScales = BoxVanishAnimation.phaseScales().toSet()
-        return AnimationRequirements(boxScaleFactors = boxScales)
-    }
 }

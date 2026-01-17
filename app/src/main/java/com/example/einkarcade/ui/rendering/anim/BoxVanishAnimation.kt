@@ -11,7 +11,7 @@ internal class BoxVanishAnimation(
     private val viewport: BoardViewport,
     private val position: Position
 ) : Animation {
-    override fun dirtyRect(): Rect? {
+    override fun dirtyRect(): Rect {
         return boxRect
     }
 
@@ -35,7 +35,7 @@ internal class BoxVanishAnimation(
         // Edit this list to change vanish phase scales/timing in one place.
         private val PHASES = listOf(
             Phase(scale = 1.0f, ticks = 4),
-            Phase(scale = 0.75f, ticks = 4),
+            Phase(scale = 0.75f, ticks = 3),
             Phase(scale = 0.5f, ticks = 3),
             Phase(scale = 0.3f, ticks = 2),
             Phase(scale = 0.18f, ticks = 2),
@@ -43,6 +43,5 @@ internal class BoxVanishAnimation(
             Phase(scale = 0.1f, ticks = 1)
         )
 
-        fun phaseScales(): List<Float> = PHASES.map { it.scale }
     }
 }
