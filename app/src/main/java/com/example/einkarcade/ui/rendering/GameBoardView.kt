@@ -149,59 +149,50 @@ internal class GameBoardView(
         playerPosition: Position
     ) {
         val previousTiles = this.tiles
-        val tilesChanged = previousTiles != tiles
 
         this.tiles = tiles
         this.boxPositions = boxPositions
         this.playerPosition = playerPosition
         selectedBox = null
 
-        if (tilesChanged) {
-            val previousViewport = lastViewport
-            val oldBitmap: Bitmap? = if (width > 0 && height > 0) {
-                val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bmp)
-                renderer.drawStaticFrame(canvas)
-                bmp
-            } else {
-                null
-            }
-
-            rebuildStaticLayout()
-
-            val newViewport = lastViewport
-
-            // Capture new bitmap after mutating state and layout
-            val newBitmap: Bitmap? = if (width > 0 && height > 0) {
-                val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bmp)
-                renderer.drawStaticFrame(canvas)
-                bmp
-            } else {
-                null
-            }
-            if (
-                previousTiles.isNotEmpty() &&
-                tiles.isNotEmpty() &&
-                oldBitmap != null &&
-                newBitmap != null &&
-                previousViewport != null &&
-                newViewport != null
-            ) {
-                animationRunner.enqueue(
-                    LevelTransitionAnimation(
-                        oldBitmap = oldBitmap,
-                        newBitmap = newBitmap,
-                        oldViewport = previousViewport,
-                        newViewport = newViewport,
-                        oldTiles = previousTiles,
-                        newTiles = tiles
-                    )
-                )
-            }
-        } else {
-            invalidate()
+        if (width <= 0 || height <= 0) {
+            return
         }
+
+        if (previousTiles == tiles) {
+            invalidate()
+            return
+        }
+
+        val backgroundBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+            renderer.drawBackground(Canvas(it), width, height)
+        }
+
+        val oldBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+            renderer.drawStaticFrame(Canvas(it))
+        }
+
+        // Rebuild layout for new tiles
+        rebuildStaticLayout()
+
+        val newViewport = lastViewport ?: run {
+            invalidate()
+            return
+        }
+
+        val newBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+            renderer.drawStaticFrame(Canvas(it))
+        }
+
+        animationRunner.enqueue(
+            LevelTransitionAnimation(
+                backgroundBitmap = backgroundBitmap,
+                oldBitmap = oldBitmap,
+                newBitmap = newBitmap,
+                newViewport = newViewport,
+                newTiles = tiles
+            )
+        )
     }
 
     private fun onPlayerMoved(to: Position) {
