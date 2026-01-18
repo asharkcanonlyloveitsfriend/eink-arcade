@@ -109,7 +109,7 @@ internal class GameBoardView(
             is GameController.RenderDelta.PlayerMoved -> onPlayerMoved(to = delta.to)
             is GameController.RenderDelta.BoxMoved -> onBoxMoved(path = delta.path)
             is GameController.RenderDelta.MoveRejected -> onMoveRejected()
-            is GameController.RenderDelta.GameWon -> Unit
+            is GameController.RenderDelta.GameWon -> onGameWon(isClean = delta.isClean)
         }
     }
 
@@ -239,19 +239,20 @@ internal class GameBoardView(
             renderer.computePlayerRect(viewport, newPlayer)
         )
 
+        animationRunner.enqueue(
+            EntityFlashAnimation(
+                renderer = renderer,
+                viewport = viewport,
+                playerPosition = previousPlayer,
+                boxPosition = boxFrom,
+                hidePlayer = true
+            )
+        )
+
         if (isWall) {
             animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, boxTo))
             animationRunner.enqueue(BlinkAnimation(renderer, viewport, newPlayer))
         } else if (isLongMove) {
-            animationRunner.enqueue(
-                EntityFlashAnimation(
-                    renderer = renderer,
-                    viewport = viewport,
-                    playerPosition = previousPlayer,
-                    boxPosition = boxFrom,
-                    hidePlayer = true
-                )
-            )
             animationRunner.enqueue(
                 BoxPathAnimation(
                     viewport = viewport,
@@ -262,6 +263,14 @@ internal class GameBoardView(
     }
 
     private fun onMoveRejected() {
+        val viewport = lastViewport ?: return
+        val playerPos = playerPosition ?: return
+
+        animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
+    }
+
+    private fun onGameWon(isClean: Boolean) {
+        if (isClean) return
         val viewport = lastViewport ?: return
         val playerPos = playerPosition ?: return
 
