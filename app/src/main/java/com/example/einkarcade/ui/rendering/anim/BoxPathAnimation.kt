@@ -28,7 +28,7 @@ internal class BoxPathAnimation(
     private var pathProgressSegments: Float = 0f
     private var isComplete: Boolean = false
 
-    override fun dirtyRect(): Rect = Rect(pathRect)
+    override fun dirtyRects(): Array<Rect?> = arrayOf(pathRect)
 
     override fun drawUnderEntities(canvas: Canvas) {
         if (isComplete) return

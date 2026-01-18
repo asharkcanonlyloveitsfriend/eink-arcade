@@ -6,8 +6,8 @@ import android.graphics.Rect
 const val ANIMATION_TICK_MS: Long = 50L
 
 interface Animation {
-    /** Region affected at the current state, or null if none. */
-    fun dirtyRect(): Rect?
+    /** Regions affected at the current state. Null entries are ignored. */
+    fun dirtyRects(): Array<Rect?>
 
     /** Draw elements that should appear below entities. */
     fun drawUnderEntities(canvas: Canvas) {}

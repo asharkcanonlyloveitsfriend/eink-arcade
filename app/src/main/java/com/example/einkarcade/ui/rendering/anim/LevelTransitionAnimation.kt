@@ -49,7 +49,7 @@ internal class LevelTransitionAnimation(
         isAntiAlias = false
     }
 
-    override fun dirtyRect(): Rect? = viewRect
+    override fun dirtyRects(): Array<Rect?> = arrayOf(viewRect)
 
     override fun drawOverEntities(canvas: Canvas) {
         val nowMs = SystemClock.elapsedRealtime()

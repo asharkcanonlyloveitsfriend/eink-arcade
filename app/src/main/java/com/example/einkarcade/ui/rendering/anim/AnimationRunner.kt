@@ -10,7 +10,7 @@ import java.util.ArrayDeque
  * It relies on injected callbacks for invalidation and scheduling.
  */
 internal class AnimationRunner(
-    private val invalidateRect: (Rect) -> Unit,
+    private val invalidateRects: (Array<Rect?>) -> Unit,
     private val postDelayed: (Runnable, Long) -> Unit
 ) {
 
@@ -42,14 +42,14 @@ internal class AnimationRunner(
         active = null
 
         // Clean up previous animation region
-        previous?.dirtyRect()?.let { invalidateRect(it) }
+        previous?.let { invalidateRects(it.dirtyRects()) }
 
         if (next == null) return
 
         active = next
 
         // Invalidate initial region if needed
-        next.dirtyRect()?.let { invalidateRect(it) }
+        invalidateRects(next.dirtyRects())
 
         scheduleNextStep()
     }
@@ -67,7 +67,7 @@ internal class AnimationRunner(
     }
 
     private fun advance() {
-        active?.dirtyRect()?.let { invalidateRect(it) }
+        active?.let { invalidateRects(it.dirtyRects()) }
         scheduleNextStep()
     }
 

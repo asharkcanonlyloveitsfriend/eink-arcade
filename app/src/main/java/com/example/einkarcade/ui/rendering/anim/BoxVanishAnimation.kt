@@ -11,9 +11,7 @@ internal class BoxVanishAnimation(
     private val viewport: BoardViewport,
     private val position: Position
 ) : Animation {
-    override fun dirtyRect(): Rect {
-        return boxRect
-    }
+    override fun dirtyRects(): Array<Rect?> = arrayOf(boxRect)
 
     override fun drawOverEntities(canvas: Canvas) {
         if (phaseIndex >= PHASES.size) return

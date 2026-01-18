@@ -43,7 +43,7 @@ internal class GameBoardView(
     private var lastViewport: BoardViewport? = null
 
     private val animationRunner = AnimationRunner(
-        invalidateRect = { rect -> invalidateRectOnAnimation(rect) },
+        invalidateRects = { rects -> invalidateRects(*rects) },
         postDelayed = { runnable, delayMs -> postDelayed(runnable, delayMs) }
     )
 
@@ -86,15 +86,10 @@ internal class GameBoardView(
 
         val viewport = lastViewport!!
 
-        previous?.let {
-            val r = renderer.computeBoxRect(viewport, it)
-            invalidateRectOnAnimation(r)
-        }
-
-        position?.let {
-            val r = renderer.computeBoxRect(viewport, it)
-            invalidateRectOnAnimation(r)
-        }
+        invalidateRects(
+            previous?.let { renderer.computeBoxRect(viewport, it) },
+            position?.let { renderer.computeBoxRect(viewport, it) }
+        )
     }
 
     override fun applyDelta(delta: GameController.RenderDelta) {
@@ -193,11 +188,10 @@ internal class GameBoardView(
         val previous = playerPosition!!
         playerPosition = to
 
-        var rect = renderer.computePlayerRect(viewport, previous)
-        invalidateRectOnAnimation(rect)
-
-        rect = renderer.computePlayerRect(viewport, to)
-        invalidateRectOnAnimation(rect)
+        invalidateRects(
+            renderer.computePlayerRect(viewport, previous),
+            renderer.computePlayerRect(viewport, to)
+        )
 
         animationRunner.enqueue(
             EntityFlashAnimation(
@@ -226,17 +220,12 @@ internal class GameBoardView(
         }
         playerPosition = newPlayer
 
-        var rect = renderer.computeBoxRect(viewport, boxFrom)
-        invalidateRectOnAnimation(rect)
-
-        rect = renderer.computeBoxRect(viewport, boxTo)
-        invalidateRectOnAnimation(rect)
-
-        rect = renderer.computePlayerRect(viewport, previousPlayer)
-        invalidateRectOnAnimation(rect)
-
-        rect = renderer.computePlayerRect(viewport, newPlayer)
-        invalidateRectOnAnimation(rect)
+        invalidateRects(
+            renderer.computeBoxRect(viewport, boxFrom),
+            renderer.computeBoxRect(viewport, boxTo),
+            renderer.computePlayerRect(viewport, previousPlayer),
+            renderer.computePlayerRect(viewport, newPlayer)
+        )
 
         if (isWall) {
             animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, boxTo))
@@ -285,6 +274,17 @@ internal class GameBoardView(
             viewport = viewport,
             tiles = tiles
         )
+    }
+
+    private fun invalidateRects(vararg rects: android.graphics.Rect?) {
+        val nonNull = rects.filterNotNull()
+        if (nonNull.isEmpty()) return
+
+        val dirty = android.graphics.Rect(nonNull[0])
+        for (i in 1 until nonNull.size) {
+            dirty.union(nonNull[i])
+        }
+        invalidateRectOnAnimation(dirty)
     }
 
     private fun invalidateRectOnAnimation(rect: android.graphics.Rect) {

@@ -33,12 +33,8 @@ internal class EntityFlashAnimation(
     private val drawItems: List<DrawItem> = buildDrawItems()
     private var phase: Phase = Phase.FLASH_DARK
 
-    override fun dirtyRect(): Rect {
-        val rect = Rect(drawItems.first().rect)
-        for (index in 1 until drawItems.size) {
-            rect.union(drawItems[index].rect)
-        }
-        return rect
+    override fun dirtyRects(): Array<Rect?> {
+        return drawItems.map { it.rect }.toTypedArray()
     }
 
     override fun drawOverEntities(canvas: Canvas) {

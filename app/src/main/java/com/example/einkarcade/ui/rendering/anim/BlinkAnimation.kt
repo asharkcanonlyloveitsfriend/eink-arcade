@@ -32,12 +32,14 @@ internal class BlinkAnimation(
 
     private var phase: Phase = Phase.WAITING
 
-    override fun dirtyRect(): Rect? {
-        return when (phase) {
-            Phase.BLINKING,
-            Phase.CLEANUP -> eyesRect
-            else -> null
-        }
+    override fun dirtyRects(): Array<Rect?> {
+        return arrayOf(
+            when (phase) {
+                Phase.BLINKING,
+                Phase.CLEANUP -> eyesRect
+                else -> null
+            }
+        )
     }
 
     override fun drawOverEntities(canvas: Canvas) {
