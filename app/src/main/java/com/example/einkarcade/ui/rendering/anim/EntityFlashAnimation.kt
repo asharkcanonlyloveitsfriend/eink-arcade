@@ -17,7 +17,7 @@ internal class EntityFlashAnimation(
     private val renderer: GameRenderer,
     private val viewport: BoardViewport,
     private val playerPosition: Position,
-    private val boxPosition: Position?,
+    private val boxPositions: List<Position>,
     private val hidePlayer: Boolean = false
 ) : Animation {
 
@@ -76,7 +76,7 @@ internal class EntityFlashAnimation(
     private fun buildDrawItems(): List<DrawItem> {
         val items = mutableListOf<DrawItem>()
         items.add(DrawItem(playerBitmap, renderer.computePlayerRect(viewport, playerPosition)))
-        boxPosition?.let { position ->
+        for (position in boxPositions) {
             items.add(DrawItem(boxBitmap, renderer.computeBoxRect(viewport, position)))
         }
         return items

@@ -62,6 +62,8 @@ class GameController(
         ) : RenderDelta
         data class PlayerMoved(val to: Position) : RenderDelta
         data class BoxMoved(val path: List<Position>) : RenderDelta
+        data class Undo(val playerPosition: Position, val boxPositions: Set<Position>) : RenderDelta
+        data class Restart(val playerPosition: Position, val boxPositions: Set<Position>) : RenderDelta
         data class GameWon(val isClean: Boolean) : RenderDelta
 
         data object MoveRejected : RenderDelta
@@ -159,8 +161,12 @@ class GameController(
 
     fun restart() {
         gameEngine = GameEngine(level)
-        markChanged()
-        onRenderDelta?.invoke(currentLevelLoadedDelta())
+        onRenderDelta?.invoke(
+            RenderDelta.Restart(
+                playerPosition = gameEngine.playerPosition,
+                boxPositions = gameEngine.boxPositions
+            )
+        )
     }
 
     fun nextLevel() {
@@ -184,10 +190,13 @@ class GameController(
     }
 
     fun undo(): Boolean {
-        val changed = gameEngine.undo()
-        if (!changed) return false
-        markChanged()
-        onRenderDelta?.invoke(currentLevelLoadedDelta())
+        if (gameEngine.undo() == null) return false
+        onRenderDelta?.invoke(
+            RenderDelta.Undo(
+                playerPosition = gameEngine.playerPosition,
+                boxPositions = gameEngine.boxPositions
+            )
+        )
         return true
     }
 

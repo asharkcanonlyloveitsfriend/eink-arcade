@@ -4,7 +4,7 @@ import kotlin.math.abs
 
 class GameEngine(private val level: Level) {
     private var gameState = GameState.fromLevel(level)
-    private var lastSavedState: GameState? = null
+    private var lastBoxPath: List<Position>? = null
 
     val playerPosition: Position
         get() = gameState.playerPosition
@@ -26,11 +26,25 @@ class GameEngine(private val level: Level) {
         return gameState.boxPositions.contains(position)
     }
 
-    fun undo(): Boolean {
-        val savedState = lastSavedState ?: return false
-        gameState = savedState.deepCopy()
-        lastSavedState = null
-        return true
+    fun undo(): List<Position>? {
+        val path = lastBoxPath ?: return null
+
+        val boxFrom = path.first()
+        val boxTo = path.last()
+        val firstStep = Position(
+            row = path[1].row - boxFrom.row,
+            col = path[1].col - boxFrom.col
+        )
+        val newPlayerPosition = Position(
+            row = boxFrom.row - firstStep.row,
+            col = boxFrom.col - firstStep.col
+        )
+
+        gameState.removeBox(boxTo)
+        gameState.boxPositions.add(boxFrom)
+        gameState.movePlayer(newPlayerPosition)
+        lastBoxPath = null
+        return path
     }
 
     fun moveBoxTo(from: Position, to: Position): List<Position>? {
@@ -46,7 +60,7 @@ class GameEngine(private val level: Level) {
             level.grid[to.row][to.col] == Tile.WALL
 
         if (pushedIntoWall) {
-            lastSavedState = gameState.deepCopy()
+            lastBoxPath = listOf(from, to)
             gameState.removeBox(from)
             gameState.movePlayer(from)
             return listOf(from, to)
@@ -66,7 +80,7 @@ class GameEngine(private val level: Level) {
         }
 
         // Apply the planned move.
-        lastSavedState = gameState.deepCopy()
+        lastBoxPath = boxPath
         gameState.moveBox(from, to)
         gameState.movePlayer(finalPlayerPosition)
         return boxPath

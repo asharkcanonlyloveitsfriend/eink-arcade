@@ -108,6 +108,14 @@ internal class GameBoardView(
             }
             is GameController.RenderDelta.PlayerMoved -> onPlayerMoved(to = delta.to)
             is GameController.RenderDelta.BoxMoved -> onBoxMoved(path = delta.path)
+            is GameController.RenderDelta.Undo -> onRevert(
+                playerPosition = delta.playerPosition,
+                boxPositions = delta.boxPositions
+            )
+            is GameController.RenderDelta.Restart -> onRevert(
+                playerPosition = delta.playerPosition,
+                boxPositions = delta.boxPositions
+            )
             is GameController.RenderDelta.MoveRejected -> onMoveRejected()
             is GameController.RenderDelta.GameWon -> onGameWon(isClean = delta.isClean)
         }
@@ -210,7 +218,7 @@ internal class GameBoardView(
                 renderer = renderer,
                 viewport = viewport,
                 playerPosition = previous,
-                boxPosition = null
+                boxPositions = emptyList()
             )
         )
     }
@@ -244,7 +252,7 @@ internal class GameBoardView(
                 renderer = renderer,
                 viewport = viewport,
                 playerPosition = previousPlayer,
-                boxPosition = boxFrom,
+                boxPositions = listOf(boxFrom),
                 hidePlayer = true
             )
         )
@@ -257,6 +265,37 @@ internal class GameBoardView(
                 BoxPathAnimation(
                     viewport = viewport,
                     path = path
+                )
+            )
+        }
+    }
+
+    private fun onRevert(playerPosition: Position, boxPositions: Set<Position>) {
+        val viewport = lastViewport ?: return
+        val previousPlayer = this.playerPosition ?: return
+        val previousBoxes = this.boxPositions
+        val movedBoxes = previousBoxes - boxPositions
+        val playerChanged = previousPlayer != playerPosition
+
+        this.playerPosition = playerPosition
+        this.boxPositions = boxPositions
+        selectedBox = null
+
+        val addedBoxes = boxPositions - previousBoxes
+        val boxRects = addedBoxes.map { renderer.computeBoxRect(viewport, it) }.toTypedArray()
+        invalidateRects(
+            renderer.computePlayerRect(viewport, playerPosition),
+            *boxRects
+        )
+
+        if (movedBoxes.isNotEmpty() || playerChanged) {
+            animationRunner.enqueue(
+                EntityFlashAnimation(
+                    renderer = renderer,
+                    viewport = viewport,
+                    playerPosition = previousPlayer,
+                    boxPositions = movedBoxes.toList(),
+                    hidePlayer = true
                 )
             )
         }
