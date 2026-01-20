@@ -2,7 +2,6 @@ package com.example.einkarcade.ui.rendering
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Rect
@@ -47,6 +46,11 @@ internal class GameBoardView(
 
     private var lastViewport: BoardViewport? = null
 
+    private val inkOverlay = InkOverlay(
+        density = resources.displayMetrics.density,
+        invalidate = { l, t, r, b -> postInvalidateOnAnimation(l, t, r, b) }
+    )
+
     private val animationRunner = AnimationRunner(
         invalidateRects = { rects -> invalidateRects(*rects) },
         postDelayed = { runnable, delayMs -> postDelayed(runnable, delayMs) }
@@ -54,15 +58,29 @@ internal class GameBoardView(
 
     init {
         setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_UP) {
-                val viewport = lastViewport ?: return@setOnTouchListener true
-                val position = viewport.screenToInnerCell(event.x, event.y)
-                if (position != null) {
-                    onTapCell?.invoke(position)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    inkOverlay.onTouchEvent(event, onTap = null)
                 }
-                return@setOnTouchListener true
+
+                MotionEvent.ACTION_MOVE -> {
+                    inkOverlay.onTouchEvent(event, onTap = null)
+                }
+
+                MotionEvent.ACTION_UP -> {
+                    inkOverlay.onTouchEvent(event) { x, y ->
+                        val viewport = lastViewport ?: return@onTouchEvent
+                        val position = viewport.screenToInnerCell(x, y) ?: return@onTouchEvent
+                        onTapCell?.invoke(position)
+                    }
+                }
+
+                MotionEvent.ACTION_CANCEL -> {
+                    inkOverlay.onTouchEvent(event, onTap = null)
+                }
+
+                else -> true
             }
-            true
         }
     }
 
@@ -71,10 +89,12 @@ internal class GameBoardView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawInternal(canvas)
+        inkOverlay.draw(canvas)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        inkOverlay.onSizeChanged(w)
         rebuildStaticLayout()
         invalidate()
     }
@@ -106,16 +126,19 @@ internal class GameBoardView(
                     playerPosition = delta.playerPosition
                 )
             }
+
             is GameController.RenderDelta.PlayerMoved -> onPlayerMoved(to = delta.to)
             is GameController.RenderDelta.BoxMoved -> onBoxMoved(path = delta.path)
             is GameController.RenderDelta.Undo -> onRevert(
                 playerPosition = delta.playerPosition,
                 boxPositions = delta.boxPositions
             )
+
             is GameController.RenderDelta.Restart -> onRevert(
                 playerPosition = delta.playerPosition,
                 boxPositions = delta.boxPositions
             )
+
             is GameController.RenderDelta.MoveRejected -> onMoveRejected()
             is GameController.RenderDelta.GameWon -> onGameWon(isClean = delta.isClean)
         }
@@ -350,4 +373,5 @@ internal class GameBoardView(
     private fun invalidateRectOnAnimation(rect: Rect) {
         postInvalidateOnAnimation(rect.left, rect.top, rect.right, rect.bottom)
     }
+
 }
