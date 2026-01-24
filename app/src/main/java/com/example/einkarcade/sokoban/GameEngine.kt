@@ -27,10 +27,6 @@ class GameEngine(private val level: Level) {
         return boxMoveHistory.toList()
     }
 
-    private fun hasBoxAt(position: Position): Boolean {
-        return gameState.boxPositions.contains(position)
-    }
-
     fun undo(): List<Position>? {
         if (hasUndoneOnce) return null
         val path = boxMoveHistory.removeLastOrNull() ?: return null
@@ -47,7 +43,7 @@ class GameEngine(private val level: Level) {
         )
 
         gameState.removeBox(boxTo)
-        gameState.boxPositions.add(boxFrom)
+        gameState.addBox(boxFrom)
         gameState.movePlayer(newPlayerPosition)
         hasUndoneOnce = true
         return path
@@ -55,7 +51,7 @@ class GameEngine(private val level: Level) {
 
     fun moveBoxTo(from: Position, to: Position): List<Position>? {
         if (isGameWon) return null
-        if (!hasBoxAt(from)) return null
+        if (!gameState.hasBoxAt(from)) return null
 
         val dirRow = from.row - playerPosition.row
         val dirCol = from.col - playerPosition.col
@@ -109,7 +105,7 @@ class GameEngine(private val level: Level) {
         get() = Array(level.grid.size) { row ->
             Array(level.grid[0].size) { col ->
                 val pos = Position(row, col)
-                level.grid[row][col] != Tile.WALL && !gameState.boxPositions.contains(pos)
+                level.grid[row][col] != Tile.WALL && !gameState.hasBoxAt(pos)
             }
         }
 }

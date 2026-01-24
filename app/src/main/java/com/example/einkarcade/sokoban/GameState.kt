@@ -13,26 +13,27 @@ data class GameState(
         }
     }
 
-    fun moveBox(from: Position, to: Position) {
-        if (!boxPositions.contains(from)) {
-            error("No box at position $from")
-        }
-        boxPositions.remove(from)
-        boxPositions.add(to)
-    }
-
-    fun removeBox(position: Position) {
-        boxPositions.remove(position)
-    }
-
     fun movePlayer(to: Position) {
         playerPosition = to
     }
 
-    fun deepCopy(): GameState {
-        return GameState(
-            playerPosition = playerPosition,
-            boxPositions = boxPositions.toMutableSet()
-        )
+    fun moveBox(from: Position, to: Position) {
+        if (!hasBoxAt(from)) {
+            error("No box at position $from")
+        }
+        removeBox(from)
+        addBox(to)
+    }
+
+    fun hasBoxAt(position: Position): Boolean {
+        return boxPositions.contains(position)
+    }
+
+    fun addBox(position: Position) {
+        boxPositions.add(position)
+    }
+
+    fun removeBox(position: Position) {
+        boxPositions.remove(position)
     }
 }
