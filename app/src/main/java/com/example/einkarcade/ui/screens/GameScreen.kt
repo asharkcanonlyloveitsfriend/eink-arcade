@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -287,7 +288,85 @@ fun GameScreen(
             }
 
 
-            Spacer(modifier = Modifier.weight(1f))
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                // Only show tap-to-advance overlay when game is won
+                if (gameController.isGameWon) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.8f)
+                            .align(Alignment.Center)
+                    ) {
+                        // Right-half tap-to-advance zone
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        gameController.nextLevel()
+                                    }
+                            )
+                        }
+
+                        // Win card content (buttons behave normally)
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .background(Color.White)
+                                    .border(width = 2.dp, color = Color.Black)
+                                    .padding(16.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    val currentRating = gameController.getCurrentRating()
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        BottomIconButton(
+                                            onClick = { gameController.toggleThumbDown() },
+                                            icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
+                                            contentDescription = "Dislike level",
+                                            backgroundColor = Color.White,
+                                            pressedBackgroundColor = Color.White,
+                                            tintColor = Color.DarkGray
+                                        )
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Text(
+                                            text = "You win!",
+                                            color = Color.Black,
+                                            fontSize = 32.sp
+                                        )
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        BottomIconButton(
+                                            onClick = { gameController.toggleThumbUp() },
+                                            icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                            contentDescription = "Like level",
+                                            backgroundColor = Color.White,
+                                            pressedBackgroundColor = Color.White,
+                                            tintColor = Color.DarkGray
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier.padding(16.dp),
@@ -359,59 +438,6 @@ fun GameScreen(
             }
         }
 
-        if (gameController.isGameWon) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        gameController.nextLevel()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .background(Color.White)
-                        .border(width = 2.dp, color = Color.Black)
-                        .padding(16.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        val currentRating = gameController.getCurrentRating()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            BottomIconButton(
-                                onClick = { gameController.toggleThumbDown() },
-                                icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
-                                contentDescription = "Dislike level",
-                                backgroundColor = Color.White,
-                                pressedBackgroundColor = Color.White,
-                                tintColor = Color.DarkGray
-                            )
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Text(
-                                text = "You win!",
-                                color = Color.Black,
-                                fontSize = 32.sp
-                            )
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            BottomIconButton(
-                                onClick = { gameController.toggleThumbUp() },
-                                icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = "Like level",
-                                backgroundColor = Color.White,
-                                pressedBackgroundColor = Color.White,
-                                tintColor = Color.DarkGray
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        // (win overlay and tap zone now handled inside the middle Box above)
     }
 }
