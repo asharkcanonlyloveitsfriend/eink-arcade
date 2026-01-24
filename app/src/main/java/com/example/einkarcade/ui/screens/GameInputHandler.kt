@@ -30,7 +30,7 @@ internal object GameInputHandler {
     ) {
         val tile = gameController.tiles[tappedPosition.row][tappedPosition.col]
         val selectedBox = selection.getSelectedBox()
-        if (tile == Tile.WALL) {
+        if (tile == Tile.VOID) {
             if (selectedBox != null) {
                 selection.setSelectedBox(null)
                 gameController.moveBoxTo(selectedBox, tappedPosition)

@@ -48,7 +48,7 @@ internal class TileDrawer {
         offsetX: Float,
         offsetY: Float
     ) {
-        if (tile == Tile.WALL) return
+        if (tile == Tile.VOID) return
         val tileLeft = offsetX + (colIndex + 1) * cellSize
         val tileTop = offsetY + (rowIndex + 1) * cellSize
         val centerX = tileLeft + cellSize / 2f
@@ -127,7 +127,7 @@ internal class TileDrawer {
         halfStroke: Float
     ) {
         when (tile) {
-            Tile.WALL -> Unit
+            Tile.VOID -> Unit
             Tile.FLOOR -> {
                 canvas.drawRect(left, top, right, bottom, floorFillPaint)
                 canvas.drawRect(

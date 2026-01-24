@@ -67,7 +67,7 @@ data class Level(
                 line.padEnd(maxWidth).mapIndexed { colIndex, ch ->
                     val position = Position(rowIndex, colIndex)
                     when (ch) {
-                        '#' -> Tile.WALL
+                        '#' -> Tile.VOID
                         ' ' -> Tile.FLOOR
                         '.' -> Tile.GOAL
                         '$' -> {

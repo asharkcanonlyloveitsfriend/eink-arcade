@@ -57,11 +57,11 @@ class GameEngine(private val level: Level) {
         val dirCol = from.col - playerPosition.col
         val isAdjacentPush = abs(dirRow) + abs(dirCol) == 1
         val pushedTo = Position(from.row + dirRow, from.col + dirCol)
-        val pushedIntoWall = isAdjacentPush &&
+        val pushedIntoVoid = isAdjacentPush &&
             pushedTo == to &&
-            level.grid[to.row][to.col] == Tile.WALL
+            level.grid[to.row][to.col] == Tile.VOID
 
-        if (pushedIntoWall) {
+        if (pushedIntoVoid) {
             boxMoveHistory.add(listOf(from, to))
             hasUndoneOnce = false
             gameState.removeBox(from)
@@ -105,7 +105,7 @@ class GameEngine(private val level: Level) {
         get() = Array(level.grid.size) { row ->
             Array(level.grid[0].size) { col ->
                 val pos = Position(row, col)
-                level.grid[row][col] != Tile.WALL && !gameState.hasBoxAt(pos)
+                level.grid[row][col] != Tile.VOID && !gameState.hasBoxAt(pos)
             }
         }
 }

@@ -1,6 +1,5 @@
 package com.example.einkarcade.ui.rendering
 
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.annotation.SuppressLint
 import android.content.Context
@@ -253,10 +252,10 @@ internal class GameBoardView(
         val boxFrom = path.first()
         val boxTo = path.last()
         val newPlayer = path[path.size - 2]
-        val isWall = tiles[boxTo.row][boxTo.col] == Tile.WALL
+        val isVoid = tiles[boxTo.row][boxTo.col] == Tile.VOID
         val isLongMove = path.size > 2
 
-        boxPositions = if (isWall) {
+        boxPositions = if (isVoid) {
             boxPositions - boxFrom
         } else {
             boxPositions - boxFrom + boxTo
@@ -280,7 +279,7 @@ internal class GameBoardView(
             )
         )
 
-        if (isWall) {
+        if (isVoid) {
             animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, boxTo))
             animationRunner.enqueue(BlinkAnimation(renderer, viewport, newPlayer))
         } else if (isLongMove) {

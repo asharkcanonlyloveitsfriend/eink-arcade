@@ -254,7 +254,7 @@ internal class LevelTransitionAnimation(
         for (r in tiles.indices) {
             val row = tiles[r]
             for (c in row.indices) {
-                if (row[c] == Tile.WALL) {
+                if (row[c] == Tile.VOID) {
                     val left = (viewport.offsetX + (c + 1) * viewport.cellSize).roundToInt()
                     val top = (viewport.offsetY + (r + 1) * viewport.cellSize).roundToInt()
                     val right = (viewport.offsetX + (c + 2) * viewport.cellSize).roundToInt()

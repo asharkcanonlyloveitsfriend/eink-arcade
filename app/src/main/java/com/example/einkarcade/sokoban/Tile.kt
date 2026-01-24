@@ -1,3 +1,3 @@
 package com.example.einkarcade.sokoban
 
-enum class Tile { FLOOR, GOAL, WALL }
+enum class Tile { FLOOR, GOAL, VOID }
