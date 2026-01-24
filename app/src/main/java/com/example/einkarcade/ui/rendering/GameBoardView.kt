@@ -212,7 +212,7 @@ internal class GameBoardView(
             renderer.drawStaticFrame(Canvas(it))
         }
 
-        animationRunner.enqueue(
+        animationRunner.replaceQueue(
             LevelTransitionAnimation(
                 backgroundBitmap = backgroundBitmap,
                 newBitmap = newBitmap,

@@ -16,11 +16,20 @@ internal class AnimationRunner(
 
     private val queue = ArrayDeque<Animation>()
     private var active: Animation? = null
+    private var generation: Int = 0
+
     fun enqueue(animation: Animation) {
         queue.addLast(animation)
         if (active == null) {
             startNext()
         }
+    }
+
+    fun replaceQueue(animation: Animation) {
+        generation++
+        queue.clear()
+        queue.addLast(animation)
+        startNext()
     }
 
     fun drawUnderEntities(canvas: Canvas) {
@@ -61,12 +70,15 @@ internal class AnimationRunner(
         if (ticks == null) {
             startNext()
         } else {
+            val scheduledGeneration = generation
             val delayMs = ticks * ANIMATION_TICK_MS
-            postDelayed(Runnable { advance() }, delayMs)
+            postDelayed(Runnable { advance(scheduledGeneration) }, delayMs)
         }
     }
 
-    private fun advance() {
+    private fun advance(scheduledGeneration: Int) {
+        if (generation != scheduledGeneration) return
+
         active?.let { invalidateRects(it.dirtyRects()) }
         scheduleNextStep()
     }
