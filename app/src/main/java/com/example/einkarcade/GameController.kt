@@ -18,23 +18,54 @@ class GameController(
 ) {
 
     private val repository = LevelsRepository(context)
+    private val revisionState = mutableLongStateOf(0L)
 
     private var levelSets: List<LevelSet> = emptyList()
-
     private var currentSetIndex: Int = 0
-    private var currentLevelIndex = 0
+    private var currentLevelIndex: Int = 0
     private lateinit var level: Level
     private lateinit var gameEngine: GameEngine
+
+    sealed interface RenderDelta {
+        data class LevelLoaded(
+            val tileMap: TileMap,
+            val playerPosition: Position,
+            val boxPositions: Set<Position>
+        ) : RenderDelta
+
+        data class StateChanged(
+            val playerPosition: Position,
+            val boxPositions: Set<Position>,
+            val annotation: StateChangeAnnotation? = null
+        ) : RenderDelta
+
+        sealed interface StateChangeAnnotation {
+            data object Undo : StateChangeAnnotation
+            data object Restart : StateChangeAnnotation
+            data object PlayerMoved : StateChangeAnnotation
+            data class BoxRemoved(val position: Position) : StateChangeAnnotation
+            data class BoxMoved(val path: List<Position>) : StateChangeAnnotation
+        }
+
+        data class GameWon(val isClean: Boolean) : RenderDelta
+
+        data object MoveRejected : RenderDelta
+    }
+
+    val revision: State<Long>
+        get() = revisionState
+
+    var onRenderDelta: ((RenderDelta) -> Unit)? = null
+        set(value) {
+            field = value
+            value?.invoke(currentLevelLoadedDelta())
+        }
+
     val currentSetName: String
         get() = levelSets[currentSetIndex].name
 
-    private val levelsInCurrentSet: List<Level>
-        get() = levelSets[currentSetIndex].levels
-
-    init {
-        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
-        rebuildState(sets)
-    }
+    val availableSetOptions: List<Pair<Int, String>>
+        get() = levelSets.map { it.id to it.name }
 
     val playerPosition: Position
         get() = gameEngine.playerPosition
@@ -54,62 +85,10 @@ class GameController(
     val levelName: String
         get() = level.name
 
-    sealed interface RenderDelta {
-        data class LevelLoaded(
-            val tileMap: TileMap,
-            val playerPosition: Position,
-            val boxPositions: Set<Position>
-        ) : RenderDelta
-        data class PlayerMoved(val to: Position) : RenderDelta
-        data class BoxMoved(val path: List<Position>) : RenderDelta
-        data class Undo(val playerPosition: Position, val boxPositions: Set<Position>) : RenderDelta
-        data class Restart(val playerPosition: Position, val boxPositions: Set<Position>) : RenderDelta
-        data class GameWon(val isClean: Boolean) : RenderDelta
-
-        data object MoveRejected : RenderDelta
+    init {
+        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
+        rebuildState(sets)
     }
-
-    private fun currentLevelLoadedDelta(): RenderDelta.LevelLoaded = RenderDelta.LevelLoaded(
-        tileMap = tileMap,
-        playerPosition = playerPosition,
-        boxPositions = boxPositions
-    )
-
-    var onRenderDelta: ((RenderDelta) -> Unit)? = null
-        set(value) {
-            field = value
-            value?.invoke(currentLevelLoadedDelta())
-        }
-
-    private fun markChanged() {
-        revisionState.longValue = revisionState.longValue + 1L
-    }
-
-    private fun recordCompletionIfWon() {
-        if (gameEngine.isCleanWin) {
-            val timestamp = repository.recordCompletion(
-                level,
-                gameEngine.getBoxMoveHistory()
-            )
-            level.markCompleted(timestamp)
-        }
-    }
-
-    private fun notifyIfWon() {
-        if (gameEngine.isGameWon) {
-            markChanged()
-            onRenderDelta?.invoke(RenderDelta.GameWon(isClean = gameEngine.isCleanWin))
-        }
-    }
-
-    private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
-
-    private fun persistSelection() {
-        lastSelectionStore.save(levelSets[currentSetIndex].id, level.puzzleId)
-    }
-
-    val availableSetOptions: List<Pair<Int, String>>
-        get() = levelSets.map { it.id to it.name }
 
     fun selectSetById(setId: Int) {
         val idx = levelSets.indexOfFirst { it.id == setId }
@@ -127,15 +106,16 @@ class GameController(
         onRenderDelta?.invoke(currentLevelLoadedDelta())
     }
 
-    // Levels for current set.
     fun levels(): List<Level> = levelsInCurrentSet
 
     fun getCurrentRating(): Int = level.rating
+
     fun toggleThumbUp() {
         level.toggleThumbUp()
         repository.updateRating(level)
         markChanged()
     }
+
     fun toggleThumbDown() {
         level.toggleThumbDown()
         repository.updateRating(level)
@@ -165,12 +145,7 @@ class GameController(
     fun restart() {
         markChanged()
         gameEngine = GameEngine(level)
-        onRenderDelta?.invoke(
-            RenderDelta.Restart(
-                playerPosition = gameEngine.playerPosition,
-                boxPositions = gameEngine.boxPositions
-            )
-        )
+        emitStateChanged(RenderDelta.StateChangeAnnotation.Restart)
     }
 
     fun nextLevel() {
@@ -196,38 +171,65 @@ class GameController(
     fun undo(): Boolean {
         if (gameEngine.undo() == null) return false
         markChanged()
-        onRenderDelta?.invoke(
-            RenderDelta.Undo(
-                playerPosition = gameEngine.playerPosition,
-                boxPositions = gameEngine.boxPositions
-            )
-        )
+        emitStateChanged(RenderDelta.StateChangeAnnotation.Undo)
         return true
     }
 
-    fun movePlayerTo(position: Position): Boolean {
+    fun movePlayerTo(position: Position) {
         val changed = gameEngine.movePlayerTo(position)
         if (changed) {
-            onRenderDelta?.invoke(RenderDelta.PlayerMoved(to = gameEngine.playerPosition))
+            emitStateChanged(RenderDelta.StateChangeAnnotation.PlayerMoved)
         }
-        return changed
     }
 
-    fun moveBoxTo(boxFrom: Position, boxTo: Position): List<Position>? {
+    fun moveBoxTo(boxFrom: Position, boxTo: Position) {
+        if (tileMap.isVoid(boxTo)) {
+            val removed = gameEngine.pushBoxIntoVoid(boxFrom, boxTo)
+            if (!removed) {
+                onRenderDelta?.invoke(RenderDelta.MoveRejected)
+                return
+            }
+            emitStateChanged(
+                RenderDelta.StateChangeAnnotation.BoxRemoved(boxTo)
+            )
+            recordCompletionIfWon()
+            notifyIfWon()
+            return
+        }
         val boxPath = gameEngine.moveBoxTo(boxFrom, boxTo)
         if (boxPath == null) {
             onRenderDelta?.invoke(RenderDelta.MoveRejected)
-            return null
+            return
         }
+        emitStateChanged(
+            RenderDelta.StateChangeAnnotation.BoxMoved(boxPath)
+        )
         recordCompletionIfWon()
-        onRenderDelta?.invoke(RenderDelta.BoxMoved(path = boxPath))
         notifyIfWon()
-        return boxPath
     }
 
-    private val revisionState = mutableLongStateOf(0L)
-    val revision: State<Long>
-        get() = revisionState
+    private val levelsInCurrentSet: List<Level>
+        get() = levelSets[currentSetIndex].levels
+
+    private fun currentLevelLoadedDelta(): RenderDelta.LevelLoaded = RenderDelta.LevelLoaded(
+        tileMap = tileMap,
+        playerPosition = playerPosition,
+        boxPositions = boxPositions
+    )
+
+    private fun emitStateChanged(
+        annotation: RenderDelta.StateChangeAnnotation? = null
+    ) {
+        onRenderDelta?.invoke(
+            RenderDelta.StateChanged(
+                playerPosition = gameEngine.playerPosition,
+                boxPositions = gameEngine.boxPositions,
+                annotation = annotation
+            )
+        )
+    }
+
+    private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
     private fun rebuildState(sets: List<LevelSet>) {
         val nonEmpty = sets.filter { it.levels.isNotEmpty() }
@@ -252,5 +254,30 @@ class GameController(
             }
         }
         level = levelsInCurrentSet[currentLevelIndex]
+    }
+
+    private fun persistSelection() {
+        lastSelectionStore.save(levelSets[currentSetIndex].id, level.puzzleId)
+    }
+
+    private fun markChanged() {
+        revisionState.longValue = revisionState.longValue + 1L
+    }
+
+    private fun recordCompletionIfWon() {
+        if (gameEngine.isCleanWin) {
+            val timestamp = repository.recordCompletion(
+                level,
+                gameEngine.getBoxMoveHistory()
+            )
+            level.markCompleted(timestamp)
+        }
+    }
+
+    private fun notifyIfWon() {
+        if (gameEngine.isGameWon) {
+            markChanged()
+            onRenderDelta?.invoke(RenderDelta.GameWon(isClean = gameEngine.isCleanWin))
+        }
     }
 }

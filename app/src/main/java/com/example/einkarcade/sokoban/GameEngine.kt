@@ -53,22 +53,6 @@ class GameEngine(private val level: Level) {
         if (isGameWon) return null
         if (!gameState.hasBoxAt(from)) return null
 
-        val dirRow = from.row - playerPosition.row
-        val dirCol = from.col - playerPosition.col
-        val isAdjacentPush = abs(dirRow) + abs(dirCol) == 1
-        val pushedTo = Position(from.row + dirRow, from.col + dirCol)
-        val pushedIntoVoid = isAdjacentPush &&
-            pushedTo == to &&
-            level.tileMap.isVoid(to)
-
-        if (pushedIntoVoid) {
-            boxMoveHistory.add(listOf(from, to))
-            hasUndoneOnce = false
-            gameState.removeBox(from)
-            gameState.movePlayer(from)
-            return listOf(from, to)
-        }
-
         // Plan a multi-push move using BoxMover. The walkable grid treats boxes as obstacles,
         // so mark the starting box square walkable for the planning step.
         val gridCopy = walkableGrid.map { it.copyOf() }.toTypedArray()
@@ -90,6 +74,26 @@ class GameEngine(private val level: Level) {
         return boxPath
     }
 
+    fun pushBoxIntoVoid(from: Position, to: Position): Boolean {
+        if (isGameWon) return false
+        if (!gameState.hasBoxAt(from)) return false
+
+        val dirRow = from.row - playerPosition.row
+        val dirCol = from.col - playerPosition.col
+        val isAdjacentPush = abs(dirRow) + abs(dirCol) == 1
+        val pushedTo = Position(from.row + dirRow, from.col + dirCol)
+
+        if (!isAdjacentPush) return false
+        if (pushedTo != to) return false
+        if (!level.tileMap.isVoid(to)) return false
+
+        boxMoveHistory.add(listOf(from, to))
+        hasUndoneOnce = false
+        gameState.removeBox(from)
+        gameState.movePlayer(from)
+        return true
+    }
+    
     fun movePlayerTo(position: Position): Boolean {
         if (isGameWon) return false
 

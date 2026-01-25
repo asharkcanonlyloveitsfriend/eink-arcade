@@ -16,8 +16,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val TICKS_PER_STEP = 2
-private const val STEP_PERCENT = 12   // percent of union rect width per step
-private const val FLASH_GAP_STEPS = 3 // how many sweep steps to wait after the band passes a tile
+private const val STEP_PERCENT = 14   // percent of union rect width per step
+private const val FLASH_GAP_STEPS = 2 // how many sweep steps to wait after the band passes a tile
 
 private enum class TileFlashPhaseType {
     BLACK,

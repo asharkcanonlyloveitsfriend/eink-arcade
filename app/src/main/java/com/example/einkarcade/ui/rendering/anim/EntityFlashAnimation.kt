@@ -17,8 +17,7 @@ internal class EntityFlashAnimation(
     private val renderer: GameRenderer,
     private val viewport: BoardViewport,
     private val playerPosition: Position,
-    private val boxPositions: List<Position>,
-    private val hidePlayer: Boolean = false
+    private val boxPositions: List<Position>
 ) : Animation {
 
     private val darkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -59,7 +58,7 @@ internal class EntityFlashAnimation(
         }
     }
 
-    override fun hidesPlayer(): Boolean = hidePlayer
+    override fun hidesPlayer(): Boolean = true
 
     private enum class Phase {
         FLASH_DARK,

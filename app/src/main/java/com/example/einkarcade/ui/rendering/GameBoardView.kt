@@ -125,19 +125,13 @@ internal class GameBoardView(
                     playerPosition = delta.playerPosition
                 )
             }
-
-            is GameController.RenderDelta.PlayerMoved -> onPlayerMoved(to = delta.to)
-            is GameController.RenderDelta.BoxMoved -> onBoxMoved(path = delta.path)
-            is GameController.RenderDelta.Undo -> onRevert(
-                playerPosition = delta.playerPosition,
-                boxPositions = delta.boxPositions
-            )
-
-            is GameController.RenderDelta.Restart -> onRevert(
-                playerPosition = delta.playerPosition,
-                boxPositions = delta.boxPositions
-            )
-
+            is GameController.RenderDelta.StateChanged -> {
+                onStateChanged(
+                    playerPosition = delta.playerPosition,
+                    boxPositions = delta.boxPositions,
+                    annotation = delta.annotation
+                )
+            }
             is GameController.RenderDelta.MoveRejected -> onMoveRejected()
             is GameController.RenderDelta.GameWon -> onGameWon(isClean = delta.isClean)
         }
@@ -224,77 +218,13 @@ internal class GameBoardView(
         )
     }
 
-    private fun onPlayerMoved(to: Position) {
+    private fun onStateChanged(
+        playerPosition: Position,
+        boxPositions: Set<Position>,
+        annotation: GameController.RenderDelta.StateChangeAnnotation?
+    ) {
         val viewport = lastViewport!!
-
-        val previous = playerPosition!!
-        playerPosition = to
-
-        invalidateRects(
-            renderer.computePlayerRect(viewport, previous),
-            renderer.computePlayerRect(viewport, to)
-        )
-
-        animationRunner.enqueue(
-            EntityFlashAnimation(
-                renderer = renderer,
-                viewport = viewport,
-                playerPosition = previous,
-                boxPositions = emptyList()
-            )
-        )
-    }
-
-    private fun onBoxMoved(path: List<Position>) {
-        val viewport = lastViewport!!
-        val previousPlayer = playerPosition!!
-
-        val boxFrom = path.first()
-        val boxTo = path.last()
-        val newPlayer = path[path.size - 2]
-        val isVoid = tileMap!!.isVoid(boxTo)
-        val isLongMove = path.size > 2
-
-        boxPositions = if (isVoid) {
-            boxPositions - boxFrom
-        } else {
-            boxPositions - boxFrom + boxTo
-        }
-        playerPosition = newPlayer
-
-        invalidateRects(
-            renderer.computeBoxRect(viewport, boxFrom),
-            renderer.computeBoxRect(viewport, boxTo),
-            renderer.computePlayerRect(viewport, previousPlayer),
-            renderer.computePlayerRect(viewport, newPlayer)
-        )
-
-        animationRunner.enqueue(
-            EntityFlashAnimation(
-                renderer = renderer,
-                viewport = viewport,
-                playerPosition = previousPlayer,
-                boxPositions = listOf(boxFrom),
-                hidePlayer = true
-            )
-        )
-
-        if (isVoid) {
-            animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, boxTo))
-            animationRunner.enqueue(BlinkAnimation(renderer, viewport, newPlayer))
-        } else if (isLongMove) {
-            animationRunner.enqueue(
-                BoxPathAnimation(
-                    viewport = viewport,
-                    path = path
-                )
-            )
-        }
-    }
-
-    private fun onRevert(playerPosition: Position, boxPositions: Set<Position>) {
-        val viewport = lastViewport ?: return
-        val previousPlayer = this.playerPosition ?: return
+        val previousPlayer = this.playerPosition!!
         val previousBoxes = this.boxPositions
         val movedBoxes = previousBoxes - boxPositions
         val playerChanged = previousPlayer != playerPosition
@@ -304,10 +234,9 @@ internal class GameBoardView(
         selectedBox = null
 
         val addedBoxes = boxPositions - previousBoxes
-        val boxRects = addedBoxes.map { renderer.computeBoxRect(viewport, it) }.toTypedArray()
         invalidateRects(
             renderer.computePlayerRect(viewport, playerPosition),
-            *boxRects
+            *addedBoxes.map { renderer.computeBoxRect(viewport, it) }.toTypedArray()
         )
 
         if (movedBoxes.isNotEmpty() || playerChanged) {
@@ -316,24 +245,46 @@ internal class GameBoardView(
                     renderer = renderer,
                     viewport = viewport,
                     playerPosition = previousPlayer,
-                    boxPositions = movedBoxes.toList(),
-                    hidePlayer = true
+                    boxPositions = movedBoxes.toList()
                 )
             )
         }
+
+        when (annotation) {
+            is GameController.RenderDelta.StateChangeAnnotation.BoxMoved -> {
+                onBoxMoved(annotation.path)
+            }
+            is GameController.RenderDelta.StateChangeAnnotation.BoxRemoved -> {
+                onBoxRemoved(annotation.position)
+            }
+            else -> {}
+        }
+    }
+
+    private fun onBoxMoved(path: List<Position>) {
+        if (path.size > 2) {
+            val viewport = lastViewport!!
+            animationRunner.enqueue(BoxPathAnimation(viewport, path))
+        }
+    }
+
+    private fun onBoxRemoved(removedPosition: Position) {
+        val viewport = lastViewport!!
+        animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, removedPosition))
+        animationRunner.enqueue(BlinkAnimation(renderer, viewport, this.playerPosition!!))
     }
 
     private fun onMoveRejected() {
-        val viewport = lastViewport ?: return
-        val playerPos = playerPosition ?: return
+        val viewport = lastViewport!!
+        val playerPos = playerPosition!!
 
         animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
     }
 
     private fun onGameWon(isClean: Boolean) {
         if (isClean) return
-        val viewport = lastViewport ?: return
-        val playerPos = playerPosition ?: return
+        val viewport = lastViewport!!
+        val playerPos = playerPosition!!
 
         animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
     }
