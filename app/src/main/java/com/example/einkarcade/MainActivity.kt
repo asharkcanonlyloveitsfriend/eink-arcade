@@ -9,18 +9,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
-import com.example.einkarcade.ui.screens.GameScreen
+import com.example.einkarcade.ui.screens.gameScreen
 import com.example.einkarcade.ui.theme.EinkArcadeTheme
 
 class MainActivity : ComponentActivity() {
-
     companion object {
         // Optional factory for injecting a custom GameController (tests)
         var gameControllerFactory: ((Context) -> GameController)? = null
     }
 
-
     private lateinit var gameController: GameController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -29,9 +28,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             EinkArcadeTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    GameScreen(
+                    gameScreen(
                         modifier = Modifier.padding(innerPadding),
-                        gameController = gameController
+                        gameController = gameController,
                     )
                 }
             }

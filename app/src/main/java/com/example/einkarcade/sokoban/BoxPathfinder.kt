@@ -3,9 +3,12 @@ package com.example.einkarcade.sokoban
 class BoxPathfinder(
     fullGrid: Array<Array<Boolean>>,
     boxStart: Position,
-    playerStart: Position
+    playerStart: Position,
 ) {
-    private data class State(val box: Position, val player: Position)
+    private data class State(
+        val box: Position,
+        val player: Position,
+    )
 
     private val planningGrid: Array<Array<Boolean>> =
         Array(fullGrid.size) { row ->
@@ -29,14 +32,15 @@ class BoxPathfinder(
         visited.add(startState.box to startState.player)
         parents[startState] = null
 
-        val directions = listOf(
-            Position(-1, 0), Position(1, 0),
-            Position(0, -1), Position(0, 1)
-        )
+        val directions =
+            listOf(
+                Position(-1, 0),
+                Position(1, 0),
+                Position(0, -1),
+                Position(0, 1),
+            )
 
-        fun isInside(pos: Position): Boolean {
-            return pos.row in 0 until numRows && pos.col in 0 until numCols
-        }
+        fun isInside(pos: Position): Boolean = pos.row in 0 until numRows && pos.col in 0 until numCols
 
         while (queue.isNotEmpty()) {
             val (box, player) = queue.removeFirst()
@@ -71,7 +75,10 @@ class BoxPathfinder(
         return null
     }
 
-    private fun buildBoxPath(parents: Map<State, State?>, endState: State): List<Position> {
+    private fun buildBoxPath(
+        parents: Map<State, State?>,
+        endState: State,
+    ): List<Position> {
         val reversed = mutableListOf<Position>()
         var current: State? = endState
         while (current != null) {
@@ -83,9 +90,10 @@ class BoxPathfinder(
     }
 
     private fun pathfinderWithBoxAt(box: Position): Pathfinder {
-        val tempGrid = Array(planningGrid.size) { row ->
-            planningGrid[row].copyOf()
-        }
+        val tempGrid =
+            Array(planningGrid.size) { row ->
+                planningGrid[row].copyOf()
+            }
         // For player reachability checks, the box occupies its current square and must be solid.
         tempGrid[box.row][box.col] = false
         return Pathfinder(tempGrid)

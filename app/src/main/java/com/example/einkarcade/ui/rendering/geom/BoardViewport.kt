@@ -2,22 +2,20 @@ package com.example.einkarcade.ui.rendering.geom
 
 import com.example.einkarcade.sokoban.Position
 import kotlin.math.min
-import android.graphics.Rect
-import kotlin.math.roundToInt
 
 internal data class BoardViewport(
     val rows: Int,
     val cols: Int,
     val cellSize: Float,
     val offsetX: Float,
-    val offsetY: Float
+    val offsetY: Float,
 )
 
 internal fun computeBoardViewport(
     surfaceWidth: Float,
     surfaceHeight: Float,
     innerRows: Int,
-    innerCols: Int
+    innerCols: Int,
 ): BoardViewport {
     require(innerRows > 0 && innerCols > 0)
     require(surfaceWidth > 0f && surfaceHeight > 0f)
@@ -37,11 +35,14 @@ internal fun computeBoardViewport(
         cols = cols,
         cellSize = cellSize,
         offsetX = offsetX,
-        offsetY = offsetY
+        offsetY = offsetY,
     )
 }
 
-internal fun BoardViewport.screenToInnerCell(x: Float, y: Float): Position? {
+internal fun BoardViewport.screenToInnerCell(
+    x: Float,
+    y: Float,
+): Position? {
     require(rows > 0 && cols > 0)
 
     val col = ((x - offsetX) / cellSize).toInt()

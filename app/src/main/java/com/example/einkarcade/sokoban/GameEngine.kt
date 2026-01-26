@@ -2,7 +2,9 @@ package com.example.einkarcade.sokoban
 
 import kotlin.math.abs
 
-class GameEngine(private val level: Level) {
+class GameEngine(
+    private val level: Level,
+) {
     private var gameState = GameState.fromLevel(level)
     private val boxMoveHistory: MutableList<List<Position>> = mutableListOf()
     private var hasUndoneOnce: Boolean = false
@@ -20,12 +22,11 @@ class GameEngine(private val level: Level) {
         get() = isGameWon && gameState.boxPositions.size == level.boxPositions.size
 
     val isAtStart: Boolean
-        get() = gameState.playerPosition == level.playerStart &&
-            gameState.boxPositions == level.boxPositions
+        get() =
+            gameState.playerPosition == level.playerStart &&
+                gameState.boxPositions == level.boxPositions
 
-    fun getBoxMoveHistory(): List<List<Position>> {
-        return boxMoveHistory.toList()
-    }
+    fun getBoxMoveHistory(): List<List<Position>> = boxMoveHistory.toList()
 
     fun undo(): List<Position>? {
         if (hasUndoneOnce) return null
@@ -33,14 +34,16 @@ class GameEngine(private val level: Level) {
 
         val boxFrom = path.first()
         val boxTo = path.last()
-        val firstStep = Position(
-            row = path[1].row - boxFrom.row,
-            col = path[1].col - boxFrom.col
-        )
-        val newPlayerPosition = Position(
-            row = boxFrom.row - firstStep.row,
-            col = boxFrom.col - firstStep.col
-        )
+        val firstStep =
+            Position(
+                row = path[1].row - boxFrom.row,
+                col = path[1].col - boxFrom.col,
+            )
+        val newPlayerPosition =
+            Position(
+                row = boxFrom.row - firstStep.row,
+                col = boxFrom.col - firstStep.col,
+            )
 
         gameState.removeBox(boxTo)
         gameState.addBox(boxFrom)
@@ -49,22 +52,27 @@ class GameEngine(private val level: Level) {
         return path
     }
 
-    fun moveBoxTo(from: Position, to: Position): List<Position>? {
+    fun moveBoxTo(
+        from: Position,
+        to: Position,
+    ): List<Position>? {
         if (isGameWon) return null
         if (!gameState.hasBoxAt(from)) return null
 
-        val boxPathfinder = BoxPathfinder(
-            fullGrid = walkableGrid,
-            boxStart = from,
-            playerStart = playerPosition
-        )
+        val boxPathfinder =
+            BoxPathfinder(
+                fullGrid = walkableGrid,
+                boxStart = from,
+                playerStart = playerPosition,
+            )
 
         val boxPath = boxPathfinder.findBoxPath(to) ?: return null
-        val finalPlayerPosition = if (boxPath.size >= 2) {
-            boxPath[boxPath.size - 2]
-        } else {
-            boxPath.last()
-        }
+        val finalPlayerPosition =
+            if (boxPath.size >= 2) {
+                boxPath[boxPath.size - 2]
+            } else {
+                boxPath.last()
+            }
 
         // Apply the planned move.
         boxMoveHistory.add(boxPath)
@@ -74,7 +82,10 @@ class GameEngine(private val level: Level) {
         return boxPath
     }
 
-    fun pushBoxIntoVoid(from: Position, to: Position): Boolean {
+    fun pushBoxIntoVoid(
+        from: Position,
+        to: Position,
+    ): Boolean {
         if (isGameWon) return false
         if (!gameState.hasBoxAt(from)) return false
 
@@ -106,8 +117,9 @@ class GameEngine(private val level: Level) {
     }
 
     private val walkableGrid: Array<Array<Boolean>>
-        get() = WalkableGrid.withObstacles(
-            baseGrid = level.tileMap.walkableGrid(),
-            obstacles = gameState.boxPositions
-        )
+        get() =
+            WalkableGrid.withObstacles(
+                baseGrid = level.tileMap.walkableGrid(),
+                obstacles = gameState.boxPositions,
+            )
 }

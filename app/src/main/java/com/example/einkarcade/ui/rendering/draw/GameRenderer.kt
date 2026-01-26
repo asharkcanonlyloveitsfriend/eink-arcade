@@ -17,7 +17,7 @@ internal class GameRenderer(
     private val assets: AndroidGameAssets,
     private val backgroundDrawer: BackgroundDrawer,
     private val tileDrawer: TileDrawer,
-    private val entityDrawer: EntityDrawer
+    private val entityDrawer: EntityDrawer,
 ) {
     private var staticFrameBitmap: Bitmap? = null
     private lateinit var geometry: ResolvedEntityGeometry
@@ -26,12 +26,13 @@ internal class GameRenderer(
         viewWidth: Int,
         viewHeight: Int,
         viewport: BoardViewport,
-        tileMap: TileMap
+        tileMap: TileMap,
     ) {
-        geometry = ResolvedEntityGeometry.compute(
-            viewport.cellSize,
-            assets = assets
-        )
+        geometry =
+            ResolvedEntityGeometry.compute(
+                viewport.cellSize,
+                assets = assets,
+            )
 
         val bitmap = createBitmap(viewWidth, viewHeight)
         val canvas = Canvas(bitmap)
@@ -47,7 +48,11 @@ internal class GameRenderer(
         canvas.drawBitmap(bitmap, 0f, 0f, null)
     }
 
-    fun drawBackground(canvas: Canvas, viewWidth: Int, viewHeight: Int) {
+    fun drawBackground(
+        canvas: Canvas,
+        viewWidth: Int,
+        viewHeight: Int,
+    ) {
         backgroundDrawer.draw(canvas, viewWidth, viewHeight)
     }
 
@@ -55,7 +60,7 @@ internal class GameRenderer(
         canvas: Canvas,
         viewport: BoardViewport,
         boxPositions: Set<Position>,
-        selectedBox: Position?
+        selectedBox: Position?,
     ) {
         entityDrawer.drawBoxes(canvas, viewport, geometry, boxPositions)
 
@@ -65,7 +70,7 @@ internal class GameRenderer(
                 viewport = viewport,
                 geometry = geometry,
                 position = selectedBox,
-                resId = R.drawable.box_selected
+                resId = R.drawable.box_selected,
             )
         }
     }
@@ -73,22 +78,23 @@ internal class GameRenderer(
     fun drawPlayer(
         canvas: Canvas,
         viewport: BoardViewport,
-        playerPosition: Position
+        playerPosition: Position,
     ) {
         entityDrawer.drawPlayer(
             canvas = canvas,
             viewport = viewport,
             geometry = geometry,
-            playerPosition = playerPosition
+            playerPosition = playerPosition,
         )
     }
 
     fun computeBoxRect(
         viewport: BoardViewport,
-        position: Position
+        position: Position,
     ): Rect {
-        val origin = Position(position.row + 1, position.col + 1)
-            .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+        val origin =
+            Position(position.row + 1, position.col + 1)
+                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
         val bounds = geometry.boxBoundsPx
 
         val left = (origin.x + bounds.left).toInt()
@@ -101,10 +107,11 @@ internal class GameRenderer(
 
     fun computePlayerRect(
         viewport: BoardViewport,
-        position: Position
+        position: Position,
     ): Rect {
-        val origin = Position(position.row + 1, position.col + 1)
-            .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+        val origin =
+            Position(position.row + 1, position.col + 1)
+                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
         val bounds = geometry.playerBoundsPx
 
         val left = (origin.x + bounds.left).toInt()
@@ -115,20 +122,17 @@ internal class GameRenderer(
         return Rect(left, top, right, bottom)
     }
 
-    fun getPlayerBodyBitmap(): Bitmap {
-        return assets.getBitmap(R.drawable.player_slime, geometry.playerSizePx)
-    }
+    fun getPlayerBodyBitmap(): Bitmap = assets.getBitmap(R.drawable.player_slime, geometry.playerSizePx)
 
-    fun getBoxBitmap(): Bitmap {
-        return assets.getBitmap(R.drawable.box, geometry.boxSizePx)
-    }
+    fun getBoxBitmap(): Bitmap = assets.getBitmap(R.drawable.box, geometry.boxSizePx)
 
     fun computePlayerEyesRect(
         viewport: BoardViewport,
-        position: Position
+        position: Position,
     ): Rect {
-        val origin = Position(position.row + 1, position.col + 1)
-            .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+        val origin =
+            Position(position.row + 1, position.col + 1)
+                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
 
         val spriteLeft = origin.x + geometry.playerBoundsPx.left
         val spriteTop = origin.y + geometry.playerBoundsPx.top
@@ -141,19 +145,18 @@ internal class GameRenderer(
         return Rect(left, top, right, bottom)
     }
 
-    fun getPlayerEyesBlinkBitmap(): Bitmap {
-        return assets.getBitmap(R.drawable.player_eyes_blink, geometry.playerSizePx)
-    }
+    fun getPlayerEyesBlinkBitmap(): Bitmap = assets.getBitmap(R.drawable.player_eyes_blink, geometry.playerSizePx)
 
     fun drawVanishingBox(
         canvas: Canvas,
         viewport: BoardViewport,
         position: Position,
-        scale: Float
+        scale: Float,
     ) {
         if (scale <= 0f) return
-        val origin = Position(position.row + 1, position.col + 1)
-            .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+        val origin =
+            Position(position.row + 1, position.col + 1)
+                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
         val bounds = geometry.boxBoundsPx
         val left = origin.x + bounds.left
         val top = origin.y + bounds.top

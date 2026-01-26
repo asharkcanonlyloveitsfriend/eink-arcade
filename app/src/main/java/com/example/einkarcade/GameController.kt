@@ -14,9 +14,8 @@ import com.example.einkarcade.sokoban.TileMap
 class GameController(
     context: Context,
     injectedSets: List<LevelSet>? = null,
-    private val lastSelectionStore: LastSelectionStore = LastSelectionStore(context)
+    private val lastSelectionStore: LastSelectionStore = LastSelectionStore(context),
 ) {
-
     private val repository = LevelsRepository(context)
     private val revisionState = mutableLongStateOf(0L)
 
@@ -30,24 +29,34 @@ class GameController(
         data class LevelLoaded(
             val tileMap: TileMap,
             val playerPosition: Position,
-            val boxPositions: Set<Position>
+            val boxPositions: Set<Position>,
         ) : RenderDelta
 
         data class StateChanged(
             val playerPosition: Position,
             val boxPositions: Set<Position>,
-            val annotation: StateChangeAnnotation? = null
+            val annotation: StateChangeAnnotation? = null,
         ) : RenderDelta
 
         sealed interface StateChangeAnnotation {
             data object Undo : StateChangeAnnotation
+
             data object Restart : StateChangeAnnotation
+
             data object PlayerMoved : StateChangeAnnotation
-            data class BoxRemoved(val position: Position) : StateChangeAnnotation
-            data class BoxMoved(val path: List<Position>) : StateChangeAnnotation
+
+            data class BoxRemoved(
+                val position: Position,
+            ) : StateChangeAnnotation
+
+            data class BoxMoved(
+                val path: List<Position>,
+            ) : StateChangeAnnotation
         }
 
-        data class GameWon(val isClean: Boolean) : RenderDelta
+        data class GameWon(
+            val isClean: Boolean,
+        ) : RenderDelta
 
         data object MoveRejected : RenderDelta
     }
@@ -160,7 +169,8 @@ class GameController(
 
     fun previousLevel() {
         val levels = levelsInCurrentSet
-        currentLevelIndex = if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
+        currentLevelIndex =
+            if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
         level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
         persistSelection()
@@ -182,7 +192,10 @@ class GameController(
         }
     }
 
-    fun moveBoxTo(boxFrom: Position, boxTo: Position) {
+    fun moveBoxTo(
+        boxFrom: Position,
+        boxTo: Position,
+    ) {
         if (tileMap.isVoid(boxTo)) {
             val removed = gameEngine.pushBoxIntoVoid(boxFrom, boxTo)
             if (!removed) {
@@ -190,7 +203,7 @@ class GameController(
                 return
             }
             emitStateChanged(
-                RenderDelta.StateChangeAnnotation.BoxRemoved(boxTo)
+                RenderDelta.StateChangeAnnotation.BoxRemoved(boxTo),
             )
             recordCompletionIfWon()
             notifyIfWon()
@@ -202,7 +215,7 @@ class GameController(
             return
         }
         emitStateChanged(
-            RenderDelta.StateChangeAnnotation.BoxMoved(boxPath)
+            RenderDelta.StateChangeAnnotation.BoxMoved(boxPath),
         )
         recordCompletionIfWon()
         notifyIfWon()
@@ -211,21 +224,20 @@ class GameController(
     private val levelsInCurrentSet: List<Level>
         get() = levelSets[currentSetIndex].levels
 
-    private fun currentLevelLoadedDelta(): RenderDelta.LevelLoaded = RenderDelta.LevelLoaded(
-        tileMap = tileMap,
-        playerPosition = playerPosition,
-        boxPositions = boxPositions
-    )
+    private fun currentLevelLoadedDelta(): RenderDelta.LevelLoaded =
+        RenderDelta.LevelLoaded(
+            tileMap = tileMap,
+            playerPosition = playerPosition,
+            boxPositions = boxPositions,
+        )
 
-    private fun emitStateChanged(
-        annotation: RenderDelta.StateChangeAnnotation? = null
-    ) {
+    private fun emitStateChanged(annotation: RenderDelta.StateChangeAnnotation? = null) {
         onRenderDelta?.invoke(
             RenderDelta.StateChanged(
                 playerPosition = gameEngine.playerPosition,
                 boxPositions = gameEngine.boxPositions,
-                annotation = annotation
-            )
+                annotation = annotation,
+            ),
         )
     }
 
@@ -266,10 +278,11 @@ class GameController(
 
     private fun recordCompletionIfWon() {
         if (gameEngine.isCleanWin) {
-            val timestamp = repository.recordCompletion(
-                level,
-                gameEngine.getBoxMoveHistory()
-            )
+            val timestamp =
+                repository.recordCompletion(
+                    level,
+                    gameEngine.getBoxMoveHistory(),
+                )
             level.markCompleted(timestamp)
         }
     }

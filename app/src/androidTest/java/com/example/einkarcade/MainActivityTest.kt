@@ -2,11 +2,11 @@ package com.example.einkarcade
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.click
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.sokoban.Level
 import org.junit.After
@@ -14,7 +14,6 @@ import org.junit.Rule
 import org.junit.Test
 
 class MainActivityTest {
-
     companion object {
         init {
             MainActivity.gameControllerFactory = { ctx ->
@@ -24,30 +23,32 @@ class MainActivityTest {
                         LevelSet(
                             id = "training",
                             name = "Training",
-                            levels = listOf(
-                                Level.fromAscii(
-                                    "Level 1",
-                                    """
-                                    ####
-                                    #@$.#
-                                    ####
-                                    """.trimIndent()
+                            levels =
+                                listOf(
+                                    Level.fromAscii(
+                                        "Level 1",
+                                        """
+                                        ####
+                                        #@$.#
+                                        ####
+                                        """.trimIndent(),
+                                    ),
+                                    Level.fromAscii(
+                                        "Level 2",
+                                        """
+                                        #####
+                                        #@ $.#
+                                        #####
+                                        """.trimIndent(),
+                                    ),
                                 ),
-                                Level.fromAscii(
-                                    "Level 2",
-                                    """
-                                    #####
-                                    #@ $.#
-                                    #####
-                                    """.trimIndent()
-                                )
-                            )
-                        )
-                    )
+                        ),
+                    ),
                 )
             }
         }
     }
+
     @After
     fun tearDown() {
         MainActivity.gameControllerFactory = null
@@ -81,9 +82,11 @@ class MainActivityTest {
     }
 }
 
-private fun gridOffset(row: Int, col: Int): Offset {
-    return Offset(
+private fun gridOffset(
+    row: Int,
+    col: Int,
+): Offset =
+    Offset(
         MainActivity.GRID_OFFSET_X + MainActivity.CELL_SIZE * (col + 0.5f),
-        MainActivity.GRID_OFFSET_Y + MainActivity.CELL_SIZE * (row + 0.5f)
+        MainActivity.GRID_OFFSET_Y + MainActivity.CELL_SIZE * (row + 0.5f),
     )
-}

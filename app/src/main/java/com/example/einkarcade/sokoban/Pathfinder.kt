@@ -3,10 +3,12 @@ package com.example.einkarcade.sokoban
 import java.util.PriorityQueue
 
 class Pathfinder(
-    private val walkableGrid: Array<Array<Boolean>>
+    private val walkableGrid: Array<Array<Boolean>>,
 ) {
-
-    fun canFindPath(from: Position, to: Position): Boolean {
+    fun canFindPath(
+        from: Position,
+        to: Position,
+    ): Boolean {
         if (from == to) return true
         val numRows = walkableGrid.size
         val numCols = walkableGrid[0].size
@@ -15,19 +17,21 @@ class Pathfinder(
         val gScore = Array(numRows) { IntArray(numCols) { Int.MAX_VALUE } }
         val visited = Array(numRows) { BooleanArray(numCols) }
 
-        fun heuristic(a: Position, b: Position): Int {
-            return kotlin.math.abs(a.row - b.row) + kotlin.math.abs(a.col - b.col)
-        }
+        fun heuristic(
+            a: Position,
+            b: Position,
+        ): Int = kotlin.math.abs(a.row - b.row) + kotlin.math.abs(a.col - b.col)
 
         gScore[from.row][from.col] = 0
         openSet.add(from to heuristic(from, to))
 
-        val directions = listOf(
-            Position(-1, 0), // up
-            Position(1, 0),  // down
-            Position(0, -1), // left
-            Position(0, 1)   // right
-        )
+        val directions =
+            listOf(
+                Position(-1, 0), // up
+                Position(1, 0), // down
+                Position(0, -1), // left
+                Position(0, 1), // right
+            )
 
         while (openSet.isNotEmpty()) {
             val entry = openSet.poll() ?: break
@@ -52,6 +56,4 @@ class Pathfinder(
 
         return false
     }
-
 }
-

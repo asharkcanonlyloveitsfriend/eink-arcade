@@ -8,17 +8,23 @@ import android.graphics.Rect
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.createBitmap
 
-internal class AndroidGameAssets(private val context: Context) {
-    private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        isFilterBitmap = false
-    }
+internal class AndroidGameAssets(
+    private val context: Context,
+) {
+    private val bitmapPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            isFilterBitmap = false
+        }
 
     private val cache = mutableMapOf<Int, MutableMap<Int, Bitmap>>()
     private val opaqueBoundsCache = mutableMapOf<Int, MutableMap<Int, Rect>>()
 
     fun bitmapPaint(): Paint = bitmapPaint
 
-    fun getBitmap(resId: Int, sizePx: Int): Bitmap {
+    fun getBitmap(
+        resId: Int,
+        sizePx: Int,
+    ): Bitmap {
         require(sizePx > 0)
         val bySize = cache.getOrPut(resId) { mutableMapOf() }
         return bySize.getOrPut(sizePx) {
@@ -32,7 +38,10 @@ internal class AndroidGameAssets(private val context: Context) {
         }
     }
 
-    fun getOpaqueBounds(resId: Int, sizePx: Int): Rect {
+    fun getOpaqueBounds(
+        resId: Int,
+        sizePx: Int,
+    ): Rect {
         require(sizePx > 0)
         val bySize = opaqueBoundsCache.getOrPut(resId) { mutableMapOf() }
         return bySize.getOrPut(sizePx) {

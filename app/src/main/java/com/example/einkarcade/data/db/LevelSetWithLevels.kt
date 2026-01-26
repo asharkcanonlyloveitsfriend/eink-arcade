@@ -7,9 +7,9 @@ data class LevelWithPuzzle(
     @Embedded val level: LevelEntity,
     @Relation(
         parentColumn = "puzzle_id",
-        entityColumn = "id"
+        entityColumn = "id",
     )
-    val puzzle: PuzzleEntity
+    val puzzle: PuzzleEntity,
 )
 
 data class LevelSetWithLevels(
@@ -17,7 +17,7 @@ data class LevelSetWithLevels(
     @Relation(
         parentColumn = "id",
         entityColumn = "level_set_id",
-        entity = LevelEntity::class
+        entity = LevelEntity::class,
     )
-    val levels: List<LevelWithPuzzle>
+    val levels: List<LevelWithPuzzle>,
 )

@@ -37,15 +37,18 @@ interface LevelsDao {
     fun clearPuzzles()
 
     @Query("UPDATE puzzles SET rating = :rating, is_locally_edited = 1 WHERE id = :puzzleId")
-    fun updatePuzzleRating(puzzleId: Int, rating: Int)
+    fun updatePuzzleRating(
+        puzzleId: Int,
+        rating: Int,
+    )
 
     @Query(
-        "UPDATE puzzles SET last_completed_at = :lastCompletedAt, user_solution = :userSolution, is_locally_edited = 1 WHERE id = :puzzleId"
+        "UPDATE puzzles SET last_completed_at = :lastCompletedAt, user_solution = :userSolution, is_locally_edited = 1 WHERE id = :puzzleId",
     )
     fun updatePuzzleCompletion(
         puzzleId: Int,
         lastCompletedAt: String?,
-        userSolution: String?
+        userSolution: String?,
     )
 
     @Query("SELECT user_solution FROM puzzles WHERE id = :puzzleId")

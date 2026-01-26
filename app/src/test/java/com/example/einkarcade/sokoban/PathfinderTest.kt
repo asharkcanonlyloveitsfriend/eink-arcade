@@ -1,104 +1,115 @@
 package com.example.einkarcade.sokoban
 
-import org.junit.Assert.*
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PathfinderTest {
     @Test
     fun testCanFindPath_StraightLineClear() {
-        val asciiMap = """
+        val asciiMap =
+            """
             #####
             #@ x#
             #   #
             #   #
             #####
-        """.trimIndent()
-        val (pathfinder, from, to) = parsePathfinderWithEndpoints(asciiMap).let {
-            Triple(
-                it.first,
-                it.second,
-                it.third
-            )
-        }
+            """.trimIndent()
+        val (pathfinder, from, to) =
+            parsePathfinderWithEndpoints(asciiMap).let {
+                Triple(
+                    it.first,
+                    it.second,
+                    it.third,
+                )
+            }
 
         assertTrue(pathfinder.canFindPath(from, to))
     }
 
     @Test
     fun testCanFindPath_StraightLineBlockedByWall() {
-        val asciiMap = """
+        val asciiMap =
+            """
             #####
             #@#x#
             #   #
             #   #
             #####
-        """.trimIndent()
-        val (pathfinder, from, to) = parsePathfinderWithEndpoints(asciiMap).let {
-            Triple(
-                it.first,
-                it.second,
-                it.third
-            )
-        }
+            """.trimIndent()
+        val (pathfinder, from, to) =
+            parsePathfinderWithEndpoints(asciiMap).let {
+                Triple(
+                    it.first,
+                    it.second,
+                    it.third,
+                )
+            }
 
         assertTrue(pathfinder.canFindPath(from, to))
     }
 
     @Test
     fun testCanFindPath_MultiTurn() {
-        val asciiMap = """
+        val asciiMap =
+            """
             #########
             #@     ##
             ### #   #
             #x# ### #
             #     # #
             #########
-        """.trimIndent()
-        val (pathfinder, from, to) = parsePathfinderWithEndpoints(asciiMap).let {
-            Triple(
-                it.first,
-                it.second,
-                it.third
-            )
-        }
+            """.trimIndent()
+        val (pathfinder, from, to) =
+            parsePathfinderWithEndpoints(asciiMap).let {
+                Triple(
+                    it.first,
+                    it.second,
+                    it.third,
+                )
+            }
 
         assertTrue(pathfinder.canFindPath(from, to))
     }
 
     @Test
     fun testCanFindPath_TurnCorner() {
-        val asciiMap = """
+        val asciiMap =
+            """
             #####
             #@  #
             # # #
             #  x#
             #####
-        """.trimIndent()
-        val (pathfinder, from, to) = parsePathfinderWithEndpoints(asciiMap).let {
-            Triple(
-                it.first,
-                it.second,
-                it.third
-            )
-        }
+            """.trimIndent()
+        val (pathfinder, from, to) =
+            parsePathfinderWithEndpoints(asciiMap).let {
+                Triple(
+                    it.first,
+                    it.second,
+                    it.third,
+                )
+            }
 
         assertTrue(pathfinder.canFindPath(from, to))
     }
 
     @Test
     fun testCanFindPath_CompletelyBlocked() {
-        val asciiMap = """
+        val asciiMap =
+            """
             #######
             #@ # x#
             #######
-        """.trimIndent()
-        val (pathfinder, from, to) = parsePathfinderWithEndpoints(asciiMap).let {
-            Triple(
-                it.first,
-                it.second,
-                it.third
-            )
-        }
+            """.trimIndent()
+        val (pathfinder, from, to) =
+            parsePathfinderWithEndpoints(asciiMap).let {
+                Triple(
+                    it.first,
+                    it.second,
+                    it.third,
+                )
+            }
 
         assertFalse(pathfinder.canFindPath(from, to))
     }
@@ -123,15 +134,19 @@ class PathfinderTest {
     }
 
     private fun createPathfinderFromAscii(asciiMap: String): Pathfinder {
-        val grid = asciiMap.lines().map { row ->
-            row.map { char ->
-                when (char) {
-                    '#', '$' -> false
-                    ' ', '@', 'x' -> true
-                    else -> error("Unsupported character: $char")
-                }
-            }.toTypedArray()
-        }.toTypedArray()
+        val grid =
+            asciiMap
+                .lines()
+                .map { row ->
+                    row
+                        .map { char ->
+                            when (char) {
+                                '#', '$' -> false
+                                ' ', '@', 'x' -> true
+                                else -> error("Unsupported character: $char")
+                            }
+                        }.toTypedArray()
+                }.toTypedArray()
 
         return Pathfinder(grid)
     }

@@ -2,15 +2,15 @@ package com.example.einkarcade.ui.screens
 
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
+
 internal object GameInputHandler {
     interface BoxSelection {
         fun getSelectedBox(): Position?
+
         fun setSelectedBox(position: Position?)
     }
 
-    fun handleBackKeyUp(
-        gameController: GameController
-    ) {
+    fun handleBackKeyUp(gameController: GameController) {
         val undone = gameController.undo()
         if (undone) {
             return
@@ -25,7 +25,7 @@ internal object GameInputHandler {
     fun handleTap(
         tappedPosition: Position,
         gameController: GameController,
-        selection: BoxSelection
+        selection: BoxSelection,
     ) {
         val selectedBox = selection.getSelectedBox()
         if (gameController.tileMap.isVoid(tappedPosition)) {

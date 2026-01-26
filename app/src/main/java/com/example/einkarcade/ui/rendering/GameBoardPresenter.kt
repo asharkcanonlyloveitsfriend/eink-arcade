@@ -1,11 +1,10 @@
 package com.example.einkarcade.ui.rendering
 
 import android.view.View
-import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.GameController
+import com.example.einkarcade.sokoban.Position
 
 interface GameBoardPresenter {
-
     /** Apply a render delta produced by the GameController. */
     fun applyDelta(delta: GameController.RenderDelta)
 
@@ -14,6 +13,7 @@ interface GameBoardPresenter {
 
     /** Selection remains surface-owned for now. */
     fun getSelectedBox(): Position?
+
     fun setSelectedBox(position: Position?)
 
     /** Expose the underlying View for AndroidView embedding. */

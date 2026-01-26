@@ -26,15 +26,16 @@ import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameBoardView(
-    context: Context
-) : View(context), GameBoardPresenter {
-
-    private val renderer = GameRenderer(
-        assets = AndroidGameAssets(context),
-        backgroundDrawer = BackgroundDrawer(context),
-        tileDrawer = TileDrawer(),
-        entityDrawer = EntityDrawer(AndroidGameAssets(context))
-    )
+    context: Context,
+) : View(context),
+    GameBoardPresenter {
+    private val renderer =
+        GameRenderer(
+            assets = AndroidGameAssets(context),
+            backgroundDrawer = BackgroundDrawer(context),
+            tileDrawer = TileDrawer(),
+            entityDrawer = EntityDrawer(AndroidGameAssets(context)),
+        )
 
     private var tileMap: TileMap? = null
     private var boxPositions: Set<Position> = emptySet()
@@ -45,15 +46,17 @@ internal class GameBoardView(
 
     private var lastViewport: BoardViewport? = null
 
-    private val inkOverlay = InkOverlay(
-        density = resources.displayMetrics.density,
-        invalidate = { l, t, r, b -> postInvalidateOnAnimation(l, t, r, b) }
-    )
+    private val inkOverlay =
+        InkOverlay(
+            density = resources.displayMetrics.density,
+            invalidate = { l, t, r, b -> postInvalidateOnAnimation(l, t, r, b) },
+        )
 
-    private val animationRunner = AnimationRunner(
-        invalidateRects = { rects -> invalidateRects(*rects) },
-        postDelayed = { runnable, delayMs -> postDelayed(runnable, delayMs) }
-    )
+    private val animationRunner =
+        AnimationRunner(
+            invalidateRects = { rects -> invalidateRects(*rects) },
+            postDelayed = { runnable, delayMs -> postDelayed(runnable, delayMs) },
+        )
 
     init {
         setOnTouchListener { _, event ->
@@ -78,7 +81,9 @@ internal class GameBoardView(
                     inkOverlay.onTouchEvent(event, onTap = null)
                 }
 
-                else -> true
+                else -> {
+                    true
+                }
             }
         }
     }
@@ -91,7 +96,12 @@ internal class GameBoardView(
         inkOverlay.draw(canvas)
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    override fun onSizeChanged(
+        w: Int,
+        h: Int,
+        oldw: Int,
+        oldh: Int,
+    ) {
         super.onSizeChanged(w, h, oldw, oldh)
         inkOverlay.onSizeChanged(w)
         rebuildStaticLayout()
@@ -112,7 +122,7 @@ internal class GameBoardView(
 
         invalidateRects(
             previous?.let { renderer.computeBoxRect(viewport, it) },
-            position?.let { renderer.computeBoxRect(viewport, it) }
+            position?.let { renderer.computeBoxRect(viewport, it) },
         )
     }
 
@@ -122,18 +132,25 @@ internal class GameBoardView(
                 onLevelLoaded(
                     tileMap = delta.tileMap,
                     boxPositions = delta.boxPositions,
-                    playerPosition = delta.playerPosition
+                    playerPosition = delta.playerPosition,
                 )
             }
+
             is GameController.RenderDelta.StateChanged -> {
                 onStateChanged(
                     playerPosition = delta.playerPosition,
                     boxPositions = delta.boxPositions,
-                    annotation = delta.annotation
+                    annotation = delta.annotation,
                 )
             }
-            is GameController.RenderDelta.MoveRejected -> onMoveRejected()
-            is GameController.RenderDelta.GameWon -> onGameWon(isClean = delta.isClean)
+
+            is GameController.RenderDelta.MoveRejected -> {
+                onMoveRejected()
+            }
+
+            is GameController.RenderDelta.GameWon -> {
+                onGameWon(isClean = delta.isClean)
+            }
         }
     }
 
@@ -154,14 +171,14 @@ internal class GameBoardView(
             canvas = canvas,
             viewport = viewport,
             boxPositions = boxPositions,
-            selectedBox = selectedBox
+            selectedBox = selectedBox,
         )
 
         if (!animationRunner.hidesPlayer()) {
             renderer.drawPlayer(
                 canvas = canvas,
                 viewport = viewport,
-                playerPosition = playerPos
+                playerPosition = playerPos,
             )
         }
 
@@ -171,7 +188,7 @@ internal class GameBoardView(
     private fun onLevelLoaded(
         tileMap: TileMap,
         boxPositions: Set<Position>,
-        playerPosition: Position
+        playerPosition: Position,
     ) {
         val previousTileMap = this.tileMap
         val previousViewport = lastViewport
@@ -190,21 +207,24 @@ internal class GameBoardView(
             return
         }
 
-        val backgroundBitmap = createBitmap(width, height).also {
-            renderer.drawBackground(Canvas(it), width, height)
-        }
+        val backgroundBitmap =
+            createBitmap(width, height).also {
+                renderer.drawBackground(Canvas(it), width, height)
+            }
 
         // Rebuild layout for new tiles
         rebuildStaticLayout()
 
-        val newViewport = lastViewport ?: run {
-            invalidate()
-            return
-        }
+        val newViewport =
+            lastViewport ?: run {
+                invalidate()
+                return
+            }
 
-        val newBitmap = createBitmap(width, height).also {
-            renderer.drawStaticFrame(Canvas(it))
-        }
+        val newBitmap =
+            createBitmap(width, height).also {
+                renderer.drawStaticFrame(Canvas(it))
+            }
 
         animationRunner.replaceQueue(
             LevelTransitionAnimation(
@@ -213,15 +233,15 @@ internal class GameBoardView(
                 oldViewport = previousViewport,
                 newViewport = newViewport,
                 oldTileMap = previousTileMap!!,
-                newTileMap = tileMap
-            )
+                newTileMap = tileMap,
+            ),
         )
     }
 
     private fun onStateChanged(
         playerPosition: Position,
         boxPositions: Set<Position>,
-        annotation: GameController.RenderDelta.StateChangeAnnotation?
+        annotation: GameController.RenderDelta.StateChangeAnnotation?,
     ) {
         val viewport = lastViewport!!
         val previousPlayer = this.playerPosition!!
@@ -236,7 +256,7 @@ internal class GameBoardView(
         val addedBoxes = boxPositions - previousBoxes
         invalidateRects(
             renderer.computePlayerRect(viewport, playerPosition),
-            *addedBoxes.map { renderer.computeBoxRect(viewport, it) }.toTypedArray()
+            *addedBoxes.map { renderer.computeBoxRect(viewport, it) }.toTypedArray(),
         )
 
         if (movedBoxes.isNotEmpty() || playerChanged) {
@@ -245,8 +265,8 @@ internal class GameBoardView(
                     renderer = renderer,
                     viewport = viewport,
                     playerPosition = previousPlayer,
-                    boxPositions = movedBoxes.toList()
-                )
+                    boxPositions = movedBoxes.toList(),
+                ),
             )
         }
 
@@ -254,9 +274,11 @@ internal class GameBoardView(
             is GameController.RenderDelta.StateChangeAnnotation.BoxMoved -> {
                 onBoxMoved(annotation.path)
             }
+
             is GameController.RenderDelta.StateChangeAnnotation.BoxRemoved -> {
                 onBoxRemoved(annotation.position)
             }
+
             else -> {}
         }
     }
@@ -293,19 +315,20 @@ internal class GameBoardView(
         if (width <= 0 || height <= 0) return
         if (tileMap == null) return
 
-        val viewport = computeBoardViewport(
-            surfaceWidth = width.toFloat(),
-            surfaceHeight = height.toFloat(),
-            innerRows = tileMap!!.rowCount,
-            innerCols = tileMap!!.columnCount
-        )
+        val viewport =
+            computeBoardViewport(
+                surfaceWidth = width.toFloat(),
+                surfaceHeight = height.toFloat(),
+                innerRows = tileMap!!.rowCount,
+                innerCols = tileMap!!.columnCount,
+            )
         lastViewport = viewport
 
         renderer.rebuildStaticLayout(
             viewWidth = width,
             viewHeight = height,
             viewport = viewport,
-            tileMap = tileMap!!
+            tileMap = tileMap!!,
         )
     }
 
@@ -323,5 +346,4 @@ internal class GameBoardView(
     private fun invalidateRectOnAnimation(rect: Rect) {
         postInvalidateOnAnimation(rect.left, rect.top, rect.right, rect.bottom)
     }
-
 }

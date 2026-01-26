@@ -7,16 +7,16 @@
     <!-- Gray background -->
     <path
         android:pathData="M31,37h38v11h-38z"
-        android:fillColor="#9ca3af"/>
+        android:fillColor="#9ca3af" />
 
     <!-- Left eye blink -->
     <path
         android:pathData="M31,41h14v3h-14z"
-        android:fillColor="#020617"/>
+        android:fillColor="#020617" />
 
     <!-- Right eye blink -->
     <path
         android:pathData="M55,41h14v3h-14z"
-        android:fillColor="#020617"/>
+        android:fillColor="#020617" />
 
 </vector>

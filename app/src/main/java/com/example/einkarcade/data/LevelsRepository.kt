@@ -2,9 +2,9 @@ package com.example.einkarcade.data
 
 import android.content.Context
 import com.example.einkarcade.content.LevelSet
-import com.example.einkarcade.data.db.LevelsDatabase
 import com.example.einkarcade.data.db.LevelEntity
 import com.example.einkarcade.data.db.LevelSetEntity
+import com.example.einkarcade.data.db.LevelsDatabase
 import com.example.einkarcade.data.db.PuzzleEntity
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
@@ -21,13 +21,17 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 
 // Repository for loading/saving level sets.
-class LevelsRepository(private val context: Context) {
+class LevelsRepository(
+    private val context: Context,
+) {
     companion object {
         private const val DEFAULT_SYNC_ENDPOINT = "http://192.168.0.75:8000/api/sync"
     }
+
     private val database = LevelsDatabase.getInstance(context)
     private val dao = database.levelsDao()
-    private val utcFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
+    private val utcFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
 
     fun loadSets(): List<LevelSet>? {
         if (dao.countLevelSets() == 0) {
@@ -36,20 +40,22 @@ class LevelsRepository(private val context: Context) {
         val sets = dao.getAllLevelSetsWithLevels()
         if (sets.isEmpty()) return null
         return sets.map { set ->
-            val levels = set.levels.sortedBy { it.level.id }.map { levelWithPuzzle ->
-                val level = Level.fromAscii(
-                    levelWithPuzzle.level.title,
-                    levelWithPuzzle.puzzle.grid,
-                    levelWithPuzzle.level.puzzleId
-                )
-                level.setRating(levelWithPuzzle.puzzle.rating)
-                level.setCompletedAt(levelWithPuzzle.puzzle.lastCompletedAt)
-                level
-            }
+            val levels =
+                set.levels.sortedBy { it.level.id }.map { levelWithPuzzle ->
+                    val level =
+                        Level.fromAscii(
+                            levelWithPuzzle.level.title,
+                            levelWithPuzzle.puzzle.grid,
+                            levelWithPuzzle.level.puzzleId,
+                        )
+                    level.setRating(levelWithPuzzle.puzzle.rating)
+                    level.setCompletedAt(levelWithPuzzle.puzzle.lastCompletedAt)
+                    level
+                }
             LevelSet(
                 id = set.levelSet.id,
                 name = set.levelSet.title,
-                levels = levels
+                levels = levels,
             )
         }
     }
@@ -58,41 +64,47 @@ class LevelsRepository(private val context: Context) {
         dao.updatePuzzleRating(level.puzzleId, level.rating)
     }
 
-    fun recordCompletion(level: Level, solutionHistory: List<List<com.example.einkarcade.sokoban.Position>>): String {
+    fun recordCompletion(
+        level: Level,
+        solutionHistory: List<List<com.example.einkarcade.sokoban.Position>>,
+    ): String {
         val normalized = normalizeSolution(solutionHistory)
         val newPushCount = normalized.size
         val existingSolutionJson = dao.getUserSolution(level.puzzleId)
         val timestamp = utcFormatter.format(Instant.now())
 
-        val shouldPersistSolution = if (existingSolutionJson == null) {
-            true
-        } else {
-            val existingPushCount = try {
-                JSONArray(existingSolutionJson).length()
-            } catch (e: Exception) {
-                // If parsing fails, treat as no existing solution
-                Int.MAX_VALUE
+        val shouldPersistSolution =
+            if (existingSolutionJson == null) {
+                true
+            } else {
+                val existingPushCount =
+                    try {
+                        JSONArray(existingSolutionJson).length()
+                    } catch (e: Exception) {
+                        // If parsing fails, treat as no existing solution
+                        Int.MAX_VALUE
+                    }
+                newPushCount < existingPushCount
             }
-            newPushCount < existingPushCount
-        }
 
         if (shouldPersistSolution) {
-            val userSolutionJson = if (normalized.isEmpty()) {
-                null
-            } else {
-                val outerArray = JSONArray()
-                for (path in normalized) {
-                    val pathArray = JSONArray()
-                    for (pos in path) {
-                        val posArray = JSONArray()
-                        posArray.put(pos.row)
-                        posArray.put(pos.col)
-                        pathArray.put(posArray)
+            val userSolutionJson =
+                if (normalized.isEmpty()) {
+                    null
+                } else {
+                    val outerArray = JSONArray()
+                    for (path in normalized) {
+                        val pathArray = JSONArray()
+                        for (pos in path) {
+                            val posArray = JSONArray()
+                            posArray.put(pos.row)
+                            posArray.put(pos.col)
+                            pathArray.put(posArray)
+                        }
+                        outerArray.put(pathArray)
                     }
-                    outerArray.put(pathArray)
+                    outerArray.toString()
                 }
-                outerArray.toString()
-            }
             dao.updatePuzzleCompletion(level.puzzleId, timestamp, userSolutionJson)
         } else {
             dao.updatePuzzleCompletion(level.puzzleId, timestamp, existingSolutionJson)
@@ -160,7 +172,7 @@ class LevelsRepository(private val context: Context) {
     private data class SyncResponseData(
         val levelSets: List<LevelSetEntity>,
         val levels: List<LevelEntity>,
-        val puzzles: List<PuzzleEntity>
+        val puzzles: List<PuzzleEntity>,
     )
 
     @Throws(JSONException::class)
@@ -176,32 +188,34 @@ class LevelsRepository(private val context: Context) {
             levelSets.add(
                 LevelSetEntity(
                     id = item.getInt("id"),
-                    title = item.getString("title")
-                )
+                    title = item.getString("title"),
+                ),
             )
         }
 
         val puzzles = ArrayList<PuzzleEntity>(puzzlesJson.length())
         for (i in 0 until puzzlesJson.length()) {
             val item = puzzlesJson.getJSONObject(i)
-            val lastCompletedAt = if (item.isNull("last_completed_at")) {
-                null
-            } else {
-                item.getString("last_completed_at")
-            }
-            val userSolution = if (item.isNull("user_solution")) {
-                null
-            } else {
-                item.getString("user_solution")
-            }
+            val lastCompletedAt =
+                if (item.isNull("last_completed_at")) {
+                    null
+                } else {
+                    item.getString("last_completed_at")
+                }
+            val userSolution =
+                if (item.isNull("user_solution")) {
+                    null
+                } else {
+                    item.getString("user_solution")
+                }
             puzzles.add(
                 PuzzleEntity(
                     id = item.getInt("id"),
                     grid = item.getString("grid"),
                     rating = item.getInt("rating"),
                     lastCompletedAt = lastCompletedAt,
-                    userSolution = userSolution
-                )
+                    userSolution = userSolution,
+                ),
             )
         }
 
@@ -213,33 +227,38 @@ class LevelsRepository(private val context: Context) {
                     id = item.getInt("id"),
                     title = item.getString("title"),
                     levelSetId = item.getInt("level_set_id"),
-                    puzzleId = item.getInt("puzzle_id")
-                )
+                    puzzleId = item.getInt("puzzle_id"),
+                ),
             )
         }
         return SyncResponseData(levelSets = levelSets, levels = levels, puzzles = puzzles)
     }
 
     @Throws(Exception::class)
-    private fun postJson(endpoint: String, body: String): String {
+    private fun postJson(
+        endpoint: String,
+        body: String,
+    ): String {
         val url = URL(endpoint)
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 10_000
-            readTimeout = 15_000
-            doInput = true
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-        }
+        val connection =
+            (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                doInput = true
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+            }
         connection.outputStream.use { stream ->
             stream.write(body.toByteArray(Charsets.UTF_8))
         }
         val responseCode = connection.responseCode
-        val stream = if (responseCode in 200..299) {
-            connection.inputStream
-        } else {
-            connection.errorStream
-        }
+        val stream =
+            if (responseCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
         val response = BufferedReader(InputStreamReader(stream)).use { it.readText() }
         connection.disconnect()
         if (responseCode !in 200..299) {
@@ -256,7 +275,7 @@ class LevelsRepository(private val context: Context) {
         } catch (e: Exception) {
             throw IllegalStateException(
                 "BootstrapFailed: server unreachable or sync error. Is the server running?",
-                e
+                e,
             )
         } finally {
             executor.shutdown()

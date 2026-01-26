@@ -7,12 +7,13 @@ import android.view.MotionEvent
 
 internal class InkOverlay(
     density: Float,
-    private val invalidate: (Int, Int, Int, Int) -> Unit
+    private val invalidate: (Int, Int, Int, Int) -> Unit,
 ) {
-    private val paint: Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = Color.argb(120, 0, 0, 0)
-    }
+    private val paint: Paint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.argb(120, 0, 0, 0)
+        }
 
     private val radiusFraction = 0.06f
 
@@ -39,7 +40,10 @@ internal class InkOverlay(
         radiusPx = width * radiusFraction
     }
 
-    fun onTouchEvent(event: MotionEvent, onTap: ((Float, Float) -> Unit)? = null): Boolean {
+    fun onTouchEvent(
+        event: MotionEvent,
+        onTap: ((Float, Float) -> Unit)? = null,
+    ): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 // Do not activate ink on down; only after movement exceeds a threshold.
@@ -157,7 +161,9 @@ internal class InkOverlay(
                 return true
             }
 
-            else -> return true
+            else -> {
+                return true
+            }
         }
     }
 
@@ -167,13 +173,16 @@ internal class InkOverlay(
         canvas.drawCircle(x, y, radiusPx, paint)
     }
 
-    private fun invalidateCircle(centerX: Float, centerY: Float) {
+    private fun invalidateCircle(
+        centerX: Float,
+        centerY: Float,
+    ) {
         val r = radiusPx + 2f
         invalidate(
             (centerX - r).toInt(),
             (centerY - r).toInt(),
             (centerX + r).toInt(),
-            (centerY + r).toInt()
+            (centerY + r).toInt(),
         )
     }
 }

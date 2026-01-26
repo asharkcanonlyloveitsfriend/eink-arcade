@@ -6,9 +6,8 @@ data class Level(
     val grid: List<List<Tile>>,
     val playerStart: Position,
     val boxPositions: Set<Position>,
-    val puzzleId: Int = -1
-)
-{
+    val puzzleId: Int = -1,
+) {
     // -1 = thumbs down, 0 = none, 1 = thumbs up. Not part of equality/hashCode.
     var rating: Int = 0
         private set
@@ -20,7 +19,6 @@ data class Level(
 
     val tileMap: TileMap
         get() = TileMap(grid)
-
 
     fun setRating(value: Int) {
         rating = value
@@ -45,15 +43,26 @@ data class Level(
     }
 
     companion object {
-        fun fromAscii(name: String, ascii: String, puzzleId: Int = -1): Level {
+        fun fromAscii(
+            name: String,
+            ascii: String,
+            puzzleId: Int = -1,
+        ): Level {
             val parsed = parseAscii(ascii)
-            return Level(name, ascii, parsed.initialGrid, parsed.playerStart, parsed.boxes, puzzleId)
+            return Level(
+                name,
+                ascii,
+                parsed.initialGrid,
+                parsed.playerStart,
+                parsed.boxes,
+                puzzleId,
+            )
         }
 
         private data class ParsedAscii(
             val initialGrid: List<List<Tile>>,
             val playerStart: Position,
-            val boxes: Set<Position>
+            val boxes: Set<Position>,
         )
 
         /** Parses Sokoban ASCII into a base grid (VOID/FLOOR/GOAL) and extracts player + boxes. */
@@ -64,37 +73,52 @@ data class Level(
             var playerStart: Position? = null
             val boxes = mutableSetOf<Position>()
 
-            val grid = lines.mapIndexed { rowIndex, line ->
-                line.padEnd(maxWidth).mapIndexed { colIndex, ch ->
-                    val position = Position(rowIndex, colIndex)
-                    when (ch) {
-                        '#' -> Tile.VOID
-                        ' ' -> Tile.FLOOR
-                        '.' -> Tile.GOAL
-                        '$' -> {
-                            boxes.add(position)
-                            Tile.FLOOR
+            val grid =
+                lines.mapIndexed { rowIndex, line ->
+                    line.padEnd(maxWidth).mapIndexed { colIndex, ch ->
+                        val position = Position(rowIndex, colIndex)
+                        when (ch) {
+                            '#' -> {
+                                Tile.VOID
+                            }
+
+                            ' ' -> {
+                                Tile.FLOOR
+                            }
+
+                            '.' -> {
+                                Tile.GOAL
+                            }
+
+                            '$' -> {
+                                boxes.add(position)
+                                Tile.FLOOR
+                            }
+
+                            '*' -> {
+                                boxes.add(position)
+                                Tile.GOAL
+                            }
+
+                            '@' -> {
+                                playerStart = position
+                                Tile.FLOOR
+                            }
+
+                            '+' -> {
+                                playerStart = position
+                                Tile.GOAL
+                            }
+
+                            else -> {
+                                Tile.FLOOR
+                            }
                         }
-                        '*' -> {
-                            boxes.add(position)
-                            Tile.GOAL
-                        }
-                        '@' -> {
-                            playerStart = position
-                            Tile.FLOOR
-                        }
-                        '+' -> {
-                            playerStart = position
-                            Tile.GOAL
-                        }
-                        else -> Tile.FLOOR
                     }
                 }
-            }
 
             val start = requireNotNull(playerStart) { "Player start '@' not found in level" }
             return ParsedAscii(grid, start, boxes)
         }
     }
 }
-

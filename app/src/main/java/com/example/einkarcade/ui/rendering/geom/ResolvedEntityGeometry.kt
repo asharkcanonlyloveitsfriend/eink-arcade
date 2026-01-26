@@ -14,9 +14,8 @@ class ResolvedEntityGeometry(
     val playerEyesOpaqueBoundsPx: Rect,
     val playerBoundsPx: Rect,
     val playerSizePx: Int,
-    val playerInsetPx: Int
+    val playerInsetPx: Int,
 ) {
-
     companion object {
         private const val BOX_SCALE = 0.90f
         private const val PLAYER_SCALE = 0.80f
@@ -28,7 +27,7 @@ class ResolvedEntityGeometry(
          */
         internal fun compute(
             tileSizePx: Float,
-            assets: AndroidGameAssets
+            assets: AndroidGameAssets,
         ): ResolvedEntityGeometry {
             val (boxSizePx, boxBoundsPx) = computeBoxGeometry(tileSizePx)
             val (playerSizePx, playerBoundsPx, playerInsetPx) =
@@ -37,51 +36,56 @@ class ResolvedEntityGeometry(
             return ResolvedEntityGeometry(
                 boxBoundsPx = boxBoundsPx,
                 boxSizePx = boxSizePx,
-                playerEyesOpaqueBoundsPx = computePlayerEyesOpaqueBounds(
-                    sizePx = playerSizePx,
-                    assets = assets
-                ),
+                playerEyesOpaqueBoundsPx =
+                    computePlayerEyesOpaqueBounds(
+                        sizePx = playerSizePx,
+                        assets = assets,
+                    ),
                 playerBoundsPx = playerBoundsPx,
                 playerSizePx = playerSizePx,
-                playerInsetPx = playerInsetPx
+                playerInsetPx = playerInsetPx,
             )
         }
 
         private fun computeBoxGeometry(tileSizePx: Float): Pair<Int, Rect> {
-            val boxSizePx = snapToWholePixel(tileSizePx * BOX_SCALE)
-                .toInt()
-                .coerceAtLeast(1)
+            val boxSizePx =
+                snapToWholePixel(tileSizePx * BOX_SCALE)
+                    .toInt()
+                    .coerceAtLeast(1)
 
-            val boxInsetPx = snapToWholePixel((tileSizePx - boxSizePx) / 2f)
-                .toInt()
+            val boxInsetPx =
+                snapToWholePixel((tileSizePx - boxSizePx) / 2f)
+                    .toInt()
 
-            val boxBoundsPx = Rect(
-                boxInsetPx,
-                boxInsetPx,
-                boxInsetPx + boxSizePx,
-                boxInsetPx + boxSizePx
-            )
+            val boxBoundsPx =
+                Rect(
+                    boxInsetPx,
+                    boxInsetPx,
+                    boxInsetPx + boxSizePx,
+                    boxInsetPx + boxSizePx,
+                )
 
             return boxSizePx to boxBoundsPx
         }
 
-        private fun computePlayerGeometry(
-            tileSizePx: Float
-        ): Triple<Int, Rect, Int> {
-            val playerSizePx = snapToWholePixel(tileSizePx * PLAYER_SCALE)
-                .toInt()
-                .coerceAtLeast(1)
+        private fun computePlayerGeometry(tileSizePx: Float): Triple<Int, Rect, Int> {
+            val playerSizePx =
+                snapToWholePixel(tileSizePx * PLAYER_SCALE)
+                    .toInt()
+                    .coerceAtLeast(1)
 
-            val insetPx = snapToWholePixel(
-                (tileSizePx - playerSizePx) / 2f
-            ).toInt()
+            val insetPx =
+                snapToWholePixel(
+                    (tileSizePx - playerSizePx) / 2f,
+                ).toInt()
 
-            val boundsPx = Rect(
-                insetPx,
-                insetPx,
-                insetPx + playerSizePx,
-                insetPx + playerSizePx
-            )
+            val boundsPx =
+                Rect(
+                    insetPx,
+                    insetPx,
+                    insetPx + playerSizePx,
+                    insetPx + playerSizePx,
+                )
 
             return Triple(playerSizePx, boundsPx, insetPx)
         }
@@ -92,18 +96,19 @@ class ResolvedEntityGeometry(
          */
         private fun computePlayerEyesOpaqueBounds(
             sizePx: Int,
-            assets: AndroidGameAssets
+            assets: AndroidGameAssets,
         ): Rect {
             val cached = playerEyesOpaqueBoundsCache[sizePx]
             if (cached != null) {
                 return Rect(cached)
             }
-            val computed = Rect(
-                assets.getOpaqueBounds(
-                    R.drawable.player_eyes_blink,
-                    sizePx
+            val computed =
+                Rect(
+                    assets.getOpaqueBounds(
+                        R.drawable.player_eyes_blink,
+                        sizePx,
+                    ),
                 )
-            )
             playerEyesOpaqueBoundsCache[sizePx] = Rect(computed)
             return computed
         }

@@ -13,23 +13,23 @@ import androidx.room.PrimaryKey
             entity = LevelSetEntity::class,
             parentColumns = ["id"],
             childColumns = ["level_set_id"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = PuzzleEntity::class,
             parentColumns = ["id"],
             childColumns = ["puzzle_id"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
     indices = [
         Index("level_set_id"),
-        Index("puzzle_id")
-    ]
+        Index("puzzle_id"),
+    ],
 )
 data class LevelEntity(
     @PrimaryKey val id: Int,
     val title: String,
     @ColumnInfo(name = "level_set_id") val levelSetId: Int,
-    @ColumnInfo(name = "puzzle_id") val puzzleId: Int
+    @ColumnInfo(name = "puzzle_id") val puzzleId: Int,
 )

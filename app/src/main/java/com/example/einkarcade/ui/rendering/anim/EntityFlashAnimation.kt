@@ -17,24 +17,23 @@ internal class EntityFlashAnimation(
     private val renderer: GameRenderer,
     private val viewport: BoardViewport,
     private val playerPosition: Position,
-    private val boxPositions: List<Position>
+    private val boxPositions: List<Position>,
 ) : Animation {
-
-    private val darkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        colorFilter = PorterDuffColorFilter(0xFF8E8E8E.toInt(), PorterDuff.Mode.SRC_IN)
-    }
-    private val lightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        colorFilter = PorterDuffColorFilter(0xFFF2F2F2.toInt(), PorterDuff.Mode.SRC_IN)
-    }
+    private val darkPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            colorFilter = PorterDuffColorFilter(0xFF8E8E8E.toInt(), PorterDuff.Mode.SRC_IN)
+        }
+    private val lightPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            colorFilter = PorterDuffColorFilter(0xFFF2F2F2.toInt(), PorterDuff.Mode.SRC_IN)
+        }
 
     private val playerBitmap by lazy { renderer.getPlayerBodyBitmap() }
     private val boxBitmap by lazy { renderer.getBoxBitmap() }
     private val drawItems: List<DrawItem> = buildDrawItems()
     private var phase: Phase = Phase.FLASH_DARK
 
-    override fun dirtyRects(): Array<Rect?> {
-        return drawItems.map { it.rect }.toTypedArray()
-    }
+    override fun dirtyRects(): Array<Rect?> = drawItems.map { it.rect }.toTypedArray()
 
     override fun drawOverEntities(canvas: Canvas) {
         when (phase) {
@@ -42,31 +41,35 @@ internal class EntityFlashAnimation(
                 drawFlashes(canvas, darkPaint)
                 phase = Phase.FLASH_LIGHT
             }
+
             Phase.FLASH_LIGHT -> {
                 drawFlashes(canvas, lightPaint)
                 phase = Phase.CLEANUP
             }
+
             Phase.CLEANUP -> {}
         }
     }
 
-    override fun ticksUntilNextStep(): Int? {
-        return when (phase) {
+    override fun ticksUntilNextStep(): Int? =
+        when (phase) {
             Phase.FLASH_DARK -> FLASH_DARK_TICKS
             Phase.FLASH_LIGHT -> FLASH_LIGHT_TICKS
             Phase.CLEANUP -> null
         }
-    }
 
     override fun hidesPlayer(): Boolean = true
 
     private enum class Phase {
         FLASH_DARK,
         FLASH_LIGHT,
-        CLEANUP
+        CLEANUP,
     }
 
-    private fun drawFlashes(canvas: Canvas, paint: Paint) {
+    private fun drawFlashes(
+        canvas: Canvas,
+        paint: Paint,
+    ) {
         for (item in drawItems) {
             canvas.drawBitmap(item.bitmap, null, item.rect, paint)
         }
@@ -83,6 +86,6 @@ internal class EntityFlashAnimation(
 
     private data class DrawItem(
         val bitmap: Bitmap,
-        val rect: Rect
+        val rect: Rect,
     )
 }

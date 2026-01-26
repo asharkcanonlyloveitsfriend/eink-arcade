@@ -4,15 +4,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LevelTest {
-
     @Test
     fun testFromAscii_ParsesGridAndExtractsEntities() {
-        val ascii = """
+        val ascii =
+            """
             #######
             #@ $. #
             #   . #
             #######
-        """.trimIndent()
+            """.trimIndent()
 
         val level = Level.fromAscii("Rectangular", ascii)
 

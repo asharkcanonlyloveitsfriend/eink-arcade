@@ -9,7 +9,9 @@ import android.graphics.Rect
 import com.example.einkarcade.R
 import kotlin.math.roundToInt
 
-internal class BackgroundDrawer(context: Context) {
+internal class BackgroundDrawer(
+    context: Context,
+) {
     private val resources = context.resources
     private var backgroundBitmap: Bitmap? = null
     private var cachedScreenBitmap: Bitmap? = null
@@ -19,7 +21,11 @@ internal class BackgroundDrawer(context: Context) {
     private val backgroundSrcRect = Rect()
     private val backgroundDstRect = Rect()
 
-    fun draw(canvas: Canvas, viewW: Int, viewH: Int) {
+    fun draw(
+        canvas: Canvas,
+        viewW: Int,
+        viewH: Int,
+    ) {
         require(viewW > 0 && viewH > 0)
 
         val cached = cachedScreenBitmap

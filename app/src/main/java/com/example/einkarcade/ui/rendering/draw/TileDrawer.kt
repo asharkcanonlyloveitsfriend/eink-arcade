@@ -9,19 +9,25 @@ import com.example.einkarcade.ui.rendering.geom.BoardViewport
 
 internal class TileDrawer {
     private val floorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-    private val floorStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFF0F0F0.toInt()
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
+    private val floorStrokePaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFF0F0F0.toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+        }
     private val goalFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE0E0E0.toInt() }
-    private val goalStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
+    private val goalStrokePaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+        }
 
-    fun drawTiles(canvas: Canvas, viewport: BoardViewport, tileMap: TileMap) {
+    fun drawTiles(
+        canvas: Canvas,
+        viewport: BoardViewport,
+        tileMap: TileMap,
+    ) {
         val cellSize = viewport.cellSize
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
@@ -46,10 +52,13 @@ internal class TileDrawer {
         top: Float,
         right: Float,
         bottom: Float,
-        halfStroke: Float
+        halfStroke: Float,
     ) {
         when (tile) {
-            Tile.VOID -> Unit
+            Tile.VOID -> {
+                Unit
+            }
+
             Tile.FLOOR -> {
                 canvas.drawRect(left, top, right, bottom, floorFillPaint)
                 canvas.drawRect(
@@ -57,9 +66,10 @@ internal class TileDrawer {
                     top + halfStroke,
                     right - halfStroke,
                     bottom - halfStroke,
-                    floorStrokePaint
+                    floorStrokePaint,
                 )
             }
+
             Tile.GOAL -> {
                 canvas.drawRect(left, top, right, bottom, goalFillPaint)
                 canvas.drawRect(
@@ -67,7 +77,7 @@ internal class TileDrawer {
                     top + halfStroke,
                     right - halfStroke,
                     bottom - halfStroke,
-                    goalStrokePaint
+                    goalStrokePaint,
                 )
             }
         }

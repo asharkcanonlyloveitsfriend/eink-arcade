@@ -11,9 +11,8 @@ import java.util.ArrayDeque
  */
 internal class AnimationRunner(
     private val invalidateRects: (Array<Rect?>) -> Unit,
-    private val postDelayed: (Runnable, Long) -> Unit
+    private val postDelayed: (Runnable, Long) -> Unit,
 ) {
-
     private val queue = ArrayDeque<Animation>()
     private var active: Animation? = null
     private var generation: Int = 0
@@ -82,5 +81,4 @@ internal class AnimationRunner(
         active?.let { invalidateRects(it.dirtyRects()) }
         scheduleNextStep()
     }
-
 }

@@ -16,22 +16,23 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val TICKS_PER_STEP = 2
-private const val STEP_PERCENT = 14   // percent of union rect width per step
+private const val STEP_PERCENT = 14 // percent of union rect width per step
 private const val FLASH_GAP_STEPS = 2 // how many sweep steps to wait after the band passes a tile
 
 private enum class TileFlashPhaseType {
     BLACK,
     NORMAL,
-    WHITE
+    WHITE,
 }
 
-private val TILE_FLASH_PHASES = listOf(
-    TileFlashPhaseType.BLACK,
-    TileFlashPhaseType.NORMAL,
-    TileFlashPhaseType.WHITE,
-    TileFlashPhaseType.NORMAL,
-    TileFlashPhaseType.BLACK,
-)
+private val TILE_FLASH_PHASES =
+    listOf(
+        TileFlashPhaseType.BLACK,
+        TileFlashPhaseType.NORMAL,
+        TileFlashPhaseType.WHITE,
+        TileFlashPhaseType.NORMAL,
+        TileFlashPhaseType.BLACK,
+    )
 
 internal class LevelTransitionAnimation(
     private val backgroundBitmap: Bitmap,
@@ -39,9 +40,8 @@ internal class LevelTransitionAnimation(
     private val oldViewport: BoardViewport,
     private val newViewport: BoardViewport,
     private val oldTileMap: TileMap,
-    private val newTileMap: TileMap
+    private val newTileMap: TileMap,
 ) : Animation {
-
     override fun hidesBoard(): Boolean = true
 
     override fun dirtyRects(): Array<Rect?> = arrayOf(unionBoardRect)
@@ -51,12 +51,10 @@ internal class LevelTransitionAnimation(
     private data class FlashTile(
         val rect: Rect,
         val completionS: Float,
-        var phaseIndex: Int = 0
+        var phaseIndex: Int = 0,
     )
 
-    private fun isDone(): Boolean {
-        return flashTiles.all { it.phaseIndex >= TILE_FLASH_PHASES.size }
-    }
+    private fun isDone(): Boolean = flashTiles.all { it.phaseIndex >= TILE_FLASH_PHASES.size }
 
     override fun drawOverEntities(canvas: Canvas) {
         if (isDone()) return
@@ -71,11 +69,12 @@ internal class LevelTransitionAnimation(
             if (back < tile.completionS + gapS) continue
 
             val phase = TILE_FLASH_PHASES[tile.phaseIndex]
-            val paint = when (phase) {
-                TileFlashPhaseType.BLACK -> flashBlackPaint
-                TileFlashPhaseType.WHITE -> flashWhitePaint
-                TileFlashPhaseType.NORMAL -> null
-            }
+            val paint =
+                when (phase) {
+                    TileFlashPhaseType.BLACK -> flashBlackPaint
+                    TileFlashPhaseType.WHITE -> flashWhitePaint
+                    TileFlashPhaseType.NORMAL -> null
+                }
 
             if (paint != null) {
                 canvas.withSave {
@@ -88,51 +87,73 @@ internal class LevelTransitionAnimation(
         }
     }
 
-    override fun ticksUntilNextStep(): Int? =
-        if (isDone()) null else TICKS_PER_STEP
+    override fun ticksUntilNextStep(): Int? = if (isDone()) null else TICKS_PER_STEP
 
-    private val invertPaint = Paint().apply {
-        colorFilter = ColorMatrixColorFilter(
-            android.graphics.ColorMatrix(
-                floatArrayOf(
-                    -1f, 0f, 0f, 0f, 255f,
-                    0f, -1f, 0f, 0f, 255f,
-                    0f, 0f, -1f, 0f, 255f,
-                    0f, 0f, 0f, 1f, 0f
+    private val invertPaint =
+        Paint().apply {
+            colorFilter =
+                ColorMatrixColorFilter(
+                    android.graphics.ColorMatrix(
+                        floatArrayOf(
+                            -1f,
+                            0f,
+                            0f,
+                            0f,
+                            255f,
+                            0f,
+                            -1f,
+                            0f,
+                            0f,
+                            255f,
+                            0f,
+                            0f,
+                            -1f,
+                            0f,
+                            255f,
+                            0f,
+                            0f,
+                            0f,
+                            1f,
+                            0f,
+                        ),
+                    ),
                 )
-            )
+            isAntiAlias = false
+        }
+
+    private val flashBlackPaint =
+        Paint().apply {
+            color = android.graphics.Color.BLACK
+            isAntiAlias = false
+        }
+
+    private val flashWhitePaint =
+        Paint().apply {
+            color = android.graphics.Color.WHITE
+            isAntiAlias = false
+        }
+
+    private val oldBoardRect: Rect =
+        Rect(
+            (oldViewport.offsetX + 1f * oldViewport.cellSize).roundToInt(),
+            (oldViewport.offsetY + 1f * oldViewport.cellSize).roundToInt(),
+            (oldViewport.offsetX + (oldViewport.cols - 1) * oldViewport.cellSize).roundToInt(),
+            (oldViewport.offsetY + (oldViewport.rows - 1) * oldViewport.cellSize).roundToInt(),
         )
-        isAntiAlias = false
-    }
 
-    private val flashBlackPaint = Paint().apply {
-        color = android.graphics.Color.BLACK
-        isAntiAlias = false
-    }
+    private val newBoardRect: Rect =
+        Rect(
+            (newViewport.offsetX + 1f * newViewport.cellSize).roundToInt(),
+            (newViewport.offsetY + 1f * newViewport.cellSize).roundToInt(),
+            (newViewport.offsetX + (newViewport.cols - 1) * newViewport.cellSize).roundToInt(),
+            (newViewport.offsetY + (newViewport.rows - 1) * newViewport.cellSize).roundToInt(),
+        )
 
-    private val flashWhitePaint = Paint().apply {
-        color = android.graphics.Color.WHITE
-        isAntiAlias = false
-    }
-
-    private val oldBoardRect: Rect = Rect(
-        (oldViewport.offsetX + 1f * oldViewport.cellSize).roundToInt(),
-        (oldViewport.offsetY + 1f * oldViewport.cellSize).roundToInt(),
-        (oldViewport.offsetX + (oldViewport.cols - 1) * oldViewport.cellSize).roundToInt(),
-        (oldViewport.offsetY + (oldViewport.rows - 1) * oldViewport.cellSize).roundToInt()
-    )
-
-    private val newBoardRect: Rect = Rect(
-        (newViewport.offsetX + 1f * newViewport.cellSize).roundToInt(),
-        (newViewport.offsetY + 1f * newViewport.cellSize).roundToInt(),
-        (newViewport.offsetX + (newViewport.cols - 1) * newViewport.cellSize).roundToInt(),
-        (newViewport.offsetY + (newViewport.rows - 1) * newViewport.cellSize).roundToInt()
-    )
-
-    private val unionBoardRect: Rect = Rect().apply {
-        set(oldBoardRect)
-        union(newBoardRect)
-    }
+    private val unionBoardRect: Rect =
+        Rect().apply {
+            set(oldBoardRect)
+            union(newBoardRect)
+        }
 
     private val W = unionBoardRect.width().toFloat()
     private val H = unionBoardRect.height().toFloat()
@@ -147,7 +168,10 @@ internal class LevelTransitionAnimation(
     private val frontS: Float
         get() = stepIndex * stepS
 
-    private fun drawFrame(canvas: Canvas, stepIndex: Int) {
+    private fun drawFrame(
+        canvas: Canvas,
+        stepIndex: Int,
+    ) {
         val frontS = stepIndex * stepS
 
         // Draw the background first so areas outside unionBoardRect remain stable during the transition.
@@ -170,7 +194,13 @@ internal class LevelTransitionAnimation(
         drawSBand(canvas, frontS - stepS, frontS, backgroundBitmap, invertPaint)
     }
 
-    private fun drawSBand(canvas: Canvas, a: Float, b: Float, bitmap: Bitmap, paint: Paint?) {
+    private fun drawSBand(
+        canvas: Canvas,
+        a: Float,
+        b: Float,
+        bitmap: Bitmap,
+        paint: Paint?,
+    ) {
         val lo = min(a, b)
         val hi = max(a, b)
 
@@ -195,12 +225,13 @@ internal class LevelTransitionAnimation(
             val bottom = max(yBot0, yBot1).coerceIn(topBound, bottomBound)
 
             if (top < bottom) {
-                val sliceRect = Rect(
-                    x.roundToInt(),
-                    top.roundToInt(),
-                    x2.roundToInt(),
-                    bottom.roundToInt()
-                )
+                val sliceRect =
+                    Rect(
+                        x.roundToInt(),
+                        top.roundToInt(),
+                        x2.roundToInt(),
+                        bottom.roundToInt(),
+                    )
                 canvas.withSave {
                     clipRect(unionBoardRect)
                     clipRect(sliceRect)
@@ -216,15 +247,19 @@ internal class LevelTransitionAnimation(
         }
     }
 
-    private fun yForS(k: Float, x: Float): Float {
+    private fun yForS(
+        k: Float,
+        x: Float,
+    ): Float {
         // s(x,y) = (x-L)/W + (B-y)/H
         // Solve for y: y = B - H * (k - (x-L)/W)
         return B - H * (k - (x - L) / W)
     }
 
-    private fun sFor(x: Float, y: Float): Float {
-        return (x - L) / W + (B - y) / H
-    }
+    private fun sFor(
+        x: Float,
+        y: Float,
+    ): Float = (x - L) / W + (B - y) / H
 
     // --- Region helpers and fields ---
 
@@ -243,7 +278,7 @@ internal class LevelTransitionAnimation(
     private fun computeWallRegion(
         viewport: BoardViewport,
         tileMap: TileMap,
-        interiorRect: Rect
+        interiorRect: Rect,
     ): Region {
         val region = Region()
 
@@ -261,7 +296,7 @@ internal class LevelTransitionAnimation(
                     val bottom = (viewport.offsetY + (r + 2) * viewport.cellSize).roundToInt()
                     region.op(
                         Rect(left, top, right, bottom),
-                        Region.Op.UNION
+                        Region.Op.UNION,
                     )
                 }
             }
@@ -271,7 +306,10 @@ internal class LevelTransitionAnimation(
     }
 
     // Compute a Region for floors/goals (not walls) in the new level, for the final flash.
-    private fun computeNewFloorGoalRegion(viewport: BoardViewport, tileMap: TileMap): Region {
+    private fun computeNewFloorGoalRegion(
+        viewport: BoardViewport,
+        tileMap: TileMap,
+    ): Region {
         val region = Region()
         for (r in 0 until tileMap.rowCount) {
             for (c in 0 until tileMap.columnCount) {
@@ -327,20 +365,22 @@ internal class LevelTransitionAnimation(
                 val right = newViewport.offsetX + (c + 2) * newViewport.cellSize
                 val bottom = newViewport.offsetY + (r + 2) * newViewport.cellSize
 
-                val rect = Rect(
-                    left.roundToInt(),
-                    top.roundToInt(),
-                    right.roundToInt(),
-                    bottom.roundToInt()
-                )
-
-                val completionS = max(
-                    sFor(left, top),
-                    max(
-                        sFor(right, top),
-                        max(sFor(left, bottom), sFor(right, bottom))
+                val rect =
+                    Rect(
+                        left.roundToInt(),
+                        top.roundToInt(),
+                        right.roundToInt(),
+                        bottom.roundToInt(),
                     )
-                )
+
+                val completionS =
+                    max(
+                        sFor(left, top),
+                        max(
+                            sFor(right, top),
+                            max(sFor(left, bottom), sFor(right, bottom)),
+                        ),
+                    )
 
                 out.add(FlashTile(rect, completionS))
             }

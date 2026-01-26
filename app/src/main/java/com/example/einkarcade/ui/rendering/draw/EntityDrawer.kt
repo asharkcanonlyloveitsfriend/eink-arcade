@@ -8,12 +8,14 @@ import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.ResolvedEntityGeometry
 import com.example.einkarcade.ui.rendering.geom.toRenderPoint
 
-internal class EntityDrawer(private val assets: AndroidGameAssets) {
+internal class EntityDrawer(
+    private val assets: AndroidGameAssets,
+) {
     fun drawBoxes(
         canvas: Canvas,
         viewport: BoardViewport,
         geometry: ResolvedEntityGeometry,
-        boxPositions: Set<Position>
+        boxPositions: Set<Position>,
     ) {
         val bitmapPaint = assets.bitmapPaint()
         for (position in boxPositions) {
@@ -23,7 +25,7 @@ internal class EntityDrawer(private val assets: AndroidGameAssets) {
                 position = position,
                 resId = R.drawable.box,
                 geometry = geometry,
-                bitmapPaint = bitmapPaint
+                bitmapPaint = bitmapPaint,
             )
         }
     }
@@ -34,13 +36,14 @@ internal class EntityDrawer(private val assets: AndroidGameAssets) {
         position: Position,
         resId: Int,
         geometry: ResolvedEntityGeometry,
-        bitmapPaint: android.graphics.Paint = assets.bitmapPaint()
+        bitmapPaint: android.graphics.Paint = assets.bitmapPaint(),
     ) {
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
 
-        val origin = Position(position.row + 1, position.col + 1)
-            .toRenderPoint(viewport.cellSize, offsetX, offsetY)
+        val origin =
+            Position(position.row + 1, position.col + 1)
+                .toRenderPoint(viewport.cellSize, offsetX, offsetY)
 
         val bounds = geometry.boxBoundsPx
         val left = origin.x + bounds.left
@@ -54,14 +57,15 @@ internal class EntityDrawer(private val assets: AndroidGameAssets) {
         canvas: Canvas,
         viewport: BoardViewport,
         playerPosition: Position,
-        geometry: ResolvedEntityGeometry
+        geometry: ResolvedEntityGeometry,
     ) {
         val bitmapPaint = assets.bitmapPaint()
         val offsetX = viewport.offsetX
         val offsetY = viewport.offsetY
 
-        val origin = Position(playerPosition.row + 1, playerPosition.col + 1)
-            .toRenderPoint(viewport.cellSize, offsetX, offsetY)
+        val origin =
+            Position(playerPosition.row + 1, playerPosition.col + 1)
+                .toRenderPoint(viewport.cellSize, offsetX, offsetY)
 
         val left = origin.x + geometry.playerInsetPx
         val top = origin.y + geometry.playerInsetPx

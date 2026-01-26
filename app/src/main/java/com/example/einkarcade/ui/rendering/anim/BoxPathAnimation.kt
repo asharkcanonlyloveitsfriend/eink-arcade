@@ -14,16 +14,16 @@ private const val PATH_SEGMENTS_PER_TICK = 2.6f
 
 internal class BoxPathAnimation(
     private val viewport: BoardViewport,
-    private val path: List<Position>
+    private val path: List<Position>,
 ) : Animation {
-
     private val pathRect: Rect by lazy { computePathRect() }
-    private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFD3D3D3.toInt()
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
-    }
+    private val pathPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFD3D3D3.toInt()
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
 
     private var pathProgressSegments: Float = 0f
     private var isComplete: Boolean = false
@@ -39,30 +39,34 @@ internal class BoxPathAnimation(
         }
     }
 
-    override fun ticksUntilNextStep(): Int? {
-        return if (isComplete) null else 1
-    }
+    override fun ticksUntilNextStep(): Int? = if (isComplete) null else 1
 
     override fun hidesPlayer(): Boolean = true
 
     private fun drawPath(canvas: Canvas) {
         if (path.size < 2) return
-        val points = path.map { position ->
-            val cx = viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
-            val cy = viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
-            PointF(cx, cy)
-        }
+        val points =
+            path.map { position ->
+                val cx =
+                    viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
+                val cy =
+                    viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
+                PointF(cx, cy)
+            }
         val totalSegments = points.size - 1
         val consumed = pathProgressSegments.coerceIn(0f, totalSegments.toFloat())
         val startSegment = consumed.toInt().coerceIn(0, totalSegments - 1)
         val startFraction = consumed - startSegment
 
-        fun interpolate(start: PointF, end: PointF, t: Float): PointF {
-            return PointF(
+        fun interpolate(
+            start: PointF,
+            end: PointF,
+            t: Float,
+        ): PointF =
+            PointF(
                 start.x + (end.x - start.x) * t,
-                start.y + (end.y - start.y) * t
+                start.y + (end.y - start.y) * t,
             )
-        }
 
         val startPoint = interpolate(points[startSegment], points[startSegment + 1], startFraction)
         pathPaint.strokeWidth = viewport.cellSize * 0.2f
@@ -74,19 +78,20 @@ internal class BoxPathAnimation(
         }
     }
 
-    private fun totalPathSegments(): Int {
-        return (path.size - 1).coerceAtLeast(0)
-    }
+    private fun totalPathSegments(): Int = (path.size - 1).coerceAtLeast(0)
 
     private fun computePathRect(): Rect {
         if (path.isEmpty()) return Rect()
         val strokeWidth = viewport.cellSize * 0.2f
         val halfStroke = strokeWidth / 2f
-        val points = path.map { position ->
-            val cx = viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
-            val cy = viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
-            PointF(cx, cy)
-        }
+        val points =
+            path.map { position ->
+                val cx =
+                    viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
+                val cy =
+                    viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
+                PointF(cx, cy)
+            }
         val minX = points.minOf { it.x } - halfStroke
         val minY = points.minOf { it.y } - halfStroke
         val maxX = points.maxOf { it.x } + halfStroke
@@ -95,7 +100,7 @@ internal class BoxPathAnimation(
             floor(minX).toInt(),
             floor(minY).toInt(),
             ceil(maxX).toInt(),
-            ceil(maxY).toInt()
+            ceil(maxY).toInt(),
         )
     }
 }
