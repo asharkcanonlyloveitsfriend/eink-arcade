@@ -1,21 +1,32 @@
 package com.example.einkarcade.sokoban
 
-class BoxMover(
-    private val staticGrid: Array<Array<Boolean>>
+class BoxPathfinder(
+    fullGrid: Array<Array<Boolean>>,
+    boxStart: Position,
+    playerStart: Position
 ) {
     private data class State(val box: Position, val player: Position)
 
-    fun findBoxPath(from: Position, to: Position, playerStart: Position): List<Position>? {
-        if (from == to) return null
-        val numRows = staticGrid.size
-        val numCols = staticGrid[0].size
+    private val planningGrid: Array<Array<Boolean>> =
+        Array(fullGrid.size) { row ->
+            fullGrid[row].copyOf()
+        }.also {
+            // While planning, the box being moved is treated as walkable
+            it[boxStart.row][boxStart.col] = true
+        }
+
+    private val startState = State(boxStart, playerStart)
+
+    fun findBoxPath(to: Position): List<Position>? {
+        if (startState.box == to) return null
+        val numRows = planningGrid.size
+        val numCols = planningGrid[0].size
 
         val visited = mutableSetOf<Pair<Position, Position>>()
         val parents = mutableMapOf<State, State?>()
         val queue = ArrayDeque<State>()
-        val startState = State(from, playerStart)
         queue.add(startState)
-        visited.add(from to playerStart)
+        visited.add(startState.box to startState.player)
         parents[startState] = null
 
         val directions = listOf(
@@ -40,10 +51,9 @@ class BoxMover(
                 if (
                     isInside(newBox) &&
                     isInside(pushPos) &&
-                    staticGrid[newBox.row][newBox.col] &&
-                    staticGrid[pushPos.row][pushPos.col]
+                    planningGrid[newBox.row][newBox.col] &&
+                    planningGrid[pushPos.row][pushPos.col]
                 ) {
-                    // Use a fresh grid for each pathfinder instance
                     val pathfinder = pathfinderWithBoxAt(box)
                     if (pathfinder.canFindPath(player, pushPos)) {
                         val newPlayer = box
@@ -73,9 +83,10 @@ class BoxMover(
     }
 
     private fun pathfinderWithBoxAt(box: Position): Pathfinder {
-        val tempGrid = Array(staticGrid.size) { row ->
-            staticGrid[row].copyOf()
+        val tempGrid = Array(planningGrid.size) { row ->
+            planningGrid[row].copyOf()
         }
+        // For player reachability checks, the box occupies its current square and must be solid.
         tempGrid[box.row][box.col] = false
         return Pathfinder(tempGrid)
     }

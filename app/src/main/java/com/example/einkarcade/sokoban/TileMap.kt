@@ -29,6 +29,13 @@ class TileMap(
         return !isVoid(position)
     }
 
+    fun walkableGrid(): Array<Array<Boolean>> =
+        Array(rowCount) { row ->
+            Array(columnCount) { col ->
+                isWalkable(Position(row, col))
+            }
+        }
+
     val rowCount: Int
         get() = tiles.size
 

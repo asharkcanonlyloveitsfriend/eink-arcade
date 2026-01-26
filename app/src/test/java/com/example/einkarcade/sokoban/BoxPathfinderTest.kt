@@ -3,9 +3,9 @@ package com.example.einkarcade.sokoban
 import org.junit.Assert.*
 import org.junit.Test
 
-class BoxMoverTest {
+class BoxPathfinderTest {
 
-    data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+    data class TripleResult<A, B, C>(val first: A, val second: B, val third: C)
 
     @Test
     fun testFindBoxPath_StraightLineWithPlayerAccess() {
@@ -15,7 +15,7 @@ class BoxMoverTest {
             # $  x#
             #######
         """.trimIndent()
-        val (mover, playerPosition, to, boxPosition) = parseBoxMoverWithEndpoints(asciiMap)
+        val (mover, to, _) = parseBoxMoverWithEndpoints(asciiMap)
 
         val expectedPath = listOf(
             Position(2, 2),
@@ -23,7 +23,7 @@ class BoxMoverTest {
             Position(2, 4),
             Position(2, 5)
         )
-        val path = mover.findBoxPath(boxPosition, to, playerPosition)
+        val path = mover.findBoxPath(to)
         assertNotNull(path)
         assertEquals(expectedPath, path)
     }
@@ -36,14 +36,14 @@ class BoxMoverTest {
             #  x#
             #####
         """.trimIndent()
-        val (mover, playerPosition, to, boxPosition) = parseBoxMoverWithEndpoints(asciiMap)
+        val (mover, to, _) = parseBoxMoverWithEndpoints(asciiMap)
 
         val expectedPath = listOf(
             Position(2, 2),
             Position(3, 2),
             Position(3, 3)
         )
-        val path = mover.findBoxPath(boxPosition, to, playerPosition)
+        val path = mover.findBoxPath(to)
         assertNotNull(path)
         assertEquals(expectedPath, path)
     }
@@ -59,9 +59,9 @@ class BoxMoverTest {
             #    ####    @#  x#
             ###################
         """.trimIndent()
-        val (mover, playerPosition, to, boxPosition) = parseBoxMoverWithEndpoints(asciiMap)
+        val (mover, to, boxPosition) = parseBoxMoverWithEndpoints(asciiMap)
 
-        val path = mover.findBoxPath(boxPosition, to, playerPosition)
+        val path = mover.findBoxPath(to)
         assertNotNull(path)
         assertTrue(path!!.isNotEmpty())
         assertEquals(boxPosition, path.first())
@@ -77,12 +77,12 @@ class BoxMoverTest {
             # #x#
             #####
         """.trimIndent()
-        val (mover, playerPosition, to, boxPosition) = parseBoxMoverWithEndpoints(asciiMap)
+        val (mover, to, _) = parseBoxMoverWithEndpoints(asciiMap)
 
-        assertNull(mover.findBoxPath(boxPosition, to, playerPosition))
+        assertNull(mover.findBoxPath(to))
     }
 
-    private fun parseBoxMoverWithEndpoints(asciiMap: String): Quadruple<BoxMover, Position, Position, Position> {
+    private fun parseBoxMoverWithEndpoints(asciiMap: String): TripleResult<BoxPathfinder, Position, Position> {
         var player: Position? = null
         var to: Position? = null
         var box: Position? = null
@@ -113,8 +113,12 @@ class BoxMoverTest {
             "Map must contain '@', 'x', and '\$'."
         }
 
-        val mover = BoxMover(grid)
-        return Quadruple(mover, player!!, to!!, box!!)
+        val mover = BoxPathfinder(
+            fullGrid = grid,
+            boxStart = box,
+            playerStart = player
+        )
+        return TripleResult(mover, to!!, box!!)
     }
 
 }
