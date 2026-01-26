@@ -51,8 +51,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
+import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.rendering.GameBoardPresenter
 import com.example.einkarcade.ui.rendering.GameBoardView
+import com.example.einkarcade.ui.transition.LevelTransitionView
 
 private fun createGameSurface(context: android.content.Context): GameBoardPresenter = GameBoardView(context)
 
@@ -62,6 +64,8 @@ fun gameScreen(
     gameController: GameController,
 ) {
     gameController.revision.value
+    val uiMode = gameController.uiMode
+    val currentTileMap: TileMap = gameController.tileMap
     val syncError = remember { mutableStateOf<String?>(null) }
     val syncSuccess = remember { mutableStateOf(false) }
     val surfaceRef = remember { mutableStateOf<GameBoardPresenter?>(null) }
@@ -165,6 +169,23 @@ fun gameScreen(
                 surface.asView()
             },
         )
+
+        if (uiMode == GameController.UiMode.LEVEL_TRANSITION) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    LevelTransitionView(ctx).apply {
+                        setTileMaps(
+                            oldTileMap = currentTileMap,
+                            newTileMap = gameController.pendingTransitionTileMap,
+                        )
+                        onDismiss = {
+                            gameController.finishLevelTransition()
+                        }
+                    }
+                },
+            )
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             Row(

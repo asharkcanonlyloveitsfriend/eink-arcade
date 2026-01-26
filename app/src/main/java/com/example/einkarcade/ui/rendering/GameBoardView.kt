@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.View
-import androidx.core.graphics.createBitmap
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
@@ -15,7 +14,6 @@ import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxPathAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxVanishAnimation
 import com.example.einkarcade.ui.rendering.anim.EntityFlashAnimation
-import com.example.einkarcade.ui.rendering.anim.LevelTransitionAnimation
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.GameRenderer
@@ -158,11 +156,6 @@ internal class GameBoardView(
         val playerPos = playerPosition ?: return
         val viewport = lastViewport ?: return
 
-        if (animationRunner.hidesBoard()) {
-            animationRunner.drawOverEntities(canvas)
-            return
-        }
-
         renderer.drawStaticFrame(canvas)
 
         animationRunner.drawUnderEntities(canvas)
@@ -190,52 +183,13 @@ internal class GameBoardView(
         boxPositions: Set<Position>,
         playerPosition: Position,
     ) {
-        val previousTileMap = this.tileMap
-        val previousViewport = lastViewport
-
         this.tileMap = tileMap
         this.boxPositions = boxPositions
         this.playerPosition = playerPosition
         selectedBox = null
 
-        if (width <= 0 || height <= 0 || previousViewport == null) {
-            return
-        }
-
-        if (previousTileMap === tileMap) {
-            invalidate()
-            return
-        }
-
-        val backgroundBitmap =
-            createBitmap(width, height).also {
-                renderer.drawBackground(Canvas(it), width, height)
-            }
-
-        // Rebuild layout for new tiles
         rebuildStaticLayout()
-
-        val newViewport =
-            lastViewport ?: run {
-                invalidate()
-                return
-            }
-
-        val newBitmap =
-            createBitmap(width, height).also {
-                renderer.drawStaticFrame(Canvas(it))
-            }
-
-        animationRunner.replaceQueue(
-            LevelTransitionAnimation(
-                backgroundBitmap = backgroundBitmap,
-                newBitmap = newBitmap,
-                oldViewport = previousViewport,
-                newViewport = newViewport,
-                oldTileMap = previousTileMap!!,
-                newTileMap = tileMap,
-            ),
-        )
+        invalidate()
     }
 
     private fun onStateChanged(

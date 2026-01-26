@@ -25,6 +25,19 @@ class GameController(
     private lateinit var level: Level
     private lateinit var gameEngine: GameEngine
 
+    enum class UiMode {
+        GAMEPLAY,
+        LEVEL_TRANSITION,
+    }
+
+    private val uiModeState = mutableLongStateOf(UiMode.GAMEPLAY.ordinal.toLong())
+
+    val uiMode: UiMode
+        get() = UiMode.entries[uiModeState.longValue.toInt()]
+
+    private var pendingLevelIndex: Int? = null
+    private var pendingSetIndex: Int? = null
+
     sealed interface RenderDelta {
         data class LevelLoaded(
             val tileMap: TileMap,
@@ -91,6 +104,14 @@ class GameController(
     val tileMap: TileMap
         get() = level.tileMap
 
+    val pendingTransitionTileMap: TileMap
+        get() {
+            val setIdx = pendingSetIndex ?: currentSetIndex
+            val levelIdx =
+                pendingLevelIndex ?: currentLevelIndex
+            return levelSets[setIdx].levels[levelIdx].tileMap
+        }
+
     val levelName: String
         get() = level.name
 
@@ -100,19 +121,17 @@ class GameController(
     }
 
     fun selectSetById(setId: Int) {
-        val idx = levelSets.indexOfFirst { it.id == setId }
-        if (idx == -1) return
-        currentSetIndex = idx
+        val setIdx = levelSets.indexOfFirst { it.id == setId }
+        if (setIdx == -1) return
 
-        val levels = levelsInCurrentSet
+        pendingSetIndex = setIdx
+
+        val levels = levelSets[setIdx].levels
         val firstIncompleteIndex = levels.indexOfFirst { !it.isCompleted }
-        currentLevelIndex = if (firstIncompleteIndex != -1) firstIncompleteIndex else 0
+        val levelIdx = if (firstIncompleteIndex != -1) firstIncompleteIndex else 0
 
-        level = levels[currentLevelIndex]
-        gameEngine = GameEngine(level)
-        persistSelection()
-        markChanged()
-        onRenderDelta?.invoke(currentLevelLoadedDelta())
+        pendingLevelIndex = levelIdx
+        uiModeState.longValue = UiMode.LEVEL_TRANSITION.ordinal.toLong()
     }
 
     fun levels(): List<Level> = levelsInCurrentSet
@@ -142,12 +161,7 @@ class GameController(
     fun selectLevel(name: String) {
         val index = levelsInCurrentSet.indexOfFirst { it.name == name }
         if (index != -1) {
-            currentLevelIndex = index
-            level = levelsInCurrentSet[currentLevelIndex]
-            gameEngine = GameEngine(level)
-            persistSelection()
-            markChanged()
-            onRenderDelta?.invoke(currentLevelLoadedDelta())
+            beginLevelTransition(index)
         }
     }
 
@@ -157,25 +171,51 @@ class GameController(
         emitStateChanged(RenderDelta.StateChangeAnnotation.Restart)
     }
 
-    fun nextLevel() {
+    private fun beginLevelTransition(nextIndex: Int) {
+        pendingSetIndex = null
+        pendingLevelIndex = nextIndex
+        uiModeState.longValue = UiMode.LEVEL_TRANSITION.ordinal.toLong()
+    }
+
+    fun finishLevelTransition() {
+        val setIdx = pendingSetIndex
+        val levelIdx = pendingLevelIndex
+
+        if (setIdx == null && levelIdx == null) return
+
+        if (setIdx != null) {
+            currentSetIndex = setIdx
+        }
+
         val levels = levelsInCurrentSet
-        currentLevelIndex = (currentLevelIndex + 1) % levels.size
+        val resolvedLevelIndex =
+            levelIdx ?: currentLevelIndex.coerceIn(0, levels.lastIndex)
+
+        currentLevelIndex = resolvedLevelIndex
         level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
+
+        pendingSetIndex = null
+        pendingLevelIndex = null
+
         persistSelection()
         markChanged()
         onRenderDelta?.invoke(currentLevelLoadedDelta())
+
+        uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
+    }
+
+    fun nextLevel() {
+        val levels = levelsInCurrentSet
+        val nextIndex = (currentLevelIndex + 1) % levels.size
+        beginLevelTransition(nextIndex)
     }
 
     fun previousLevel() {
         val levels = levelsInCurrentSet
-        currentLevelIndex =
+        val nextIndex =
             if (currentLevelIndex - 1 < 0) levels.size - 1 else currentLevelIndex - 1
-        level = levels[currentLevelIndex]
-        gameEngine = GameEngine(level)
-        persistSelection()
-        markChanged()
-        onRenderDelta?.invoke(currentLevelLoadedDelta())
+        beginLevelTransition(nextIndex)
     }
 
     fun undo(): Boolean {

@@ -6,9 +6,6 @@ import android.graphics.Rect
 const val ANIMATION_TICK_MS: Long = 50L
 
 interface Animation {
-    /** Return true when the animation should hide the entire board. */
-    fun hidesBoard(): Boolean = false
-
     /** Return true when the animation should hide the player sprite. */
     fun hidesPlayer(): Boolean = false
 

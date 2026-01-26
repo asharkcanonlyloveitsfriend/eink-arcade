@@ -15,20 +15,12 @@ internal class AnimationRunner(
 ) {
     private val queue = ArrayDeque<Animation>()
     private var active: Animation? = null
-    private var generation: Int = 0
 
     fun enqueue(animation: Animation) {
         queue.addLast(animation)
         if (active == null) {
             startNext()
         }
-    }
-
-    fun replaceQueue(animation: Animation) {
-        generation++
-        queue.clear()
-        queue.addLast(animation)
-        startNext()
     }
 
     fun drawUnderEntities(canvas: Canvas) {
@@ -40,8 +32,6 @@ internal class AnimationRunner(
     }
 
     fun hidesPlayer(): Boolean = active?.hidesPlayer() == true
-
-    fun hidesBoard(): Boolean = active?.hidesBoard() == true
 
     private fun startNext() {
         val previous = active
@@ -69,15 +59,12 @@ internal class AnimationRunner(
         if (ticks == null) {
             startNext()
         } else {
-            val scheduledGeneration = generation
             val delayMs = ticks * ANIMATION_TICK_MS
-            postDelayed(Runnable { advance(scheduledGeneration) }, delayMs)
+            postDelayed(Runnable { advance() }, delayMs)
         }
     }
 
-    private fun advance(scheduledGeneration: Int) {
-        if (generation != scheduledGeneration) return
-
+    private fun advance() {
         active?.let { invalidateRects(it.dirtyRects()) }
         scheduleNextStep()
     }
