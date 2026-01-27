@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:function-naming")
+
 package com.example.einkarcade.ui.screens
 
 import android.os.Handler
@@ -54,12 +56,13 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.rendering.GameBoardPresenter
 import com.example.einkarcade.ui.rendering.GameBoardView
+import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import com.example.einkarcade.ui.transition.LevelTransitionView
 
 private fun createGameSurface(context: android.content.Context): GameBoardPresenter = GameBoardView(context)
 
 @Composable
-fun gameScreen(
+fun GameScreen(
     modifier: Modifier = Modifier,
     gameController: GameController,
 ) {
@@ -79,6 +82,9 @@ fun gameScreen(
     }
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
+    val boardWidth = remember { mutableStateOf(0) }
+    val boardHeight = remember { mutableStateOf(0) }
+    val hasEmittedLevelLoaded = remember { mutableStateOf(false) }
 
     DisposableEffect(surfaceRef.value) {
         val surface = surfaceRef.value
@@ -90,6 +96,47 @@ fun gameScreen(
             if (gameController.onRenderDelta === sink) {
                 gameController.onRenderDelta = null
             }
+        }
+    }
+
+    DisposableEffect(surfaceRef.value) {
+        val surface = surfaceRef.value
+        if (surface is GameBoardView) {
+            val view = surface.asView()
+            view.addOnLayoutChangeListener { _, _, _, right, bottom, _, _, _, _ ->
+                val width = right
+                val height = bottom
+                if (width > 0 && height > 0) {
+                    boardWidth.value = width
+                    boardHeight.value = height
+                }
+            }
+        }
+        onDispose { }
+    }
+
+    LaunchedEffect(boardWidth.value, boardHeight.value, uiMode) {
+        if (uiMode == GameController.UiMode.GAMEPLAY &&
+            boardWidth.value > 0 &&
+            boardHeight.value > 0 &&
+            !hasEmittedLevelLoaded.value
+        ) {
+            val frame =
+                gameController.buildStaticBoardFrame(
+                    context = context,
+                    tileMap = currentTileMap,
+                    width = boardWidth.value,
+                    height = boardHeight.value,
+                )
+
+            gameController.emitLevelLoaded(frame)
+            hasEmittedLevelLoaded.value = true
+        }
+    }
+
+    LaunchedEffect(uiMode) {
+        if (uiMode == GameController.UiMode.LEVEL_TRANSITION) {
+            hasEmittedLevelLoaded.value = false
         }
     }
 
@@ -174,13 +221,48 @@ fun gameScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
+                    val width = boardWidth.value
+                    val height = boardHeight.value
+
+                    check(width > 0 && height > 0) {
+                        "LevelTransitionView requires board size before construction"
+                    }
+                    val oldViewport =
+                        computeBoardViewport(
+                            surfaceWidth = width.toFloat(),
+                            surfaceHeight = height.toFloat(),
+                            innerRows = currentTileMap.rowCount,
+                            innerCols = currentTileMap.columnCount,
+                        )
+
+                    val newFrame =
+                        gameController.buildStaticBoardFrame(
+                            context = ctx,
+                            tileMap = gameController.pendingTransitionTileMap,
+                            width = width,
+                            height = height,
+                        )
+
                     LevelTransitionView(ctx).apply {
-                        setTileMaps(
+                        setTransitionData(
+                            oldViewport = oldViewport,
                             oldTileMap = currentTileMap,
-                            newTileMap = gameController.pendingTransitionTileMap,
+                            newFrame = newFrame,
                         )
                         onDismiss = {
                             gameController.finishLevelTransition()
+                            val w = boardWidth.value
+                            val h = boardHeight.value
+                            check(w > 0 && h > 0) { "Board size must be known when dismissing level transition" }
+                            val frame =
+                                gameController.buildStaticBoardFrame(
+                                    context = ctx,
+                                    tileMap = gameController.tileMap,
+                                    width = w,
+                                    height = h,
+                                )
+                            gameController.emitLevelLoaded(frame)
+                            hasEmittedLevelLoaded.value = true
                         }
                     }
                 },

@@ -22,17 +22,21 @@ internal class GameRenderer(
     private var staticFrameBitmap: Bitmap? = null
     private lateinit var geometry: ResolvedEntityGeometry
 
+    fun initGeometry(viewport: BoardViewport) {
+        geometry =
+            ResolvedEntityGeometry.compute(
+                viewport.cellSize,
+                assets = assets,
+            )
+    }
+
     fun rebuildStaticLayout(
         viewWidth: Int,
         viewHeight: Int,
         viewport: BoardViewport,
         tileMap: TileMap,
     ) {
-        geometry =
-            ResolvedEntityGeometry.compute(
-                viewport.cellSize,
-                assets = assets,
-            )
+        initGeometry(viewport)
 
         val bitmap = createBitmap(viewWidth, viewHeight)
         val canvas = Canvas(bitmap)
@@ -47,6 +51,9 @@ internal class GameRenderer(
         val bitmap = staticFrameBitmap ?: error("Static frame bitmap not initialized")
         canvas.drawBitmap(bitmap, 0f, 0f, null)
     }
+
+    fun getStaticFrameBitmap(): Bitmap =
+        staticFrameBitmap ?: error("Static frame bitmap not initialized")
 
     fun drawBackground(
         canvas: Canvas,

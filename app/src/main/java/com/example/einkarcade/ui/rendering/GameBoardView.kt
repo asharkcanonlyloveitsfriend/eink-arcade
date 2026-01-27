@@ -8,7 +8,6 @@ import android.view.MotionEvent
 import android.view.View
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.rendering.anim.AnimationRunner
 import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxPathAnimation
@@ -18,8 +17,6 @@ import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.GameRenderer
 import com.example.einkarcade.ui.rendering.draw.TileDrawer
-import com.example.einkarcade.ui.rendering.geom.BoardViewport
-import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
 
 @SuppressLint("ClickableViewAccessibility")
@@ -35,14 +32,12 @@ internal class GameBoardView(
             entityDrawer = EntityDrawer(AndroidGameAssets(context)),
         )
 
-    private var tileMap: TileMap? = null
+    private var staticFrame: StaticBoardFrame? = null
     private var boxPositions: Set<Position> = emptySet()
     private var playerPosition: Position? = null
 
     private var onTapCell: ((Position) -> Unit)? = null
     private var selectedBox: Position? = null
-
-    private var lastViewport: BoardViewport? = null
 
     private val inkOverlay =
         InkOverlay(
@@ -69,7 +64,7 @@ internal class GameBoardView(
 
                 MotionEvent.ACTION_UP -> {
                     inkOverlay.onTouchEvent(event) { x, y ->
-                        val viewport = lastViewport ?: return@onTouchEvent
+                        val viewport = staticFrame?.viewport ?: return@onTouchEvent
                         val position = viewport.screenToInnerCell(x, y) ?: return@onTouchEvent
                         onTapCell?.invoke(position)
                     }
@@ -102,8 +97,6 @@ internal class GameBoardView(
     ) {
         super.onSizeChanged(w, h, oldw, oldh)
         inkOverlay.onSizeChanged(w)
-        rebuildStaticLayout()
-        invalidate()
     }
 
     override fun setOnTapCell(handler: (Position) -> Unit) {
@@ -116,7 +109,7 @@ internal class GameBoardView(
         val previous = selectedBox
         selectedBox = position
 
-        val viewport = lastViewport!!
+        val viewport = staticFrame!!.viewport
 
         invalidateRects(
             previous?.let { renderer.computeBoxRect(viewport, it) },
@@ -128,7 +121,7 @@ internal class GameBoardView(
         when (delta) {
             is GameController.RenderDelta.LevelLoaded -> {
                 onLevelLoaded(
-                    tileMap = delta.tileMap,
+                    staticFrame = delta.staticFrame,
                     boxPositions = delta.boxPositions,
                     playerPosition = delta.playerPosition,
                 )
@@ -154,9 +147,10 @@ internal class GameBoardView(
 
     private fun drawInternal(canvas: Canvas) {
         val playerPos = playerPosition ?: return
-        val viewport = lastViewport ?: return
+        val frame = staticFrame ?: return
+        val viewport = frame.viewport
 
-        renderer.drawStaticFrame(canvas)
+        canvas.drawBitmap(frame.bitmap, 0f, 0f, null)
 
         animationRunner.drawUnderEntities(canvas)
 
@@ -179,16 +173,15 @@ internal class GameBoardView(
     }
 
     private fun onLevelLoaded(
-        tileMap: TileMap,
+        staticFrame: StaticBoardFrame,
         boxPositions: Set<Position>,
         playerPosition: Position,
     ) {
-        this.tileMap = tileMap
+        this.staticFrame = staticFrame
+        renderer.initGeometry(staticFrame.viewport)
         this.boxPositions = boxPositions
         this.playerPosition = playerPosition
         selectedBox = null
-
-        rebuildStaticLayout()
         invalidate()
     }
 
@@ -197,7 +190,7 @@ internal class GameBoardView(
         boxPositions: Set<Position>,
         annotation: GameController.RenderDelta.StateChangeAnnotation?,
     ) {
-        val viewport = lastViewport!!
+        val viewport = staticFrame!!.viewport
         val previousPlayer = this.playerPosition!!
         val previousBoxes = this.boxPositions
         val movedBoxes = previousBoxes - boxPositions
@@ -239,19 +232,19 @@ internal class GameBoardView(
 
     private fun onBoxMoved(path: List<Position>) {
         if (path.size > 2) {
-            val viewport = lastViewport!!
+            val viewport = staticFrame!!.viewport
             animationRunner.enqueue(BoxPathAnimation(viewport, path))
         }
     }
 
     private fun onBoxRemoved(removedPosition: Position) {
-        val viewport = lastViewport!!
+        val viewport = staticFrame!!.viewport
         animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, removedPosition))
         animationRunner.enqueue(BlinkAnimation(renderer, viewport, this.playerPosition!!))
     }
 
     private fun onMoveRejected() {
-        val viewport = lastViewport!!
+        val viewport = staticFrame!!.viewport
         val playerPos = playerPosition!!
 
         animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
@@ -259,31 +252,10 @@ internal class GameBoardView(
 
     private fun onGameWon(isClean: Boolean) {
         if (isClean) return
-        val viewport = lastViewport!!
+        val viewport = staticFrame!!.viewport
         val playerPos = playerPosition!!
 
         animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
-    }
-
-    private fun rebuildStaticLayout() {
-        if (width <= 0 || height <= 0) return
-        if (tileMap == null) return
-
-        val viewport =
-            computeBoardViewport(
-                surfaceWidth = width.toFloat(),
-                surfaceHeight = height.toFloat(),
-                innerRows = tileMap!!.rowCount,
-                innerCols = tileMap!!.columnCount,
-            )
-        lastViewport = viewport
-
-        renderer.rebuildStaticLayout(
-            viewWidth = width,
-            viewHeight = height,
-            viewport = viewport,
-            tileMap = tileMap!!,
-        )
     }
 
     private fun invalidateRects(vararg rects: Rect?) {

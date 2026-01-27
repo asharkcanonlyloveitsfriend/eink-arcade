@@ -15,13 +15,9 @@ import android.view.View
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withSave
 import com.example.einkarcade.sokoban.TileMap
-import com.example.einkarcade.ui.rendering.AndroidGameAssets
+import com.example.einkarcade.ui.rendering.StaticBoardFrame
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
-import com.example.einkarcade.ui.rendering.draw.EntityDrawer
-import com.example.einkarcade.ui.rendering.draw.GameRenderer
-import com.example.einkarcade.ui.rendering.draw.TileDrawer
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
-import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -52,26 +48,23 @@ class LevelTransitionView
         context: Context,
         attrs: AttributeSet? = null,
     ) : View(context, attrs) {
-        private val renderer =
-            GameRenderer(
-                assets = AndroidGameAssets(context),
-                backgroundDrawer = BackgroundDrawer(context),
-                tileDrawer = TileDrawer(),
-                entityDrawer = EntityDrawer(AndroidGameAssets(context)),
-            )
+        private val backgroundDrawer = BackgroundDrawer(context)
 
+        private var oldViewport: BoardViewport? = null
         private var oldTileMap: TileMap? = null
-        private var newTileMap: TileMap? = null
+        private var newFrame: StaticBoardFrame? = null
         private var transitionState: TransitionState? = null
         private var stepIndex = 0
         private var hasDismissed = false
 
-        fun setTileMaps(
+        internal fun setTransitionData(
+            oldViewport: BoardViewport,
             oldTileMap: TileMap,
-            newTileMap: TileMap,
+            newFrame: StaticBoardFrame,
         ) {
+            this.oldViewport = oldViewport
             this.oldTileMap = oldTileMap
-            this.newTileMap = newTileMap
+            this.newFrame = newFrame
             rebuildTransitionState()
             invalidate()
         }
@@ -80,18 +73,20 @@ class LevelTransitionView
         var onDismiss: (() -> Unit)? = null
 
         override fun onDraw(canvas: Canvas) {
-            val oldMap =
+            val oldViewport =
+                checkNotNull(oldViewport) { "LevelTransitionView requires oldViewport before draw." }
+            val oldTileMap =
                 checkNotNull(oldTileMap) { "LevelTransitionView requires oldTileMap before draw." }
-            val newMap =
-                checkNotNull(newTileMap) { "LevelTransitionView requires newTileMap before draw." }
+            val newFrame =
+                checkNotNull(newFrame) { "LevelTransitionView requires newFrame before draw." }
 
             if (transitionState == null) {
-                rebuildTransitionState(oldMap, newMap)
+                rebuildTransitionState(oldViewport, oldTileMap, newFrame)
             }
 
             val state = transitionState
             if (state == null) {
-                renderer.drawBackground(canvas, width, height)
+                backgroundDrawer.draw(canvas, width, height)
                 return
             }
 
@@ -152,57 +147,32 @@ class LevelTransitionView
         }
 
         private fun rebuildTransitionState() {
-            val oldMap = oldTileMap ?: return
-            val newMap = newTileMap ?: return
-            rebuildTransitionState(oldMap, newMap)
+            val oldViewport = oldViewport ?: return
+            val oldTileMap = oldTileMap ?: return
+            val newFrame = newFrame ?: return
+            rebuildTransitionState(oldViewport, oldTileMap, newFrame)
         }
 
         private fun rebuildTransitionState(
-            oldMap: TileMap,
-            newMap: TileMap,
+            oldViewport: BoardViewport,
+            oldTileMap: TileMap,
+            newFrame: StaticBoardFrame,
         ) {
             if (width <= 0 || height <= 0) return
 
-            val oldViewport =
-                computeBoardViewport(
-                    surfaceWidth = width.toFloat(),
-                    surfaceHeight = height.toFloat(),
-                    innerRows = oldMap.rowCount,
-                    innerCols = oldMap.columnCount,
-                )
-            val newViewport =
-                computeBoardViewport(
-                    surfaceWidth = width.toFloat(),
-                    surfaceHeight = height.toFloat(),
-                    innerRows = newMap.rowCount,
-                    innerCols = newMap.columnCount,
-                )
-
             val backgroundBitmap =
                 createBitmap(width, height).also {
-                    renderer.drawBackground(Canvas(it), width, height)
-                }
-
-            renderer.rebuildStaticLayout(
-                viewWidth = width,
-                viewHeight = height,
-                viewport = newViewport,
-                tileMap = newMap,
-            )
-
-            val newBitmap =
-                createBitmap(width, height).also {
-                    renderer.drawStaticFrame(Canvas(it))
+                    backgroundDrawer.draw(Canvas(it), width, height)
                 }
 
             transitionState =
                 TransitionState(
                     backgroundBitmap = backgroundBitmap,
-                    newBitmap = newBitmap,
+                    newBitmap = newFrame.bitmap,
                     oldViewport = oldViewport,
-                    newViewport = newViewport,
-                    oldTileMap = oldMap,
-                    newTileMap = newMap,
+                    newViewport = newFrame.viewport,
+                    oldTileMap = oldTileMap,
+                    newTileMap = newFrame.tileMap,
                 )
 
             stepIndex = 0
@@ -281,7 +251,7 @@ class LevelTransitionView
             private val oldInteriorRect by lazy { interiorBoardRect(oldViewport) }
             private val newInteriorRect by lazy { interiorBoardRect(newViewport) }
 
-            private fun computeWallRegion(
+            private fun computeVoidRegion(
                 viewport: BoardViewport,
                 tileMap: TileMap,
                 interiorRect: Rect,
@@ -309,15 +279,15 @@ class LevelTransitionView
                 return region
             }
 
-            private val stableWallRegion: Region by lazy {
-                val oldWalls = computeWallRegion(oldViewport, oldTileMap, oldInteriorRect)
-                val newWalls = computeWallRegion(newViewport, newTileMap, newInteriorRect)
-                oldWalls.apply { op(newWalls, Region.Op.INTERSECT) }
+            private val stableVoidRegion: Region by lazy {
+                val oldVoids = computeVoidRegion(oldViewport, oldTileMap, oldInteriorRect)
+                val newVoids = computeVoidRegion(newViewport, newTileMap, newInteriorRect)
+                oldVoids.apply { op(newVoids, Region.Op.INTERSECT) }
             }
 
-            val stableWallRects: List<Rect> by lazy {
+            val stableVoidRects: List<Rect> by lazy {
                 val out = mutableListOf<Rect>()
-                val it = RegionIterator(stableWallRegion)
+                val it = RegionIterator(stableVoidRegion)
                 val r = Rect()
                 while (it.next(r)) out.add(Rect(r))
                 out
@@ -477,7 +447,7 @@ class LevelTransitionView
                     canvas.withSave {
                         clipRect(unionBoardRect)
                         clipRect(sliceRect)
-                        for (r in state.stableWallRects) {
+                        for (r in state.stableVoidRects) {
                             canvas.clipOutRect(r)
                         }
                         canvas.drawBitmap(bitmap, 0f, 0f, paint)

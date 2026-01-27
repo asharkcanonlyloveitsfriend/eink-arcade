@@ -3,7 +3,7 @@ package com.example.einkarcade.ui.rendering.geom
 import com.example.einkarcade.sokoban.Position
 import kotlin.math.min
 
-internal data class BoardViewport(
+data class BoardViewport(
     val rows: Int,
     val cols: Int,
     val cellSize: Float,

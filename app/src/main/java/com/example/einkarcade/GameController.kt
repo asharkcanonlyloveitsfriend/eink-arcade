@@ -1,8 +1,10 @@
 package com.example.einkarcade
 
 import android.content.Context
+import android.graphics.Canvas
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.core.graphics.createBitmap
 import com.example.einkarcade.appstate.LastSelectionStore
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.data.LevelsRepository
@@ -10,6 +12,13 @@ import com.example.einkarcade.sokoban.GameEngine
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
+import com.example.einkarcade.ui.rendering.AndroidGameAssets
+import com.example.einkarcade.ui.rendering.StaticBoardFrame
+import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
+import com.example.einkarcade.ui.rendering.draw.EntityDrawer
+import com.example.einkarcade.ui.rendering.draw.GameRenderer
+import com.example.einkarcade.ui.rendering.draw.TileDrawer
+import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 
 class GameController(
     context: Context,
@@ -40,7 +49,7 @@ class GameController(
 
     sealed interface RenderDelta {
         data class LevelLoaded(
-            val tileMap: TileMap,
+            val staticFrame: StaticBoardFrame,
             val playerPosition: Position,
             val boxPositions: Set<Position>,
         ) : RenderDelta
@@ -80,7 +89,7 @@ class GameController(
     var onRenderDelta: ((RenderDelta) -> Unit)? = null
         set(value) {
             field = value
-            value?.invoke(currentLevelLoadedDelta())
+            // Initial LevelLoaded is now emitted explicitly by the UI once a StaticBoardFrame exists.
         }
 
     val currentSetName: String
@@ -155,7 +164,7 @@ class GameController(
         val sets = loadLevelSets() ?: emptyList()
         rebuildState(sets)
         markChanged()
-        onRenderDelta?.invoke(currentLevelLoadedDelta())
+        // onRenderDelta?.invoke(currentLevelLoadedDelta())  // removed
     }
 
     fun selectLevel(name: String) {
@@ -200,7 +209,7 @@ class GameController(
 
         persistSelection()
         markChanged()
-        onRenderDelta?.invoke(currentLevelLoadedDelta())
+        // onRenderDelta?.invoke(currentLevelLoadedDelta())  // removed
 
         uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
     }
@@ -264,12 +273,15 @@ class GameController(
     private val levelsInCurrentSet: List<Level>
         get() = levelSets[currentSetIndex].levels
 
-    private fun currentLevelLoadedDelta(): RenderDelta.LevelLoaded =
-        RenderDelta.LevelLoaded(
-            tileMap = tileMap,
-            playerPosition = playerPosition,
-            boxPositions = boxPositions,
+    fun emitLevelLoaded(staticFrame: StaticBoardFrame) {
+        onRenderDelta?.invoke(
+            RenderDelta.LevelLoaded(
+                staticFrame = staticFrame,
+                playerPosition = playerPosition,
+                boxPositions = boxPositions,
+            ),
         )
+    }
 
     private fun emitStateChanged(annotation: RenderDelta.StateChangeAnnotation? = null) {
         onRenderDelta?.invoke(
@@ -332,5 +344,48 @@ class GameController(
             markChanged()
             onRenderDelta?.invoke(RenderDelta.GameWon(isClean = gameEngine.isCleanWin))
         }
+    }
+
+    private fun createRenderer(context: Context): GameRenderer =
+        GameRenderer(
+            assets = AndroidGameAssets(context),
+            backgroundDrawer = BackgroundDrawer(context),
+            tileDrawer = TileDrawer(),
+            entityDrawer = EntityDrawer(AndroidGameAssets(context)),
+        )
+
+    internal fun buildStaticBoardFrame(
+        context: Context,
+        tileMap: TileMap,
+        width: Int,
+        height: Int,
+    ): StaticBoardFrame {
+        val renderer = createRenderer(context)
+
+        val viewport =
+            computeBoardViewport(
+                surfaceWidth = width.toFloat(),
+                surfaceHeight = height.toFloat(),
+                innerRows = tileMap.rowCount,
+                innerCols = tileMap.columnCount,
+            )
+
+        renderer.rebuildStaticLayout(
+            viewWidth = width,
+            viewHeight = height,
+            viewport = viewport,
+            tileMap = tileMap,
+        )
+
+        val bitmap = createBitmap(width, height)
+        renderer.drawStaticFrame(Canvas(bitmap))
+
+        return StaticBoardFrame(
+            bitmap = bitmap,
+            viewport = viewport,
+            tileMap = tileMap,
+            width = width,
+            height = height,
+        )
     }
 }
