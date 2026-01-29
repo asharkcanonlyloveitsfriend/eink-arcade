@@ -69,16 +69,6 @@ internal class BackgroundDrawer(
         canvas.drawBitmap(screenBitmap, 0f, 0f, null)
     }
 
-    fun recycle() {
-        backgroundBitmap?.recycle()
-        backgroundBitmap = null
-
-        cachedScreenBitmap?.recycle()
-        cachedScreenBitmap = null
-        cachedScreenW = 0
-        cachedScreenH = 0
-    }
-
     private fun requireBackgroundBitmap(): Bitmap {
         val existing = backgroundBitmap
         if (existing != null && !existing.isRecycled) return existing

@@ -1,10 +1,8 @@
 package com.example.einkarcade
 
 import android.content.Context
-import android.graphics.Canvas
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.core.graphics.createBitmap
 import com.example.einkarcade.appstate.LastSelectionStore
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.data.LevelsRepository
@@ -12,11 +10,8 @@ import com.example.einkarcade.sokoban.GameEngine
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
-import com.example.einkarcade.ui.rendering.AndroidGameAssets
 import com.example.einkarcade.ui.rendering.StaticBoardFrame
-import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
-import com.example.einkarcade.ui.rendering.draw.EntityDrawer
-import com.example.einkarcade.ui.rendering.draw.GameRenderer
+import com.example.einkarcade.ui.rendering.draw.StaticBoardRenderer
 import com.example.einkarcade.ui.rendering.draw.TileDrawer
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 
@@ -346,21 +341,17 @@ class GameController(
         }
     }
 
-    private fun createRenderer(context: Context): GameRenderer =
-        GameRenderer(
-            assets = AndroidGameAssets(context),
-            backgroundDrawer = BackgroundDrawer(context),
-            tileDrawer = TileDrawer(),
-            entityDrawer = EntityDrawer(AndroidGameAssets(context)),
-        )
-
     internal fun buildStaticBoardFrame(
         context: Context,
         tileMap: TileMap,
         width: Int,
         height: Int,
     ): StaticBoardFrame {
-        val renderer = createRenderer(context)
+        val renderer =
+            StaticBoardRenderer(
+                context = context,
+                tileDrawer = TileDrawer(),
+            )
 
         val viewport =
             computeBoardViewport(
@@ -377,8 +368,7 @@ class GameController(
             tileMap = tileMap,
         )
 
-        val bitmap = createBitmap(width, height)
-        renderer.drawStaticFrame(Canvas(bitmap))
+        val bitmap = renderer.getStaticFrameBitmap()
 
         return StaticBoardFrame(
             bitmap = bitmap,

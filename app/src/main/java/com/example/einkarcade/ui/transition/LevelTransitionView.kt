@@ -12,10 +12,10 @@ import android.graphics.RegionIterator
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
-import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withSave
 import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.rendering.StaticBoardFrame
+import com.example.einkarcade.ui.rendering.draw.BackgroundBitmapCache
 import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import kotlin.math.max
@@ -161,9 +161,11 @@ class LevelTransitionView
             if (width <= 0 || height <= 0) return
 
             val backgroundBitmap =
-                createBitmap(width, height).also {
-                    backgroundDrawer.draw(Canvas(it), width, height)
-                }
+                BackgroundBitmapCache.get(
+                    context = context,
+                    width = width,
+                    height = height,
+                )
 
             transitionState =
                 TransitionState(

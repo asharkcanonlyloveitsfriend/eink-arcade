@@ -7,14 +7,14 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.ui.rendering.draw.GameRenderer
+import com.example.einkarcade.ui.rendering.draw.EntityRenderer
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 
 private const val FLASH_LIGHT_TICKS = 1
 private const val FLASH_DARK_TICKS = 1
 
 internal class EntityFlashAnimation(
-    private val renderer: GameRenderer,
+    private val renderer: EntityRenderer,
     private val viewport: BoardViewport,
     private val playerPosition: Position,
     private val boxPositions: List<Position>,

@@ -3,23 +3,18 @@ package com.example.einkarcade.ui.rendering.draw
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
-import androidx.core.graphics.createBitmap
 import com.example.einkarcade.R
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.ResolvedEntityGeometry
 import com.example.einkarcade.ui.rendering.geom.toRenderPoint
 import kotlin.math.roundToInt
 
-internal class GameRenderer(
+internal class EntityRenderer(
     private val assets: AndroidGameAssets,
-    private val backgroundDrawer: BackgroundDrawer,
-    private val tileDrawer: TileDrawer,
     private val entityDrawer: EntityDrawer,
 ) {
-    private var staticFrameBitmap: Bitmap? = null
     private lateinit var geometry: ResolvedEntityGeometry
 
     fun initGeometry(viewport: BoardViewport) {
@@ -28,39 +23,6 @@ internal class GameRenderer(
                 viewport.cellSize,
                 assets = assets,
             )
-    }
-
-    fun rebuildStaticLayout(
-        viewWidth: Int,
-        viewHeight: Int,
-        viewport: BoardViewport,
-        tileMap: TileMap,
-    ) {
-        initGeometry(viewport)
-
-        val bitmap = createBitmap(viewWidth, viewHeight)
-        val canvas = Canvas(bitmap)
-
-        backgroundDrawer.draw(canvas, viewWidth, viewHeight)
-        tileDrawer.drawTiles(canvas, viewport, tileMap)
-
-        staticFrameBitmap = bitmap
-    }
-
-    fun drawStaticFrame(canvas: Canvas) {
-        val bitmap = staticFrameBitmap ?: error("Static frame bitmap not initialized")
-        canvas.drawBitmap(bitmap, 0f, 0f, null)
-    }
-
-    fun getStaticFrameBitmap(): Bitmap =
-        staticFrameBitmap ?: error("Static frame bitmap not initialized")
-
-    fun drawBackground(
-        canvas: Canvas,
-        viewWidth: Int,
-        viewHeight: Int,
-    ) {
-        backgroundDrawer.draw(canvas, viewWidth, viewHeight)
     }
 
     fun drawBoxes(

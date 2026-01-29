@@ -13,10 +13,8 @@ import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxPathAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxVanishAnimation
 import com.example.einkarcade.ui.rendering.anim.EntityFlashAnimation
-import com.example.einkarcade.ui.rendering.draw.BackgroundDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
-import com.example.einkarcade.ui.rendering.draw.GameRenderer
-import com.example.einkarcade.ui.rendering.draw.TileDrawer
+import com.example.einkarcade.ui.rendering.draw.EntityRenderer
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
 
 @SuppressLint("ClickableViewAccessibility")
@@ -24,12 +22,11 @@ internal class GameBoardView(
     context: Context,
 ) : View(context),
     GameBoardPresenter {
-    private val renderer =
-        GameRenderer(
-            assets = AndroidGameAssets(context),
-            backgroundDrawer = BackgroundDrawer(context),
-            tileDrawer = TileDrawer(),
-            entityDrawer = EntityDrawer(AndroidGameAssets(context)),
+    private val assets = AndroidGameAssets(context)
+    private val entityRenderer =
+        EntityRenderer(
+            assets = assets,
+            entityDrawer = EntityDrawer(assets),
         )
 
     private var staticFrame: StaticBoardFrame? = null
@@ -112,8 +109,8 @@ internal class GameBoardView(
         val viewport = staticFrame!!.viewport
 
         invalidateRects(
-            previous?.let { renderer.computeBoxRect(viewport, it) },
-            position?.let { renderer.computeBoxRect(viewport, it) },
+            previous?.let { entityRenderer.computeBoxRect(viewport, it) },
+            position?.let { entityRenderer.computeBoxRect(viewport, it) },
         )
     }
 
@@ -154,7 +151,7 @@ internal class GameBoardView(
 
         animationRunner.drawUnderEntities(canvas)
 
-        renderer.drawBoxes(
+        entityRenderer.drawBoxes(
             canvas = canvas,
             viewport = viewport,
             boxPositions = boxPositions,
@@ -162,7 +159,7 @@ internal class GameBoardView(
         )
 
         if (!animationRunner.hidesPlayer()) {
-            renderer.drawPlayer(
+            entityRenderer.drawPlayer(
                 canvas = canvas,
                 viewport = viewport,
                 playerPosition = playerPos,
@@ -178,7 +175,7 @@ internal class GameBoardView(
         playerPosition: Position,
     ) {
         this.staticFrame = staticFrame
-        renderer.initGeometry(staticFrame.viewport)
+        entityRenderer.initGeometry(staticFrame.viewport)
         this.boxPositions = boxPositions
         this.playerPosition = playerPosition
         selectedBox = null
@@ -202,14 +199,14 @@ internal class GameBoardView(
 
         val addedBoxes = boxPositions - previousBoxes
         invalidateRects(
-            renderer.computePlayerRect(viewport, playerPosition),
-            *addedBoxes.map { renderer.computeBoxRect(viewport, it) }.toTypedArray(),
+            entityRenderer.computePlayerRect(viewport, playerPosition),
+            *addedBoxes.map { entityRenderer.computeBoxRect(viewport, it) }.toTypedArray(),
         )
 
         if (movedBoxes.isNotEmpty() || playerChanged) {
             animationRunner.enqueue(
                 EntityFlashAnimation(
-                    renderer = renderer,
+                    renderer = entityRenderer,
                     viewport = viewport,
                     playerPosition = previousPlayer,
                     boxPositions = movedBoxes.toList(),
@@ -239,15 +236,15 @@ internal class GameBoardView(
 
     private fun onBoxRemoved(removedPosition: Position) {
         val viewport = staticFrame!!.viewport
-        animationRunner.enqueue(BoxVanishAnimation(renderer, viewport, removedPosition))
-        animationRunner.enqueue(BlinkAnimation(renderer, viewport, this.playerPosition!!))
+        animationRunner.enqueue(BoxVanishAnimation(entityRenderer, viewport, removedPosition))
+        animationRunner.enqueue(BlinkAnimation(entityRenderer, viewport, this.playerPosition!!))
     }
 
     private fun onMoveRejected() {
         val viewport = staticFrame!!.viewport
         val playerPos = playerPosition!!
 
-        animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
+        animationRunner.enqueue(BlinkAnimation(entityRenderer, viewport, playerPos))
     }
 
     private fun onGameWon(isClean: Boolean) {
@@ -255,7 +252,7 @@ internal class GameBoardView(
         val viewport = staticFrame!!.viewport
         val playerPos = playerPosition!!
 
-        animationRunner.enqueue(BlinkAnimation(renderer, viewport, playerPos))
+        animationRunner.enqueue(BlinkAnimation(entityRenderer, viewport, playerPos))
     }
 
     private fun invalidateRects(vararg rects: Rect?) {

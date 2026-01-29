@@ -251,17 +251,7 @@ fun GameScreen(
                         )
                         onDismiss = {
                             gameController.finishLevelTransition()
-                            val w = boardWidth.value
-                            val h = boardHeight.value
-                            check(w > 0 && h > 0) { "Board size must be known when dismissing level transition" }
-                            val frame =
-                                gameController.buildStaticBoardFrame(
-                                    context = ctx,
-                                    tileMap = gameController.tileMap,
-                                    width = w,
-                                    height = h,
-                                )
-                            gameController.emitLevelLoaded(frame)
+                            gameController.emitLevelLoaded(newFrame)
                             hasEmittedLevelLoaded.value = true
                         }
                     }
@@ -420,8 +410,8 @@ fun GameScreen(
                         .weight(1f)
                         .fillMaxWidth(),
             ) {
-                // Only show tap-to-advance overlay when game is won
-                if (gameController.isGameWon) {
+                // Only show tap-to-advance overlay when game is won AND in gameplay mode
+                if (uiMode == GameController.UiMode.GAMEPLAY && gameController.isGameWon) {
                     Box(
                         modifier =
                             Modifier

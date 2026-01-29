@@ -3,7 +3,7 @@ package com.example.einkarcade.ui.rendering.anim
 import android.graphics.Canvas
 import android.graphics.Rect
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.ui.rendering.draw.GameRenderer
+import com.example.einkarcade.ui.rendering.draw.EntityRenderer
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 
 private data class BoxVanishPhase(
@@ -23,7 +23,7 @@ private val BOX_VANISH_PHASES =
     )
 
 internal class BoxVanishAnimation(
-    private val renderer: GameRenderer,
+    private val renderer: EntityRenderer,
     private val viewport: BoardViewport,
     private val position: Position,
 ) : Animation {

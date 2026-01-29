@@ -3,7 +3,7 @@ package com.example.einkarcade.ui.rendering.anim
 import android.graphics.Canvas
 import android.graphics.Rect
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.ui.rendering.draw.GameRenderer
+import com.example.einkarcade.ui.rendering.draw.EntityRenderer
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 
 /**
@@ -13,7 +13,7 @@ import com.example.einkarcade.ui.rendering.geom.BoardViewport
  * - Step 2: cleanup (invalidate eyes, draw nothing), then finish
  */
 internal class BlinkAnimation(
-    renderer: GameRenderer,
+    renderer: EntityRenderer,
     viewport: BoardViewport,
     playerPos: Position,
     private val waitTicks: Int = 8, // e.g. 8 * 50ms = 400ms
