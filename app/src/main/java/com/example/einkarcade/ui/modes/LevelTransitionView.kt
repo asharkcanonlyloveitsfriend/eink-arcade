@@ -1,4 +1,4 @@
-package com.example.einkarcade.ui.transition
+package com.example.einkarcade.ui.modes
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -50,9 +50,9 @@ class LevelTransitionView
     ) : View(context, attrs) {
         private val backgroundDrawer = BackgroundDrawer(context)
 
-        private var oldViewport: BoardViewport? = null
-        private var oldTileMap: TileMap? = null
-        private var newFrame: StaticBoardFrame? = null
+        private lateinit var oldViewport: BoardViewport
+        private lateinit var oldTileMap: TileMap
+        private lateinit var newFrame: StaticBoardFrame
         private var transitionState: TransitionState? = null
         private var stepIndex = 0
         private var hasDismissed = false
@@ -69,17 +69,10 @@ class LevelTransitionView
             invalidate()
         }
 
-        // Set by the host (Compose or parent view) to dismiss the overlay.
+        // Set by the host (Compose or parent view) to dismiss the view.
         var onDismiss: (() -> Unit)? = null
 
         override fun onDraw(canvas: Canvas) {
-            val oldViewport =
-                checkNotNull(oldViewport) { "LevelTransitionView requires oldViewport before draw." }
-            val oldTileMap =
-                checkNotNull(oldTileMap) { "LevelTransitionView requires oldTileMap before draw." }
-            val newFrame =
-                checkNotNull(newFrame) { "LevelTransitionView requires newFrame before draw." }
-
             if (transitionState == null) {
                 rebuildTransitionState(oldViewport, oldTileMap, newFrame)
             }
@@ -147,9 +140,6 @@ class LevelTransitionView
         }
 
         private fun rebuildTransitionState() {
-            val oldViewport = oldViewport ?: return
-            val oldTileMap = oldTileMap ?: return
-            val newFrame = newFrame ?: return
             rebuildTransitionState(oldViewport, oldTileMap, newFrame)
         }
 

@@ -71,10 +71,10 @@ class MainActivityTest {
         }
 
         composeTestRule
-            .onNodeWithText("You win!")
+            .onNodeWithTag("levelSolvedView")
             .assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Restart").performTouchInput { click() }
+        composeTestRule.onNodeWithTag("levelSolvedView").performTouchInput { click() }
 
         composeTestRule
             .onNodeWithText("Level 2", substring = true)

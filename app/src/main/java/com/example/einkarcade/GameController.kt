@@ -31,6 +31,7 @@ class GameController(
 
     enum class UiMode {
         GAMEPLAY,
+        LEVEL_SOLVED,
         LEVEL_TRANSITION,
     }
 
@@ -71,10 +72,6 @@ class GameController(
             ) : StateChangeAnnotation
         }
 
-        data class GameWon(
-            val isClean: Boolean,
-        ) : RenderDelta
-
         data object MoveRejected : RenderDelta
     }
 
@@ -84,7 +81,6 @@ class GameController(
     var onRenderDelta: ((RenderDelta) -> Unit)? = null
         set(value) {
             field = value
-            // Initial LevelLoaded is now emitted explicitly by the UI once a StaticBoardFrame exists.
         }
 
     val currentSetName: String
@@ -98,9 +94,6 @@ class GameController(
 
     val boxPositions: Set<Position>
         get() = gameEngine.boxPositions
-
-    val isGameWon: Boolean
-        get() = gameEngine.isGameWon
 
     val isAtStart: Boolean
         get() = gameEngine.isAtStart
@@ -159,7 +152,6 @@ class GameController(
         val sets = loadLevelSets() ?: emptyList()
         rebuildState(sets)
         markChanged()
-        // onRenderDelta?.invoke(currentLevelLoadedDelta())  // removed
     }
 
     fun selectLevel(name: String) {
@@ -170,9 +162,9 @@ class GameController(
     }
 
     fun restart() {
-        markChanged()
         gameEngine = GameEngine(level)
         emitStateChanged(RenderDelta.StateChangeAnnotation.Restart)
+        uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
     }
 
     private fun beginLevelTransition(nextIndex: Int) {
@@ -204,7 +196,6 @@ class GameController(
 
         persistSelection()
         markChanged()
-        // onRenderDelta?.invoke(currentLevelLoadedDelta())  // removed
 
         uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
     }
@@ -223,8 +214,8 @@ class GameController(
     }
 
     fun undo(): Boolean {
+        if (uiMode != UiMode.GAMEPLAY) return false
         if (gameEngine.undo() == null) return false
-        markChanged()
         emitStateChanged(RenderDelta.StateChangeAnnotation.Undo)
         return true
     }
@@ -249,8 +240,8 @@ class GameController(
             emitStateChanged(
                 RenderDelta.StateChangeAnnotation.BoxRemoved(boxTo),
             )
-            recordCompletionIfWon()
-            notifyIfWon()
+            recordCompletionIfSolved()
+            updateUiModeIfSolved()
             return
         }
         val boxPath = gameEngine.moveBoxTo(boxFrom, boxTo)
@@ -261,8 +252,8 @@ class GameController(
         emitStateChanged(
             RenderDelta.StateChangeAnnotation.BoxMoved(boxPath),
         )
-        recordCompletionIfWon()
-        notifyIfWon()
+        recordCompletionIfSolved()
+        updateUiModeIfSolved()
     }
 
     private val levelsInCurrentSet: List<Level>
@@ -323,8 +314,8 @@ class GameController(
         revisionState.longValue = revisionState.longValue + 1L
     }
 
-    private fun recordCompletionIfWon() {
-        if (gameEngine.isCleanWin) {
+    private fun recordCompletionIfSolved() {
+        if (gameEngine.isCleanSolution) {
             val timestamp =
                 repository.recordCompletion(
                     level,
@@ -334,10 +325,9 @@ class GameController(
         }
     }
 
-    private fun notifyIfWon() {
-        if (gameEngine.isGameWon) {
-            markChanged()
-            onRenderDelta?.invoke(RenderDelta.GameWon(isClean = gameEngine.isCleanWin))
+    private fun updateUiModeIfSolved() {
+        if (gameEngine.isLevelSolved) {
+            uiModeState.longValue = UiMode.LEVEL_SOLVED.ordinal.toLong()
         }
     }
 

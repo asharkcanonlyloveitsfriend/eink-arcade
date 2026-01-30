@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
+import androidx.core.graphics.createBitmap
 import com.example.einkarcade.R
 import kotlin.math.roundToInt
 
@@ -55,7 +56,7 @@ internal class BackgroundDrawer(
         }
 
         // Render the fitted background into a cached screen-sized bitmap
-        val screenBitmap = Bitmap.createBitmap(viewW, viewH, Bitmap.Config.ARGB_8888)
+        val screenBitmap = createBitmap(viewW, viewH)
         val screenCanvas = Canvas(screenBitmap)
 
         backgroundDstRect.set(0, 0, viewW, viewH)

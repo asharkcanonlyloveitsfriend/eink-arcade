@@ -6,7 +6,6 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,12 +24,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -39,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -54,10 +49,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
+import com.example.einkarcade.ui.modes.LevelSolvedView
+import com.example.einkarcade.ui.modes.LevelTransitionView
 import com.example.einkarcade.ui.rendering.GameBoardPresenter
 import com.example.einkarcade.ui.rendering.GameBoardView
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
-import com.example.einkarcade.ui.transition.LevelTransitionView
 
 private fun createGameSurface(context: android.content.Context): GameBoardPresenter = GameBoardView(context)
 
@@ -82,8 +78,8 @@ fun GameScreen(
     }
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
-    val boardWidth = remember { mutableStateOf(0) }
-    val boardHeight = remember { mutableStateOf(0) }
+    val boardWidth = remember { mutableIntStateOf(0) }
+    val boardHeight = remember { mutableIntStateOf(0) }
     val hasEmittedLevelLoaded = remember { mutableStateOf(false) }
 
     DisposableEffect(surfaceRef.value) {
@@ -107,8 +103,8 @@ fun GameScreen(
                 val width = right
                 val height = bottom
                 if (width > 0 && height > 0) {
-                    boardWidth.value = width
-                    boardHeight.value = height
+                    boardWidth.intValue = width
+                    boardHeight.intValue = height
                 }
             }
         }
@@ -185,6 +181,46 @@ fun GameScreen(
         }
     }
 
+    @Composable
+    fun bottomDrawableButton(
+        onClick: () -> Unit,
+        drawableResId: Int,
+        contentDescription: String,
+        backgroundColor: Color = Color.Transparent,
+        pressedBackgroundColor: Color = Color.Transparent,
+        tintColor: Color = Color.LightGray,
+        pressedTintAlpha: Float = 0.6f,
+    ) {
+        val interactionSource = remember { MutableInteractionSource() }
+        val isPressed = interactionSource.collectIsPressedAsState()
+        val currentTint =
+            if (isPressed.value) {
+                tintColor.copy(alpha = tintColor.alpha * pressedTintAlpha)
+            } else {
+                tintColor
+            }
+        Box(
+            modifier =
+                Modifier
+                    .height(48.dp)
+                    .background(if (isPressed.value) pressedBackgroundColor else backgroundColor)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = onClick,
+                    ).padding(horizontal = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter =
+                    androidx.compose.ui.res
+                        .painterResource(drawableResId),
+                contentDescription = contentDescription,
+                tint = currentTint,
+            )
+        }
+    }
+
     Box(
         modifier =
             modifier
@@ -254,6 +290,42 @@ fun GameScreen(
                             gameController.emitLevelLoaded(newFrame)
                             hasEmittedLevelLoaded.value = true
                         }
+                    }
+                },
+            )
+        }
+
+        if (uiMode == GameController.UiMode.LEVEL_SOLVED) {
+            AndroidView(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .testTag("levelSolvedView"),
+                factory = { ctx ->
+                    val width = boardWidth.value
+                    val height = boardHeight.value
+
+                    LevelSolvedView(ctx).apply {
+                        if (width > 0 && height > 0) {
+                            val frame =
+                                gameController.buildStaticBoardFrame(
+                                    context = ctx,
+                                    tileMap = currentTileMap,
+                                    width = width,
+                                    height = height,
+                                )
+                            setStaticFrame(frame)
+                            setRating(gameController.getCurrentRating())
+                        }
+                        onThumbUp = {
+                            gameController.toggleThumbUp()
+                            setRating(gameController.getCurrentRating())
+                        }
+                        onThumbDown = {
+                            gameController.toggleThumbDown()
+                            setRating(gameController.getCurrentRating())
+                        }
+                        onAdvance = { gameController.nextLevel() }
                     }
                 },
             )
@@ -410,82 +482,6 @@ fun GameScreen(
                         .weight(1f)
                         .fillMaxWidth(),
             ) {
-                // Only show tap-to-advance overlay when game is won AND in gameplay mode
-                if (uiMode == GameController.UiMode.GAMEPLAY && gameController.isGameWon) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(0.8f)
-                                .align(Alignment.Center),
-                    ) {
-                        // Right-half tap-to-advance zone
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            Spacer(modifier = Modifier.weight(1f))
-
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                        ) {
-                                            gameController.nextLevel()
-                                        },
-                            )
-                        }
-
-                        // Win card content (buttons behave normally)
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .padding(16.dp)
-                                        .background(Color.White)
-                                        .border(width = 2.dp, color = Color.Black)
-                                        .padding(16.dp),
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    val currentRating = gameController.getCurrentRating()
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        bottomIconButton(
-                                            onClick = { gameController.toggleThumbDown() },
-                                            icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
-                                            contentDescription = "Dislike level",
-                                            backgroundColor = Color.White,
-                                            pressedBackgroundColor = Color.White,
-                                            tintColor = Color.DarkGray,
-                                        )
-
-                                        Spacer(modifier = Modifier.width(12.dp))
-
-                                        Text(
-                                            text = "You win!",
-                                            color = Color.Black,
-                                            fontSize = 32.sp,
-                                        )
-
-                                        Spacer(modifier = Modifier.width(12.dp))
-
-                                        bottomIconButton(
-                                            onClick = { gameController.toggleThumbUp() },
-                                            icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                            contentDescription = "Like level",
-                                            backgroundColor = Color.White,
-                                            pressedBackgroundColor = Color.White,
-                                            tintColor = Color.DarkGray,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
 
             Row(
@@ -537,28 +533,40 @@ fun GameScreen(
                             ),
                 )
 
-                bottomIconButton(
+                bottomDrawableButton(
                     onClick = {
                         syncSuccess.value = false
                         syncError.value = null
                         gameController.toggleThumbDown()
                     },
-                    icon = if (currentRating == -1) Icons.Filled.Delete else Icons.Outlined.Delete,
+                    drawableResId =
+                        if (currentRating ==
+                            -1
+                        ) {
+                            com.example.einkarcade.R.drawable.ic_trash_filled
+                        } else {
+                            com.example.einkarcade.R.drawable.ic_trash
+                        },
                     contentDescription = "Dislike level",
                 )
 
-                bottomIconButton(
+                bottomDrawableButton(
                     onClick = {
                         syncSuccess.value = false
                         syncError.value = null
                         gameController.toggleThumbUp()
                     },
-                    icon = if (currentRating == 1) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    drawableResId =
+                        if (currentRating ==
+                            1
+                        ) {
+                            com.example.einkarcade.R.drawable.ic_heart_filled
+                        } else {
+                            com.example.einkarcade.R.drawable.ic_heart
+                        },
                     contentDescription = "Like level",
                 )
             }
         }
-
-        // (win overlay and tap zone now handled inside the middle Box above)
     }
 }

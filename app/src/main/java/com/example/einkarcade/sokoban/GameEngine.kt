@@ -15,11 +15,11 @@ class GameEngine(
     val boxPositions: Set<Position>
         get() = gameState.boxPositions
 
-    val isGameWon: Boolean
+    val isLevelSolved: Boolean
         get() = gameState.boxPositions.all { level.tileMap.isGoal(it) }
 
-    val isCleanWin: Boolean
-        get() = isGameWon && gameState.boxPositions.size == level.boxPositions.size
+    val isCleanSolution: Boolean
+        get() = isLevelSolved && gameState.boxPositions.size == level.boxPositions.size
 
     val isAtStart: Boolean
         get() =
@@ -56,7 +56,7 @@ class GameEngine(
         from: Position,
         to: Position,
     ): List<Position>? {
-        if (isGameWon) return null
+        if (isLevelSolved) return null
         if (!gameState.hasBoxAt(from)) return null
 
         val boxPathfinder =
@@ -86,7 +86,7 @@ class GameEngine(
         from: Position,
         to: Position,
     ): Boolean {
-        if (isGameWon) return false
+        if (isLevelSolved) return false
         if (!gameState.hasBoxAt(from)) return false
 
         val dirRow = from.row - playerPosition.row
@@ -106,7 +106,7 @@ class GameEngine(
     }
 
     fun movePlayerTo(position: Position): Boolean {
-        if (isGameWon) return false
+        if (isLevelSolved) return false
 
         val pathfinder = Pathfinder(walkableGrid)
         if (!pathfinder.canFindPath(playerPosition, position)) return false
