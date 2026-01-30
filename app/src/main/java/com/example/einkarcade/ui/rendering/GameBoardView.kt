@@ -36,12 +36,6 @@ internal class GameBoardView(
     private var onTapCell: ((Position) -> Unit)? = null
     private var selectedBox: Position? = null
 
-    private val inkOverlay =
-        InkOverlay(
-            density = resources.displayMetrics.density,
-            invalidate = { l, t, r, b -> postInvalidateOnAnimation(l, t, r, b) },
-        )
-
     private val animationRunner =
         AnimationRunner(
             invalidateRects = { rects -> invalidateRects(*rects) },
@@ -50,31 +44,14 @@ internal class GameBoardView(
 
     init {
         setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    inkOverlay.onTouchEvent(event, onTap = null)
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    inkOverlay.onTouchEvent(event, onTap = null)
-                }
-
-                MotionEvent.ACTION_UP -> {
-                    inkOverlay.onTouchEvent(event) { x, y ->
-                        val viewport = staticFrame?.viewport ?: return@onTouchEvent
-                        val position = viewport.screenToInnerCell(x, y) ?: return@onTouchEvent
-                        onTapCell?.invoke(position)
-                    }
-                }
-
-                MotionEvent.ACTION_CANCEL -> {
-                    inkOverlay.onTouchEvent(event, onTap = null)
-                }
-
-                else -> {
-                    true
-                }
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                val viewport = staticFrame?.viewport ?: return@setOnTouchListener true
+                val position =
+                    viewport.screenToInnerCell(event.x, event.y)
+                        ?: return@setOnTouchListener true
+                onTapCell?.invoke(position)
             }
+            true
         }
     }
 
@@ -83,17 +60,6 @@ internal class GameBoardView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawInternal(canvas)
-        inkOverlay.draw(canvas)
-    }
-
-    override fun onSizeChanged(
-        w: Int,
-        h: Int,
-        oldw: Int,
-        oldh: Int,
-    ) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        inkOverlay.onSizeChanged(w)
     }
 
     override fun setOnTapCell(handler: (Position) -> Unit) {
