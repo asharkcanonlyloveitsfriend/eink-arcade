@@ -49,7 +49,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
-import com.example.einkarcade.ui.modes.LevelSolvedView
+import com.example.einkarcade.ui.modes.LevelSolvedOverlay
 import com.example.einkarcade.ui.modes.LevelTransitionView
 import com.example.einkarcade.ui.rendering.GameBoardPresenter
 import com.example.einkarcade.ui.rendering.GameBoardView
@@ -302,21 +302,8 @@ fun GameScreen(
                         .fillMaxSize()
                         .testTag("levelSolvedView"),
                 factory = { ctx ->
-                    val width = boardWidth.value
-                    val height = boardHeight.value
-
-                    LevelSolvedView(ctx).apply {
-                        if (width > 0 && height > 0) {
-                            val frame =
-                                gameController.buildStaticBoardFrame(
-                                    context = ctx,
-                                    tileMap = currentTileMap,
-                                    width = width,
-                                    height = height,
-                                )
-                            setStaticFrame(frame)
-                            setRating(gameController.getCurrentRating())
-                        }
+                    LevelSolvedOverlay(ctx).apply {
+                        setRating(gameController.getCurrentRating())
                         onThumbUp = {
                             gameController.toggleThumbUp()
                             setRating(gameController.getCurrentRating())

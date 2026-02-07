@@ -12,21 +12,14 @@ import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.example.einkarcade.R
-import com.example.einkarcade.ui.rendering.StaticBoardFrame
 import kotlin.math.max
 
-class LevelSolvedView
+class LevelSolvedOverlay
     @JvmOverloads
     constructor(
         context: Context,
         attrs: AttributeSet? = null,
     ) : View(context, attrs) {
-        private lateinit var staticFrame: StaticBoardFrame
-
-        fun setStaticFrame(frame: StaticBoardFrame) {
-            staticFrame = frame
-        }
-
         var onAdvance: (() -> Unit)? = null
         var onThumbUp: (() -> Unit)? = null
         var onThumbDown: (() -> Unit)? = null
@@ -79,8 +72,6 @@ class LevelSolvedView
             requireNotNull(ContextCompat.getDrawable(context, R.drawable.ic_heart_filled))
 
         override fun onDraw(canvas: Canvas) {
-            canvas.drawBitmap(staticFrame.bitmap, 0f, 0f, null)
-
             val density = resources.displayMetrics.density
 
             val text = "You win!"
@@ -182,7 +173,7 @@ class LevelSolvedView
                         onThumbUp?.invoke()
                     }
 
-                    else -> {
+                    x > width / 2f -> {
                         onAdvance?.invoke()
                     }
                 }
