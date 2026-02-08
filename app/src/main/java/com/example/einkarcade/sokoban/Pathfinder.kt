@@ -4,6 +4,7 @@ import java.util.PriorityQueue
 
 class Pathfinder(
     private val walkableGrid: Array<Array<Boolean>>,
+    private val stats: PathfinderStats? = null,
 ) {
     fun canFindPath(
         from: Position,
@@ -24,6 +25,7 @@ class Pathfinder(
 
         gScore[from.row][from.col] = 0
         openSet.add(from to heuristic(from, to))
+        stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
 
         val directions =
             listOf(
@@ -37,6 +39,8 @@ class Pathfinder(
             val entry = openSet.poll() ?: break
             val (current, _) = entry
 
+            stats?.nodesExpanded = stats?.nodesExpanded?.plus(1) ?: 0
+
             if (current == to) return true
             if (visited[current.row][current.col]) continue
             visited[current.row][current.col] = true
@@ -49,6 +53,7 @@ class Pathfinder(
                         gScore[neighbor.row][neighbor.col] = tentativeG
                         val fScore = tentativeG + heuristic(neighbor, to)
                         openSet.add(neighbor to fScore)
+                        stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
                     }
                 }
             }
