@@ -1,7 +1,5 @@
 package com.example.einkarcade.sokoban
 
-import java.util.PriorityQueue
-
 class Pathfinder(
     private val walkableGrid: Array<Array<Boolean>>,
     private val stats: PathfinderStats? = null,
@@ -14,48 +12,52 @@ class Pathfinder(
         val numRows = walkableGrid.size
         val numCols = walkableGrid[0].size
 
-        val openSet = PriorityQueue(compareBy<Pair<Position, Int>> { it.second })
-        val gScore = Array(numRows) { IntArray(numCols) { Int.MAX_VALUE } }
         val visited = Array(numRows) { BooleanArray(numCols) }
+        val queue: ArrayDeque<Int> = ArrayDeque()
 
-        fun heuristic(
-            a: Position,
-            b: Position,
-        ): Int = kotlin.math.abs(a.row - b.row) + kotlin.math.abs(a.col - b.col)
-
-        gScore[from.row][from.col] = 0
-        openSet.add(from to heuristic(from, to))
+        queue.add(from.row * numCols + from.col)
         stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
 
-        val directions =
-            listOf(
-                Position(-1, 0), // up
-                Position(1, 0), // down
-                Position(0, -1), // left
-                Position(0, 1), // right
-            )
+        val targetIndex = to.row * numCols + to.col
 
-        while (openSet.isNotEmpty()) {
-            val entry = openSet.poll() ?: break
-            val (current, _) = entry
-
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
             stats?.nodesExpanded = stats?.nodesExpanded?.plus(1) ?: 0
 
-            if (current == to) return true
-            if (visited[current.row][current.col]) continue
-            visited[current.row][current.col] = true
+            if (current == targetIndex) return true
 
-            for (dir in directions) {
-                val neighbor = Position(current.row + dir.row, current.col + dir.col)
-                if (neighbor.row in 0 until numRows && neighbor.col in 0 until numCols && walkableGrid[neighbor.row][neighbor.col]) {
-                    val tentativeG = gScore[current.row][current.col] + 1
-                    if (tentativeG < gScore[neighbor.row][neighbor.col]) {
-                        gScore[neighbor.row][neighbor.col] = tentativeG
-                        val fScore = tentativeG + heuristic(neighbor, to)
-                        openSet.add(neighbor to fScore)
-                        stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
-                    }
-                }
+            val row = current / numCols
+            val col = current % numCols
+
+            if (visited[row][col]) continue
+            visited[row][col] = true
+
+            // up
+            val up = row - 1
+            if (up >= 0 && walkableGrid[up][col] && !visited[up][col]) {
+                queue.add(up * numCols + col)
+                stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
+            }
+
+            // down
+            val down = row + 1
+            if (down < numRows && walkableGrid[down][col] && !visited[down][col]) {
+                queue.add(down * numCols + col)
+                stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
+            }
+
+            // left
+            val left = col - 1
+            if (left >= 0 && walkableGrid[row][left] && !visited[row][left]) {
+                queue.add(row * numCols + left)
+                stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
+            }
+
+            // right
+            val right = col + 1
+            if (right < numCols && walkableGrid[row][right] && !visited[row][right]) {
+                queue.add(row * numCols + right)
+                stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
             }
         }
 

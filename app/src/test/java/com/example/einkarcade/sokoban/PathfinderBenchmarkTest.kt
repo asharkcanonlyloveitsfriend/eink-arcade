@@ -2,7 +2,7 @@ package com.example.einkarcade.sokoban
 
 import org.junit.Test
 
-@Ignore("Benchmark – run manually")
+// @Ignore("Benchmark – run manually")
 class PathfinderBenchmarkTest {
     @Test
     fun benchmarkCanFindPath_baseline() {
