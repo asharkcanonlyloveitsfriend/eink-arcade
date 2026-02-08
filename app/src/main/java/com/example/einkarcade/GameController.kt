@@ -72,6 +72,10 @@ class GameController(
             ) : StateChangeAnnotation
         }
 
+        data class LevelSolved(
+            val isClean: Boolean,
+        ) : RenderDelta
+
         data object MoveRejected : RenderDelta
     }
 
@@ -328,6 +332,7 @@ class GameController(
     private fun updateUiModeIfSolved() {
         if (gameEngine.isLevelSolved) {
             uiModeState.longValue = UiMode.LEVEL_SOLVED.ordinal.toLong()
+            onRenderDelta?.invoke(RenderDelta.LevelSolved(isClean = gameEngine.isCleanSolution))
         }
     }
 

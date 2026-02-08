@@ -101,6 +101,10 @@ internal class GameBoardView(
             is GameController.RenderDelta.MoveRejected -> {
                 onMoveRejected()
             }
+
+            is GameController.RenderDelta.LevelSolved -> {
+                onLevelSolved(isClean = delta.isClean)
+            }
         }
     }
 
@@ -203,6 +207,14 @@ internal class GameBoardView(
     }
 
     private fun onMoveRejected() {
+        val viewport = staticFrame!!.viewport
+        val playerPos = playerPosition!!
+
+        animationRunner.enqueue(BlinkAnimation(entityRenderer, viewport, playerPos))
+    }
+
+    private fun onLevelSolved(isClean: Boolean) {
+        if (isClean) return
         val viewport = staticFrame!!.viewport
         val playerPos = playerPosition!!
 
