@@ -20,6 +20,7 @@ class BoxPathfinder(
         }
 
     private val startState = State(boxStart, playerStart)
+    private val playerPathfinder = Pathfinder(planningGrid)
 
     fun findBoxPath(to: Position): List<Position>? {
         if (startState.box == to) return null
@@ -62,9 +63,8 @@ class BoxPathfinder(
                     planningGrid[newBox.row][newBox.col] &&
                     planningGrid[pushPos.row][pushPos.col]
                 ) {
-                    val pathfinder = pathfinderWithBoxAt(box)
                     stats?.playerPathfinderCalls = stats?.playerPathfinderCalls?.plus(1) ?: 0
-                    if (pathfinder.canFindPath(player, pushPos)) {
+                    if (playerPathfinder.canFindPath(player, pushPos, blocked = box)) {
                         stats?.playerPathfinderSuccesses =
                             stats?.playerPathfinderSuccesses?.plus(1) ?: 0
                         val newPlayer = box
@@ -95,15 +95,5 @@ class BoxPathfinder(
         }
         reversed.reverse()
         return reversed
-    }
-
-    private fun pathfinderWithBoxAt(box: Position): Pathfinder {
-        val tempGrid =
-            Array(planningGrid.size) { row ->
-                planningGrid[row].copyOf()
-            }
-        // For player reachability checks, the box occupies its current square and must be solid.
-        tempGrid[box.row][box.col] = false
-        return Pathfinder(tempGrid)
     }
 }

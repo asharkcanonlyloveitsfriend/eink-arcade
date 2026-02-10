@@ -12,6 +12,7 @@ class Pathfinder(
     fun canFindPath(
         from: Position,
         to: Position,
+        blocked: Position? = null,
     ): Boolean {
         if (from == to) return true
         val stamp = currentStamp++
@@ -38,28 +39,52 @@ class Pathfinder(
 
             // up
             val up = row - 1
-            if (up >= 0 && walkableGrid[up][col] && visitedStamp[up * numCols + col] != stamp) {
+            val upPos = Position(up, col)
+            if (
+                up >= 0 &&
+                blocked != upPos &&
+                walkableGrid[up][col] &&
+                visitedStamp[up * numCols + col] != stamp
+            ) {
                 queue.add(up * numCols + col)
                 stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
             }
 
             // down
             val down = row + 1
-            if (down < numRows && walkableGrid[down][col] && visitedStamp[down * numCols + col] != stamp) {
+            val downPos = Position(down, col)
+            if (
+                down < numRows &&
+                blocked != downPos &&
+                walkableGrid[down][col] &&
+                visitedStamp[down * numCols + col] != stamp
+            ) {
                 queue.add(down * numCols + col)
                 stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
             }
 
             // left
             val left = col - 1
-            if (left >= 0 && walkableGrid[row][left] && visitedStamp[row * numCols + left] != stamp) {
+            val leftPos = Position(row, left)
+            if (
+                left >= 0 &&
+                blocked != leftPos &&
+                walkableGrid[row][left] &&
+                visitedStamp[row * numCols + left] != stamp
+            ) {
                 queue.add(row * numCols + left)
                 stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
             }
 
             // right
             val right = col + 1
-            if (right < numCols && walkableGrid[row][right] && visitedStamp[row * numCols + right] != stamp) {
+            val rightPos = Position(row, right)
+            if (
+                right < numCols &&
+                blocked != rightPos &&
+                walkableGrid[row][right] &&
+                visitedStamp[row * numCols + right] != stamp
+            ) {
                 queue.add(row * numCols + right)
                 stats?.nodesPushed = stats?.nodesPushed?.plus(1) ?: 0
             }
