@@ -4,6 +4,7 @@ class BoxPathfinder(
     fullGrid: Array<Array<Boolean>>,
     boxStart: Position,
     playerStart: Position,
+    private val stats: BoxPathfinderStats? = null,
 ) {
     private data class State(
         val box: Position,
@@ -29,6 +30,7 @@ class BoxPathfinder(
         val parents = mutableMapOf<State, State?>()
         val queue = ArrayDeque<State>()
         queue.add(startState)
+        stats?.statesPushed = stats?.statesPushed?.plus(1) ?: 0
         visited.add(startState.box to startState.player)
         parents[startState] = null
 
@@ -44,11 +46,13 @@ class BoxPathfinder(
 
         while (queue.isNotEmpty()) {
             val (box, player) = queue.removeFirst()
+            stats?.statesExpanded = stats?.statesExpanded?.plus(1) ?: 0
             if (box == to) {
                 return buildBoxPath(parents, State(box, player))
             }
 
             for (dir in directions) {
+                stats?.pushAttempts = stats?.pushAttempts?.plus(1) ?: 0
                 val newBox = Position(box.row + dir.row, box.col + dir.col)
                 val pushPos = Position(box.row - dir.row, box.col - dir.col)
 
@@ -59,13 +63,17 @@ class BoxPathfinder(
                     planningGrid[pushPos.row][pushPos.col]
                 ) {
                     val pathfinder = pathfinderWithBoxAt(box)
+                    stats?.playerPathfinderCalls = stats?.playerPathfinderCalls?.plus(1) ?: 0
                     if (pathfinder.canFindPath(player, pushPos)) {
+                        stats?.playerPathfinderSuccesses =
+                            stats?.playerPathfinderSuccesses?.plus(1) ?: 0
                         val newPlayer = box
                         val newState = State(newBox, newPlayer)
                         if ((newBox to newPlayer) !in visited) {
                             visited.add(newBox to newPlayer)
                             parents[newState] = State(box, player)
                             queue.add(newState)
+                            stats?.statesPushed = stats?.statesPushed?.plus(1) ?: 0
                         }
                     }
                 }
