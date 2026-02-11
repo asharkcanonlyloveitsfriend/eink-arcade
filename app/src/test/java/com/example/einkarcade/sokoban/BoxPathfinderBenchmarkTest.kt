@@ -1,14 +1,27 @@
 package com.example.einkarcade.sokoban
 
-import org.junit.Ignore
+// import org.junit.Ignore
 import org.junit.Test
 
-@Ignore("Benchmark - run manually")
+// @Ignore("Benchmark - run manually")
 class BoxPathfinderBenchmarkTest {
     @Test
     fun benchmarkFindBoxPath_baseline() {
         val cases =
             listOf(
+                Triple(
+                    "l5",
+                    """
+                    #######
+                    #     #
+                    #    x#
+                    #     #
+                    # b   #
+                    #@    #
+                    #######
+                    """.trimIndent(),
+                    100_000,
+                ),
                 Triple(
                     "micro94",
                     """
