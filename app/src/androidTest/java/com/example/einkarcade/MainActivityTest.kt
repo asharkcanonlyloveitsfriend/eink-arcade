@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.sokoban.Level
+import com.example.einkarcade.ui.rendering.geom.BoardViewport
+import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -21,7 +23,7 @@ class MainActivityTest {
                     ctx,
                     listOf(
                         LevelSet(
-                            id = "training",
+                            id = 1,
                             name = "Training",
                             levels =
                                 listOf(
@@ -32,6 +34,7 @@ class MainActivityTest {
                                         #@$.#
                                         ####
                                         """.trimIndent(),
+                                        puzzleId = 101,
                                     ),
                                     Level.fromAscii(
                                         "Level 2",
@@ -40,6 +43,7 @@ class MainActivityTest {
                                         #@ $.#
                                         #####
                                         """.trimIndent(),
+                                        puzzleId = 102,
                                     ),
                                 ),
                         ),
@@ -63,30 +67,49 @@ class MainActivityTest {
             .onNodeWithText("Level 1", substring = true)
             .assertIsDisplayed()
 
-        val boxOffset = gridOffset(row = 1, col = 2)
-        val targetOffset = gridOffset(row = 1, col = 3)
         composeTestRule.onNodeWithTag("gameCanvas").performTouchInput {
-            click(boxOffset)
-            click(targetOffset)
+            val viewport =
+                computeBoardViewport(
+                    surfaceWidth = visibleSize.width.toFloat(),
+                    surfaceHeight = visibleSize.height.toFloat(),
+                    innerRows = 3,
+                    innerCols = 5,
+                )
+            click(gridOffsetInMiddleRow(viewport = viewport, col = 2))
+            click(gridOffsetInMiddleRow(viewport = viewport, col = 3))
         }
 
         composeTestRule
             .onNodeWithTag("levelSolvedView")
             .assertIsDisplayed()
 
-        composeTestRule.onNodeWithTag("levelSolvedView").performTouchInput { click() }
+        composeTestRule.onNodeWithTag("levelSolvedView").performTouchInput {
+            click(
+                Offset(
+                    x = visibleSize.width * 0.95f,
+                    y = visibleSize.height * 0.1f,
+                ),
+            )
+        }
 
-        composeTestRule
-            .onNodeWithText("Level 2", substring = true)
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag("gameCanvas").performTouchInput {
+            click(
+                Offset(
+                    x = visibleSize.width * 0.95f,
+                    y = visibleSize.height * 0.1f,
+                ),
+            )
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Level 2", substring = true).assertIsDisplayed()
     }
 }
 
-private fun gridOffset(
-    row: Int,
+private fun gridOffsetInMiddleRow(
+    viewport: BoardViewport,
     col: Int,
 ): Offset =
     Offset(
-        MainActivity.GRID_OFFSET_X + MainActivity.CELL_SIZE * (col + 0.5f),
-        MainActivity.GRID_OFFSET_Y + MainActivity.CELL_SIZE * (row + 0.5f),
+        viewport.offsetX + viewport.cellSize * (col + 1.5f),
+        viewport.offsetY + viewport.cellSize * (1 + 1.5f),
     )

@@ -11,44 +11,41 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
+import com.example.einkarcade.catalog.RepositoryLevelCatalog
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
+import com.example.einkarcade.ui.modes.LevelPickerOverlay
+import com.example.einkarcade.ui.modes.LevelSetPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSolvedOverlay
 import com.example.einkarcade.ui.modes.LevelTransitionView
 import com.example.einkarcade.ui.rendering.GameBoardPresenter
@@ -76,11 +73,14 @@ fun GameScreen(
     if (surfaceRef.value == null) {
         surfaceRef.value = surface
     }
+    val levelCatalog = remember(context) { RepositoryLevelCatalog(context = context) }
     val currentSetName = gameController.currentSetName
     val currentLevelName = gameController.levelName
     val boardWidth = remember { mutableIntStateOf(0) }
     val boardHeight = remember { mutableIntStateOf(0) }
     val hasEmittedLevelLoaded = remember { mutableStateOf(false) }
+    var showLevelPicker by remember { mutableStateOf(false) }
+    var showLevelSetPicker by remember { mutableStateOf(false) }
 
     DisposableEffect(surfaceRef.value) {
         val surface = surfaceRef.value
@@ -327,140 +327,28 @@ fun GameScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // --- Set (top-left) ---
-                val setExpanded = remember { mutableStateOf(false) }
-                val setOptions = gameController.availableSetOptions
-
-                Box(
+                Text(
+                    text = currentSetName,
+                    fontSize = 16.sp,
+                    color = Color.LightGray,
                     modifier =
                         Modifier
-                            .clickable { setExpanded.value = true },
-                ) {
-                    Text(
-                        text = currentSetName,
-                        fontSize = 16.sp,
-                        color = Color.LightGray,
-                        modifier =
-                            Modifier
-                                .background(
-                                    Color.Black,
-                                    shape =
-                                        androidx.compose.foundation.shape
-                                            .RoundedCornerShape(6.dp),
-                                ).padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-
-                    DropdownMenu(
-                        expanded = setExpanded.value,
-                        onDismissRequest = { setExpanded.value = false },
-                    ) {
-                        Column(
-                            modifier = Modifier.heightIn(max = 800.dp),
-                        ) {
-                            setOptions.forEach { (id, name) ->
-                                val isSelected = name == currentSetName
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        gameController.selectSetById(id)
-                                        setExpanded.value = false
-                                    },
-                                    contentPadding =
-                                        PaddingValues(
-                                            horizontal = 12.dp,
-                                            vertical = 4.dp,
-                                        ),
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .background(
-                                                if (isSelected) Color.LightGray else Color.Transparent,
-                                            ),
-                                )
-                            }
-                        }
-                    }
-                }
+                            .clickable { showLevelSetPicker = true }
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
 
                 Spacer(modifier = Modifier.weight(1f))
 
                 // --- Level (top-right, right-aligned) ---
-                val levelExpanded = remember { mutableStateOf(false) }
-                val levels = gameController.levels()
-                val selectedLevelIndex = levels.indexOfFirst { it.name == currentLevelName }
-                val levelScrollState = rememberScrollState()
-                val density = LocalDensity.current
-                val itemHeight: Dp = 40.dp
-
-                Box(
+                Text(
+                    text = currentLevelName,
+                    fontSize = 16.sp,
+                    color = Color.LightGray,
                     modifier =
                         Modifier
-                            .clickable { levelExpanded.value = true },
-                ) {
-                    Text(
-                        text = currentLevelName,
-                        fontSize = 16.sp,
-                        color = Color.LightGray,
-                        modifier =
-                            Modifier
-                                .background(
-                                    Color.Black,
-                                    shape =
-                                        androidx.compose.foundation.shape
-                                            .RoundedCornerShape(6.dp),
-                                ).padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-
-                    DropdownMenu(
-                        expanded = levelExpanded.value,
-                        onDismissRequest = { levelExpanded.value = false },
-                    ) {
-                        LaunchedEffect(levelExpanded.value, selectedLevelIndex) {
-                            if (levelExpanded.value && selectedLevelIndex >= 0) {
-                                val targetIndex = (selectedLevelIndex - 2).coerceAtLeast(0)
-                                val targetOffset =
-                                    with(density) { (itemHeight * targetIndex).roundToPx() }
-                                levelScrollState.scrollTo(targetOffset)
-                            }
-                        }
-
-                        Column(
-                            modifier =
-                                Modifier
-                                    .heightIn(max = 800.dp)
-                                    .verticalScroll(levelScrollState),
-                        ) {
-                            levels.forEach { lvl ->
-                                val completedMark = if (lvl.isCompleted) " ✓" else ""
-                                val ratingBadge =
-                                    when (lvl.rating) {
-                                        1 -> " 👍"
-                                        -1 -> " 👎"
-                                        else -> ""
-                                    }
-                                val isSelected = lvl.name == currentLevelName
-
-                                DropdownMenuItem(
-                                    text = { Text(lvl.name + completedMark + ratingBadge) },
-                                    onClick = {
-                                        gameController.selectLevel(lvl.name)
-                                        levelExpanded.value = false
-                                    },
-                                    contentPadding =
-                                        PaddingValues(
-                                            horizontal = 12.dp,
-                                            vertical = 4.dp,
-                                        ),
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .background(
-                                                if (isSelected) Color.LightGray else Color.Transparent,
-                                            ),
-                                )
-                            }
-                        }
-                    }
-                }
+                            .clickable { showLevelPicker = true }
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
             }
 
             Box(
@@ -554,6 +442,26 @@ fun GameScreen(
                     contentDescription = "Like level",
                 )
             }
+        }
+
+        if (showLevelPicker) {
+            LevelPickerOverlay(
+                catalog = levelCatalog,
+                selectedSetId = gameController.currentSetId,
+                selectedPuzzleId = gameController.currentPuzzleId,
+                onPickLevel = { puzzleId -> gameController.selectLevelByPuzzleId(puzzleId) },
+                onToggleLike = { puzzleId -> gameController.toggleLikeByPuzzleId(puzzleId) },
+                onToggleDislike = { puzzleId -> gameController.toggleDislikeByPuzzleId(puzzleId) },
+                onDismiss = { showLevelPicker = false },
+            )
+        }
+        if (showLevelSetPicker) {
+            LevelSetPickerOverlay(
+                catalog = levelCatalog,
+                selectedSetId = gameController.currentSetId,
+                onPickSet = { setId -> gameController.selectSetById(setId) },
+                onDismiss = { showLevelSetPicker = false },
+            )
         }
     }
 }

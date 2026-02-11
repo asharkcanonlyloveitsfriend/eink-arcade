@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableLongStateOf
 import com.example.einkarcade.appstate.LastSelectionStore
+import com.example.einkarcade.catalog.LevelCatalog
+import com.example.einkarcade.catalog.RepositoryLevelCatalog
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.data.LevelsRepository
+import com.example.einkarcade.selection.DefaultLevelPolicy
 import com.example.einkarcade.sokoban.GameEngine
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
@@ -19,6 +22,7 @@ class GameController(
     context: Context,
     injectedSets: List<LevelSet>? = null,
     private val lastSelectionStore: LastSelectionStore = LastSelectionStore(context),
+    private val levelCatalog: LevelCatalog = RepositoryLevelCatalog(context, injectedSets),
 ) {
     private val repository = LevelsRepository(context)
     private val revisionState = mutableLongStateOf(0L)
@@ -90,8 +94,8 @@ class GameController(
     val currentSetName: String
         get() = levelSets[currentSetIndex].name
 
-    val availableSetOptions: List<Pair<Int, String>>
-        get() = levelSets.map { it.id to it.name }
+    val currentSetId: Int
+        get() = levelSets[currentSetIndex].id
 
     val playerPosition: Position
         get() = gameEngine.playerPosition
@@ -116,6 +120,9 @@ class GameController(
     val levelName: String
         get() = level.name
 
+    val currentPuzzleId: Int
+        get() = level.puzzleId
+
     init {
         val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
         rebuildState(sets)
@@ -128,8 +135,7 @@ class GameController(
         pendingSetIndex = setIdx
 
         val levels = levelSets[setIdx].levels
-        val firstIncompleteIndex = levels.indexOfFirst { !it.isCompleted }
-        val levelIdx = if (firstIncompleteIndex != -1) firstIncompleteIndex else 0
+        val levelIdx = DefaultLevelPolicy.pickIndex(levels)
 
         pendingLevelIndex = levelIdx
         uiModeState.longValue = UiMode.LEVEL_TRANSITION.ordinal.toLong()
@@ -140,15 +146,31 @@ class GameController(
     fun getCurrentRating(): Int = level.rating
 
     fun toggleThumbUp() {
-        level.toggleThumbUp()
-        repository.updateRating(level)
-        markChanged()
+        toggleLikeByPuzzleId(currentPuzzleId)
     }
 
     fun toggleThumbDown() {
-        level.toggleThumbDown()
-        repository.updateRating(level)
-        markChanged()
+        toggleDislikeByPuzzleId(currentPuzzleId)
+    }
+
+    fun toggleLikeByPuzzleId(puzzleId: Int) {
+        val target = levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId } ?: return
+        val nextRating = if (target.rating == 1) 0 else 1
+        levelCatalog.setRating(puzzleId, nextRating)
+        target.setRating(nextRating)
+        if (puzzleId == currentPuzzleId) {
+            markChanged()
+        }
+    }
+
+    fun toggleDislikeByPuzzleId(puzzleId: Int) {
+        val target = levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId } ?: return
+        val nextRating = if (target.rating == -1) 0 else -1
+        levelCatalog.setRating(puzzleId, nextRating)
+        target.setRating(nextRating)
+        if (puzzleId == currentPuzzleId) {
+            markChanged()
+        }
     }
 
     fun syncWithServer() {
@@ -158,8 +180,8 @@ class GameController(
         markChanged()
     }
 
-    fun selectLevel(name: String) {
-        val index = levelsInCurrentSet.indexOfFirst { it.name == name }
+    fun selectLevelByPuzzleId(puzzleId: Int) {
+        val index = levelsInCurrentSet.indexOfFirst { it.puzzleId == puzzleId }
         if (index != -1) {
             beginLevelTransition(index)
         }
