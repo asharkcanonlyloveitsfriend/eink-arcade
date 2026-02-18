@@ -8,9 +8,10 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.pow
 
-// Number of path segments consumed per tick (may be fractional)
-private const val PATH_SEGMENTS_PER_TICK = 2.6f
+private const val SPEED_SCALE = 1.3f // overall speed multiplier
+private const val SPEED_EXPONENT = 0.5f // nonlinear acceleration factor (0 < exponent < 1)
 
 internal class BoxPathAnimation(
     private val viewport: BoardViewport,
@@ -28,13 +29,34 @@ internal class BoxPathAnimation(
     private var pathProgressSegments: Float = 0f
     private var isComplete: Boolean = false
 
+    private val totalSegments: Int = totalPathSegments()
+
+    private val points: List<PointF> by lazy {
+        path.map { position ->
+            val cx =
+                viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
+            val cy =
+                viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
+            PointF(cx, cy)
+        }
+    }
+
+    private val speedPerTick: Float
+
+    init {
+        val total = totalSegments.toFloat()
+        speedPerTick = SPEED_SCALE * total.pow(SPEED_EXPONENT)
+        pathPaint.strokeWidth = viewport.cellSize * 0.2f
+    }
+
     override fun dirtyRects(): Array<Rect?> = arrayOf(pathRect)
 
     override fun drawUnderEntities(canvas: Canvas) {
         if (isComplete) return
         drawPath(canvas)
-        pathProgressSegments += PATH_SEGMENTS_PER_TICK
-        if (pathProgressSegments >= totalPathSegments()) {
+        pathProgressSegments += speedPerTick
+
+        if (pathProgressSegments >= totalSegments) {
             isComplete = true
         }
     }
@@ -44,17 +66,9 @@ internal class BoxPathAnimation(
     override fun hidesPlayer(): Boolean = true
 
     private fun drawPath(canvas: Canvas) {
-        if (path.size < 2) return
-        val points =
-            path.map { position ->
-                val cx =
-                    viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
-                val cy =
-                    viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
-                PointF(cx, cy)
-            }
-        val totalSegments = points.size - 1
-        val consumed = pathProgressSegments.coerceIn(0f, totalSegments.toFloat())
+        if (points.size < 2) return
+
+        val consumed = minOf(pathProgressSegments, totalSegments.toFloat())
         val startSegment = consumed.toInt().coerceIn(0, totalSegments - 1)
         val startFraction = consumed - startSegment
 
@@ -69,7 +83,6 @@ internal class BoxPathAnimation(
             )
 
         val startPoint = interpolate(points[startSegment], points[startSegment + 1], startFraction)
-        pathPaint.strokeWidth = viewport.cellSize * 0.2f
         var prev = startPoint
         for (index in (startSegment + 1) until points.size) {
             val next = points[index]
@@ -81,17 +94,8 @@ internal class BoxPathAnimation(
     private fun totalPathSegments(): Int = (path.size - 1).coerceAtLeast(0)
 
     private fun computePathRect(): Rect {
-        if (path.isEmpty()) return Rect()
-        val strokeWidth = viewport.cellSize * 0.2f
-        val halfStroke = strokeWidth / 2f
-        val points =
-            path.map { position ->
-                val cx =
-                    viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
-                val cy =
-                    viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
-                PointF(cx, cy)
-            }
+        if (points.isEmpty()) return Rect()
+        val halfStroke = pathPaint.strokeWidth / 2f
         val minX = points.minOf { it.x } - halfStroke
         val minY = points.minOf { it.y } - halfStroke
         val maxX = points.maxOf { it.x } + halfStroke
