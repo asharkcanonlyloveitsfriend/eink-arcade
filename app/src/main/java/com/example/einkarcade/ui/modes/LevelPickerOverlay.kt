@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,12 +21,15 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +53,7 @@ import com.example.einkarcade.catalog.LevelBoardGeometry
 import com.example.einkarcade.catalog.LevelBoardTile
 import com.example.einkarcade.catalog.LevelSummary
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
+import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -70,6 +73,29 @@ fun LevelPickerOverlay(
     var gridReady by remember { mutableIntStateOf(0) } // 0 = not ready, 1 = ready
 
     val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    val isAtTop by
+        remember(gridState) {
+            derivedStateOf {
+                gridState.firstVisibleItemIndex == 0 &&
+                    gridState.firstVisibleItemScrollOffset == 0
+            }
+        }
+    val isAtBottom by
+        remember(gridState) {
+            derivedStateOf {
+                val layoutInfo = gridState.layoutInfo
+                val totalItems = layoutInfo.totalItemsCount
+                if (totalItems == 0) {
+                    true
+                } else {
+                    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
+                    val isLastItemVisible = lastVisible.index == totalItems - 1
+                    val lastItemBottom = lastVisible.offset.y + lastVisible.size.height
+                    isLastItemVisible && lastItemBottom <= layoutInfo.viewportEndOffset
+                }
+            }
+        }
     val selectedIndex = levels.indexOfFirst { it.puzzleId == selectedPuzzleId }
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -130,78 +156,129 @@ fun LevelPickerOverlay(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
-        Box(
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Fixed(3),
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.225f)),
-        )
-
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .alpha(if (gridReady == 1) 1f else 0f),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_back),
-                    contentDescription = "Back",
-                    colorFilter = ColorFilter.tint(Color.LightGray),
-                    modifier =
-                        Modifier
-                            .clickable { onDismiss() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+            items(levels, key = { it.puzzleId }) { level ->
+                val isSelected = level.puzzleId == selectedPuzzleId
+                LevelCard(
+                    level = level,
+                    isSelected = isSelected,
+                    aspectRatio = cardAspect,
+                    onToggleDislike = {
+                        onToggleDislike(level.puzzleId)
+                    },
+                    onToggleLike = {
+                        onToggleLike(level.puzzleId)
+                    },
+                    onToggleStar = {
+                        onToggleStar(level.puzzleId)
+                    },
+                    onClick = {
+                        if (!isSelected) {
+                            onPickLevel(level.puzzleId)
+                        }
+                        onDismiss()
+                    },
                 )
-
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Select Level",
-                        fontSize = 20.sp,
-                        color = Color.LightGray,
-                    )
-                }
-            }
-
-            LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Fixed(3),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .alpha(if (gridReady == 1) 1f else 0f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(levels, key = { it.puzzleId }) { level ->
-                    val isSelected = level.puzzleId == selectedPuzzleId
-                    LevelCard(
-                        level = level,
-                        isSelected = isSelected,
-                        aspectRatio = cardAspect,
-                        onToggleDislike = {
-                            onToggleDislike(level.puzzleId)
-                        },
-                        onToggleLike = {
-                            onToggleLike(level.puzzleId)
-                        },
-                        onToggleStar = {
-                            onToggleStar(level.puzzleId)
-                        },
-                        onClick = {
-                            if (!isSelected) {
-                                onPickLevel(level.puzzleId)
-                            }
-                            onDismiss()
-                        },
-                    )
-                }
             }
         }
+
+        OverlayCircleIconButton(
+            iconRes = R.drawable.ic_back,
+            contentDescription = "Back",
+            onClick = onDismiss,
+            modifier =
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 18.dp, top = 12.dp),
+        )
+
+        if (!isAtTop) {
+            OverlayCircleIconButton(
+                iconRes = R.drawable.ic_up,
+                contentDescription = "Scroll to top",
+                onClick = {
+                    scope.launch {
+                        gridState.scrollToItem(0)
+                    }
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 12.dp),
+            )
+        }
+
+        if (!isAtBottom) {
+            OverlayCircleIconButton(
+                iconRes = R.drawable.ic_down,
+                contentDescription = "Scroll to bottom",
+                onClick = {
+                    if (levels.isNotEmpty()) {
+                        scope.launch {
+                            gridState.scrollToItem(levels.lastIndex)
+                        }
+                    }
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OverlayCircleIconButton(
+    iconRes: Int,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            drawCircle(
+                brush =
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors =
+                            listOf(
+                                Color.Black.copy(alpha = 0.55f),
+                                Color.Black.copy(alpha = 0.25f),
+                                Color.Black.copy(alpha = 0.01f),
+                                Color.Transparent,
+                            ),
+                        center = center,
+                        radius = size.maxDimension * 0.75f,
+                    ),
+            )
+        }
+        Image(
+            painter = painterResource(iconRes),
+            contentDescription = contentDescription,
+            colorFilter = ColorFilter.tint(Color.LightGray),
+            modifier = Modifier.size(32.dp),
+        )
     }
 }
 
