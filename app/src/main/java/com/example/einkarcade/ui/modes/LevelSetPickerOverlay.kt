@@ -20,11 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -103,15 +98,17 @@ fun LevelSetPickerOverlay(
                     )
                 }
 
-                Icon(
-                    imageVector =
-                        when (syncStatus) {
-                            SyncStatus.SUCCESS -> Icons.Filled.Check
-                            SyncStatus.FAILURE -> Icons.Filled.Warning
-                            null -> Icons.Filled.Refresh
-                        },
+                Image(
+                    painter =
+                        painterResource(
+                            when (syncStatus) {
+                                SyncStatus.SUCCESS -> R.drawable.ic_sync_success
+                                SyncStatus.FAILURE -> R.drawable.ic_sync_error
+                                null -> R.drawable.ic_sync
+                            },
+                        ),
                     contentDescription = "Sync",
-                    tint = Color.LightGray,
+                    colorFilter = ColorFilter.tint(Color.LightGray),
                     modifier =
                         Modifier
                             .size(48.dp)
