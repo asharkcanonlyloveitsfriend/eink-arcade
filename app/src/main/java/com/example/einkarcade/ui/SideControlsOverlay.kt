@@ -13,17 +13,30 @@ import com.example.einkarcade.R
 
 @Composable
 fun SideControlsOverlay(
+    showRestartButton: Boolean,
+    onRestart: () -> Unit,
     onSkip: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.CenterEnd,
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (showRestartButton) {
+            GameControlButton(
+                onClick = onRestart,
+                drawableResId = R.drawable.ic_restart,
+                contentDescription = "Restart level",
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 16.dp),
+            )
+        }
         GameControlButton(
             onClick = onSkip,
             drawableResId = R.drawable.ic_forward,
             contentDescription = "Skip level",
-            modifier = Modifier.padding(end = 16.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 16.dp),
         )
     }
 }

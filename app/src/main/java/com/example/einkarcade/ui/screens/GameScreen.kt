@@ -253,8 +253,12 @@ fun GameScreen(
             }
         }
 
-        if (uiMode == GameController.UiMode.GAMEPLAY) {
-            SideControlsOverlay(onSkip = { gameController.skipLevel() })
+        if (uiMode != GameController.UiMode.LEVEL_TRANSITION) {
+            SideControlsOverlay(
+                showRestartButton = gameController.showRestartControl.value,
+                onRestart = { gameController.restart() },
+                onSkip = { gameController.skipLevel() },
+            )
         }
 
         if (showLevelPicker) {

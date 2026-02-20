@@ -11,11 +11,7 @@ internal object GameInputHandler {
     }
 
     fun handleBackKeyUp(gameController: GameController) {
-        val undone = gameController.undo()
-        if (undone) {
-            return
-        }
-        gameController.restart()
+        gameController.undo()
     }
 
     fun handleTap(

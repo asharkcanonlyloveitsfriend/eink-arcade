@@ -66,6 +66,7 @@ class GameController(
         get() = UiMode.entries[uiModeState.longValue.toInt()]
 
     private val transitionSnapshotState = mutableStateOf<LevelTransitionSnapshot?>(null)
+    private val showRestartControlState = mutableStateOf(false)
 
     sealed interface RenderDelta {
         data class LevelLoaded(
@@ -123,14 +124,14 @@ class GameController(
     val boxPositions: Set<Position>
         get() = gameEngine.boxPositions
 
-    val isAtStart: Boolean
-        get() = gameEngine.isAtStart
-
     val tileMap: TileMap
         get() = requireGameScreenState().tileMap
 
     val transitionSnapshot: State<LevelTransitionSnapshot?>
         get() = transitionSnapshotState
+
+    val showRestartControl: State<Boolean>
+        get() = showRestartControlState
 
     val levelName: String
         get() = requireGameScreenState().levelName
@@ -224,6 +225,7 @@ class GameController(
 
     fun restart() {
         gameEngine = GameEngine(level)
+        refreshShowRestartControl()
         emitStateChanged(RenderDelta.StateChangeAnnotation.Restart)
         uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
     }
@@ -304,6 +306,7 @@ class GameController(
         currentLevelIndex = resolvedLevelIndex
         level = levels[currentLevelIndex]
         gameEngine = GameEngine(level)
+        refreshShowRestartControl()
         persistSelection()
         refreshGameScreenState()
         return true
@@ -312,6 +315,7 @@ class GameController(
     fun undo(): Boolean {
         if (uiMode != UiMode.GAMEPLAY) return false
         if (gameEngine.undo() == null) return false
+        refreshShowRestartControl()
         emitStateChanged(RenderDelta.StateChangeAnnotation.Undo)
         return true
     }
@@ -319,6 +323,7 @@ class GameController(
     fun movePlayerTo(position: Position) {
         val changed = gameEngine.movePlayerTo(position)
         if (changed) {
+            refreshShowRestartControl()
             emitStateChanged(RenderDelta.StateChangeAnnotation.PlayerMoved)
         }
     }
@@ -333,6 +338,7 @@ class GameController(
                 onRenderDelta?.invoke(RenderDelta.MoveRejected)
                 return
             }
+            refreshShowRestartControl()
             emitStateChanged(
                 RenderDelta.StateChangeAnnotation.BoxRemoved(boxTo),
             )
@@ -345,6 +351,7 @@ class GameController(
             onRenderDelta?.invoke(RenderDelta.MoveRejected)
             return
         }
+        refreshShowRestartControl()
         emitStateChanged(
             RenderDelta.StateChangeAnnotation.BoxMoved(boxPath),
         )
@@ -383,11 +390,19 @@ class GameController(
         currentSetIndex = 0
         currentLevelIndex = 0
         transitionSnapshotState.value = null
-        if (levelSets.isEmpty()) return
+        if (levelSets.isEmpty()) {
+            showRestartControlState.value = false
+            return
+        }
         restoreLastSelection()
         gameEngine = GameEngine(level)
+        refreshShowRestartControl()
         persistSelection()
         refreshGameScreenState()
+    }
+
+    private fun refreshShowRestartControl() {
+        showRestartControlState.value = !gameEngine.isAtStart
     }
 
     private fun restoreLastSelection() {
