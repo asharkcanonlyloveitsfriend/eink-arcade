@@ -258,11 +258,6 @@ class GameController(
         if (levels.size < 2) return
 
         val skippedLevel = levels[currentLevelIndex]
-        if (skippedLevel.isCompleted) {
-            nextLevel()
-            return
-        }
-
         val reorderedLevels =
             buildList(levels.size) {
                 levels.forEachIndexed { index, level ->
