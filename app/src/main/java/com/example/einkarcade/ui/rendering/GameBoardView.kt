@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.View
 import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
+import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.rendering.anim.AnimationRunner
 import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxPathAnimation
@@ -15,18 +16,25 @@ import com.example.einkarcade.ui.rendering.anim.BoxVanishAnimation
 import com.example.einkarcade.ui.rendering.anim.EntityFlashAnimation
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.EntityRenderer
+import com.example.einkarcade.ui.rendering.draw.StaticBoardRenderer
+import com.example.einkarcade.ui.rendering.draw.TileDrawer
+import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameBoardView(
     context: Context,
-) : View(context),
-    GameBoardPresenter {
+) : View(context) {
     private val assets = AndroidGameAssets(context)
     private val entityRenderer =
         EntityRenderer(
             assets = assets,
             entityDrawer = EntityDrawer(assets),
+        )
+    private val staticBoardRenderer =
+        StaticBoardRenderer(
+            context = context,
+            tileDrawer = TileDrawer(),
         )
 
     private var staticFrame: StaticBoardFrame? = null
@@ -34,7 +42,19 @@ internal class GameBoardView(
     private var playerPosition: Position? = null
 
     private var onTapCell: ((Position) -> Unit)? = null
-    private var selectedBox: Position? = null
+    var selectedBox: Position? = null
+        set(value) {
+            val previous = field
+            if (previous == value) return
+
+            field = value
+
+            val viewport = staticFrame?.viewport ?: return
+            invalidateRects(
+                previous?.let { entityRenderer.computeBoxRect(viewport, it) },
+                value?.let { entityRenderer.computeBoxRect(viewport, it) },
+            )
+        }
 
     private val animationRunner =
         AnimationRunner(
@@ -55,57 +75,85 @@ internal class GameBoardView(
         }
     }
 
-    override fun asView(): View = this
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawInternal(canvas)
     }
 
-    override fun setOnTapCell(handler: (Position) -> Unit) {
+    fun setOnTapCell(handler: ((Position) -> Unit)?) {
         onTapCell = handler
     }
 
-    override fun getSelectedBox(): Position? = selectedBox
-
-    override fun setSelectedBox(position: Position?) {
-        val previous = selectedBox
-        selectedBox = position
-
-        val viewport = staticFrame!!.viewport
-
-        invalidateRects(
-            previous?.let { entityRenderer.computeBoxRect(viewport, it) },
-            position?.let { entityRenderer.computeBoxRect(viewport, it) },
-        )
-    }
-
-    override fun applyDelta(delta: GameController.RenderDelta) {
-        when (delta) {
-            is GameController.RenderDelta.LevelLoaded -> {
-                onLevelLoaded(
-                    staticFrame = delta.staticFrame,
-                    boxPositions = delta.boxPositions,
-                    playerPosition = delta.playerPosition,
-                )
-            }
-
-            is GameController.RenderDelta.StateChanged -> {
+    fun applyEvent(event: GameController.RenderEvent) {
+        when (event) {
+            is GameController.RenderEvent.StateChanged -> {
                 onStateChanged(
-                    playerPosition = delta.playerPosition,
-                    boxPositions = delta.boxPositions,
-                    annotation = delta.annotation,
+                    playerPosition = event.playerPosition,
+                    boxPositions = event.boxPositions,
+                    annotation = event.annotation,
                 )
             }
 
-            is GameController.RenderDelta.MoveRejected -> {
+            is GameController.RenderEvent.MoveRejected -> {
                 onMoveRejected()
             }
 
-            is GameController.RenderDelta.LevelSolved -> {
-                onLevelSolved(isClean = delta.isClean)
+            is GameController.RenderEvent.LevelSolvedWithCheat -> {
+                onLevelSolvedWithCheat()
             }
         }
+    }
+
+    fun buildStaticBoardFrame(tileMap: TileMap): StaticBoardFrame {
+        check(width > 0 && height > 0) { "GameBoardView must be laid out before loading a level" }
+
+        val viewport =
+            computeBoardViewport(
+                surfaceWidth = width.toFloat(),
+                surfaceHeight = height.toFloat(),
+                innerRows = tileMap.rowCount,
+                innerCols = tileMap.columnCount,
+            )
+
+        staticBoardRenderer.rebuildStaticLayout(
+            viewWidth = width,
+            viewHeight = height,
+            viewport = viewport,
+            tileMap = tileMap,
+        )
+
+        return StaticBoardFrame(
+            bitmap = staticBoardRenderer.getStaticFrameBitmap(),
+            viewport = viewport,
+            tileMap = tileMap,
+            width = width,
+            height = height,
+        )
+    }
+
+    fun loadLevel(
+        tileMap: TileMap,
+        playerPosition: Position,
+        boxPositions: Set<Position>,
+    ) {
+        loadLevel(
+            staticFrame = buildStaticBoardFrame(tileMap),
+            playerPosition = playerPosition,
+            boxPositions = boxPositions,
+        )
+    }
+
+    fun loadLevel(
+        staticFrame: StaticBoardFrame,
+        playerPosition: Position,
+        boxPositions: Set<Position>,
+    ) {
+        this.staticFrame = staticFrame
+        entityRenderer.initGeometry(staticFrame.viewport)
+        this.boxPositions = boxPositions
+        this.playerPosition = playerPosition
+        selectedBox = null
+        invalidate()
     }
 
     private fun drawInternal(canvas: Canvas) {
@@ -135,23 +183,10 @@ internal class GameBoardView(
         animationRunner.drawOverEntities(canvas)
     }
 
-    private fun onLevelLoaded(
-        staticFrame: StaticBoardFrame,
-        boxPositions: Set<Position>,
-        playerPosition: Position,
-    ) {
-        this.staticFrame = staticFrame
-        entityRenderer.initGeometry(staticFrame.viewport)
-        this.boxPositions = boxPositions
-        this.playerPosition = playerPosition
-        selectedBox = null
-        invalidate()
-    }
-
     private fun onStateChanged(
         playerPosition: Position,
         boxPositions: Set<Position>,
-        annotation: GameController.RenderDelta.StateChangeAnnotation?,
+        annotation: GameController.RenderEvent.StateChangeAnnotation?,
     ) {
         val viewport = staticFrame!!.viewport
         val previousPlayer = this.playerPosition!!
@@ -181,11 +216,11 @@ internal class GameBoardView(
         }
 
         when (annotation) {
-            is GameController.RenderDelta.StateChangeAnnotation.BoxMoved -> {
+            is GameController.RenderEvent.StateChangeAnnotation.BoxMoved -> {
                 onBoxMoved(annotation.path)
             }
 
-            is GameController.RenderDelta.StateChangeAnnotation.BoxRemoved -> {
+            is GameController.RenderEvent.StateChangeAnnotation.BoxRemoved -> {
                 onBoxRemoved(annotation.position)
             }
 
@@ -213,8 +248,7 @@ internal class GameBoardView(
         animationRunner.enqueue(BlinkAnimation(entityRenderer, viewport, playerPos))
     }
 
-    private fun onLevelSolved(isClean: Boolean) {
-        if (isClean) return
+    private fun onLevelSolvedWithCheat() {
         val viewport = staticFrame!!.viewport
         val playerPos = playerPosition!!
 

@@ -19,10 +19,6 @@ import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.sokoban.TileMap
-import com.example.einkarcade.ui.rendering.StaticBoardFrame
-import com.example.einkarcade.ui.rendering.draw.StaticBoardRenderer
-import com.example.einkarcade.ui.rendering.draw.TileDrawer
-import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 
 class GameController(
     context: Context,
@@ -68,26 +64,14 @@ class GameController(
     private val transitionSnapshotState = mutableStateOf<LevelTransitionSnapshot?>(null)
     private val showRestartControlState = mutableStateOf(false)
 
-    sealed interface RenderDelta {
-        data class LevelLoaded(
-            val staticFrame: StaticBoardFrame,
-            val playerPosition: Position,
-            val boxPositions: Set<Position>,
-        ) : RenderDelta
-
+    sealed interface RenderEvent {
         data class StateChanged(
             val playerPosition: Position,
             val boxPositions: Set<Position>,
             val annotation: StateChangeAnnotation? = null,
-        ) : RenderDelta
+        ) : RenderEvent
 
         sealed interface StateChangeAnnotation {
-            data object Undo : StateChangeAnnotation
-
-            data object Restart : StateChangeAnnotation
-
-            data object PlayerMoved : StateChangeAnnotation
-
             data class BoxRemoved(
                 val position: Position,
             ) : StateChangeAnnotation
@@ -97,26 +81,15 @@ class GameController(
             ) : StateChangeAnnotation
         }
 
-        data class LevelSolved(
-            val isClean: Boolean,
-        ) : RenderDelta
+        data object LevelSolvedWithCheat : RenderEvent
 
-        data object MoveRejected : RenderDelta
+        data object MoveRejected : RenderEvent
     }
 
     val screenState: State<GameScreenState?>
         get() = gameScreenState
 
-    var onRenderDelta: ((RenderDelta) -> Unit)? = null
-        set(value) {
-            field = value
-        }
-
-    val currentSetName: String
-        get() = requireGameScreenState().setName
-
-    val currentSetId: Int
-        get() = requireGameScreenState().setId
+    var onRenderEvent: ((RenderEvent) -> Unit)? = null
 
     val playerPosition: Position
         get() = gameEngine.playerPosition
@@ -226,7 +199,7 @@ class GameController(
     fun restart() {
         gameEngine = GameEngine(level)
         refreshShowRestartControl()
-        emitStateChanged(RenderDelta.StateChangeAnnotation.Restart)
+        emitStateChanged()
         uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
     }
 
@@ -237,7 +210,13 @@ class GameController(
         if (levelSets.isEmpty()) return
         val oldTileMap = requireGameScreenState().tileMap
         val oldPuzzleId = currentPuzzleId
-        if (!applyLevelSelection(nextSetIndex = nextSetIndex, nextLevelIndex = nextLevelIndex)) return
+        if (!applyLevelSelection(
+                nextSetIndex = nextSetIndex,
+                nextLevelIndex = nextLevelIndex,
+            )
+        ) {
+            return
+        }
         if (currentPuzzleId == oldPuzzleId) return
         startTransition(oldTileMap)
     }
@@ -311,7 +290,7 @@ class GameController(
         if (uiMode != UiMode.GAMEPLAY) return false
         if (gameEngine.undo() == null) return false
         refreshShowRestartControl()
-        emitStateChanged(RenderDelta.StateChangeAnnotation.Undo)
+        emitStateChanged()
         return true
     }
 
@@ -319,7 +298,7 @@ class GameController(
         val changed = gameEngine.movePlayerTo(position)
         if (changed) {
             refreshShowRestartControl()
-            emitStateChanged(RenderDelta.StateChangeAnnotation.PlayerMoved)
+            emitStateChanged()
         }
     }
 
@@ -330,12 +309,12 @@ class GameController(
         if (tileMap.isVoid(boxTo)) {
             val removed = gameEngine.pushBoxIntoVoid(boxFrom, boxTo)
             if (!removed) {
-                onRenderDelta?.invoke(RenderDelta.MoveRejected)
+                onRenderEvent?.invoke(RenderEvent.MoveRejected)
                 return
             }
             refreshShowRestartControl()
             emitStateChanged(
-                RenderDelta.StateChangeAnnotation.BoxRemoved(boxTo),
+                RenderEvent.StateChangeAnnotation.BoxRemoved(boxTo),
             )
             recordCompletionIfSolved()
             updateUiModeIfSolved()
@@ -343,12 +322,12 @@ class GameController(
         }
         val boxPath = gameEngine.moveBoxTo(boxFrom, boxTo)
         if (boxPath == null) {
-            onRenderDelta?.invoke(RenderDelta.MoveRejected)
+            onRenderEvent?.invoke(RenderEvent.MoveRejected)
             return
         }
         refreshShowRestartControl()
         emitStateChanged(
-            RenderDelta.StateChangeAnnotation.BoxMoved(boxPath),
+            RenderEvent.StateChangeAnnotation.BoxMoved(boxPath),
         )
         recordCompletionIfSolved()
         updateUiModeIfSolved()
@@ -357,19 +336,9 @@ class GameController(
     private val levelsInCurrentSet: List<Level>
         get() = levelSets[currentSetIndex].levels
 
-    fun emitLevelLoaded(staticFrame: StaticBoardFrame) {
-        onRenderDelta?.invoke(
-            RenderDelta.LevelLoaded(
-                staticFrame = staticFrame,
-                playerPosition = playerPosition,
-                boxPositions = boxPositions,
-            ),
-        )
-    }
-
-    private fun emitStateChanged(annotation: RenderDelta.StateChangeAnnotation? = null) {
-        onRenderDelta?.invoke(
-            RenderDelta.StateChanged(
+    private fun emitStateChanged(annotation: RenderEvent.StateChangeAnnotation? = null) {
+        onRenderEvent?.invoke(
+            RenderEvent.StateChanged(
                 playerPosition = gameEngine.playerPosition,
                 boxPositions = gameEngine.boxPositions,
                 annotation = annotation,
@@ -418,8 +387,7 @@ class GameController(
         lastSelectionStore.save(levelSets[currentSetIndex].id, level.puzzleId)
     }
 
-    private fun requireGameScreenState(): GameScreenState =
-        requireNotNull(gameScreenState.value) { "Game screen state is not initialized" }
+    private fun requireGameScreenState(): GameScreenState = requireNotNull(gameScreenState.value) { "Game screen state is not initialized" }
 
     private fun refreshGameScreenState() {
         gameScreenState.value =
@@ -458,46 +426,10 @@ class GameController(
     private fun updateUiModeIfSolved() {
         if (gameEngine.isLevelSolved) {
             uiModeState.longValue = UiMode.LEVEL_SOLVED.ordinal.toLong()
-            onRenderDelta?.invoke(RenderDelta.LevelSolved(isClean = gameEngine.isCleanSolution))
+            if (!gameEngine.isCleanSolution) {
+                onRenderEvent?.invoke(RenderEvent.LevelSolvedWithCheat)
+            }
         }
-    }
-
-    internal fun buildStaticBoardFrame(
-        context: Context,
-        tileMap: TileMap,
-        width: Int,
-        height: Int,
-    ): StaticBoardFrame {
-        val renderer =
-            StaticBoardRenderer(
-                context = context,
-                tileDrawer = TileDrawer(),
-            )
-
-        val viewport =
-            computeBoardViewport(
-                surfaceWidth = width.toFloat(),
-                surfaceHeight = height.toFloat(),
-                innerRows = tileMap.rowCount,
-                innerCols = tileMap.columnCount,
-            )
-
-        renderer.rebuildStaticLayout(
-            viewWidth = width,
-            viewHeight = height,
-            viewport = viewport,
-            tileMap = tileMap,
-        )
-
-        val bitmap = renderer.getStaticFrameBitmap()
-
-        return StaticBoardFrame(
-            bitmap = bitmap,
-            viewport = viewport,
-            tileMap = tileMap,
-            width = width,
-            height = height,
-        )
     }
 
     private fun Level.toBoardGeometry(): LevelBoardGeometry {
@@ -519,7 +451,10 @@ class GameController(
             columnCount = columnCount,
             tiles = tiles,
             player = LevelBoardPoint(playerStart.row, playerStart.col),
-            boxes = boxPositions.map { LevelBoardPoint(it.row, it.col) }.sortedWith(compareBy({ it.row }, { it.col })),
+            boxes =
+                boxPositions
+                    .map { LevelBoardPoint(it.row, it.col) }
+                    .sortedWith(compareBy({ it.row }, { it.col })),
         )
     }
 }

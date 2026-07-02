@@ -5,20 +5,20 @@ package com.example.einkarcade.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
 import com.example.einkarcade.catalog.RepositoryLevelCatalog
@@ -26,106 +26,101 @@ import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.GameHud
 import com.example.einkarcade.ui.GameTitleBar
 import com.example.einkarcade.ui.SideControlsOverlay
-import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.modes.LevelPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSetPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSolvedOverlay
 import com.example.einkarcade.ui.modes.LevelTransitionView
-import com.example.einkarcade.ui.rendering.GameBoardPresenter
 import com.example.einkarcade.ui.rendering.GameBoardView
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private fun createGameSurface(context: android.content.Context): GameBoardPresenter = GameBoardView(context)
+private data class LoadedBoardKey(
+    val puzzleId: Int,
+    val boardSize: IntSize,
+)
 
 @Composable
 fun GameScreen(
     modifier: Modifier = Modifier,
     gameController: GameController,
 ) {
-    val screenState = requireNotNull(gameController.screenState.value) { "Game screen state is not initialized" }
+    val screenState =
+        requireNotNull(gameController.screenState.value) { "Game screen state is not initialized" }
     val uiMode = gameController.uiMode
     val transitionSnapshot = gameController.transitionSnapshot.value
-    val currentTileMap: TileMap = screenState.tileMap
-    val surfaceRef = remember { mutableStateOf<GameBoardPresenter?>(null) }
+    val currentTileMap = screenState.tileMap
     val context = androidx.compose.ui.platform.LocalContext.current
-    val surface =
-        remember {
-            createGameSurface(context)
-        }
-    if (surfaceRef.value == null) {
-        surfaceRef.value = surface
-    }
+    val surface = remember(context) { GameBoardView(context) }
     val levelCatalog = remember(context) { RepositoryLevelCatalog(context = context) }
     val currentSetName = screenState.setName
     val currentLevelName = screenState.levelName
     val currentPuzzleId = screenState.puzzleId
-    val boardWidth = remember { mutableIntStateOf(0) }
-    val boardHeight = remember { mutableIntStateOf(0) }
-    val loadedPuzzleId = remember { mutableStateOf<Int?>(null) }
+    var boardSize by remember { mutableStateOf(IntSize.Zero) }
+    val loadedBoardKey =
+        remember(gameController, surface) { mutableStateOf<LoadedBoardKey?>(null) }
     var showLevelPicker by remember { mutableStateOf(false) }
     var showLevelSetPicker by remember { mutableStateOf(false) }
     var pickerRefreshNonce by remember { mutableLongStateOf(0L) }
 
-    DisposableEffect(surfaceRef.value) {
-        val surface = surfaceRef.value
-        val sink: (GameController.RenderDelta) -> Unit = { delta ->
-            surface?.applyDelta(delta)
+    DisposableEffect(gameController, surface) {
+        val renderHandler: (GameController.RenderEvent) -> Unit = surface::applyEvent
+        val tapHandler: (Position) -> Unit = { position ->
+            surface.selectedBox =
+                GameInputHandler.handleTap(
+                    tappedPosition = position,
+                    gameController = gameController,
+                    selectedBox = surface.selectedBox,
+                )
         }
-        gameController.onRenderDelta = sink
+        gameController.onRenderEvent = renderHandler
+        surface.setOnTapCell(tapHandler)
         onDispose {
-            if (gameController.onRenderDelta === sink) {
-                gameController.onRenderDelta = null
+            if (gameController.onRenderEvent === renderHandler) {
+                gameController.onRenderEvent = null
             }
+            surface.setOnTapCell(null)
         }
     }
 
-    DisposableEffect(surfaceRef.value) {
-        val surface = surfaceRef.value
-        if (surface is GameBoardView) {
-            val view = surface.asView()
-            view.addOnLayoutChangeListener { _, _, _, right, bottom, _, _, _, _ ->
-                val width = right
-                val height = bottom
+    DisposableEffect(surface) {
+        val listener =
+            android.view.View.OnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+                val width = right - left
+                val height = bottom - top
                 if (width > 0 && height > 0) {
-                    boardWidth.intValue = width
-                    boardHeight.intValue = height
+                    boardSize = IntSize(width, height)
                 }
             }
+        surface.addOnLayoutChangeListener(listener)
+        onDispose {
+            surface.removeOnLayoutChangeListener(listener)
         }
-        onDispose { }
     }
 
-    LaunchedEffect(boardWidth.value, boardHeight.value, uiMode, currentPuzzleId) {
+    LaunchedEffect(boardSize, uiMode, currentPuzzleId, gameController, surface) {
+        val boardKey = LoadedBoardKey(currentPuzzleId, boardSize)
         if (uiMode == GameController.UiMode.GAMEPLAY &&
-            boardWidth.value > 0 &&
-            boardHeight.value > 0 &&
-            loadedPuzzleId.value != currentPuzzleId
+            boardSize != IntSize.Zero &&
+            loadedBoardKey.value != boardKey
         ) {
-            val frame =
-                gameController.buildStaticBoardFrame(
-                    context = context,
-                    tileMap = currentTileMap,
-                    width = boardWidth.value,
-                    height = boardHeight.value,
-                )
-
-            gameController.emitLevelLoaded(frame)
-            loadedPuzzleId.value = currentPuzzleId
+            surface.loadLevel(
+                tileMap = currentTileMap,
+                playerPosition = gameController.playerPosition,
+                boxPositions = gameController.boxPositions,
+            )
+            loadedBoardKey.value = boardKey
         }
     }
 
     LaunchedEffect(uiMode) {
         if (uiMode == GameController.UiMode.LEVEL_TRANSITION) {
-            loadedPuzzleId.value = null
+            loadedBoardKey.value = null
         }
     }
 
     BackHandler(enabled = true) {
-        GameInputHandler.handleBackKeyUp(
-            gameController = gameController,
-        )
+        gameController.undo()
     }
 
     Box(
@@ -138,35 +133,17 @@ fun GameScreen(
                 Modifier
                     .fillMaxSize()
                     .testTag("gameCanvas"),
-            factory = {
-                val selection =
-                    object : GameInputHandler.BoxSelection {
-                        override fun getSelectedBox(): Position? = surface.getSelectedBox()
-
-                        override fun setSelectedBox(position: Position?) {
-                            surface.setSelectedBox(position)
-                        }
-                    }
-
-                surface.setOnTapCell { pos ->
-                    GameInputHandler.handleTap(
-                        tappedPosition = pos,
-                        gameController = gameController,
-                        selection = selection,
-                    )
-                }
-
-                surface.asView()
-            },
+            factory = { surface },
         )
 
         if (uiMode == GameController.UiMode.LEVEL_TRANSITION) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
-                    val snapshot = requireNotNull(transitionSnapshot) { "Missing level transition snapshot" }
-                    val width = boardWidth.value
-                    val height = boardHeight.value
+                    val snapshot =
+                        requireNotNull(transitionSnapshot) { "Missing level transition snapshot" }
+                    val width = boardSize.width
+                    val height = boardSize.height
 
                     check(width > 0 && height > 0) {
                         "LevelTransitionView requires board size before construction"
@@ -179,13 +156,7 @@ fun GameScreen(
                             innerCols = snapshot.oldTileMap.columnCount,
                         )
 
-                    val newFrame =
-                        gameController.buildStaticBoardFrame(
-                            context = ctx,
-                            tileMap = currentTileMap,
-                            width = width,
-                            height = height,
-                        )
+                    val newFrame = surface.buildStaticBoardFrame(currentTileMap)
 
                     LevelTransitionView(ctx).apply {
                         setTransitionData(
@@ -195,8 +166,12 @@ fun GameScreen(
                         )
                         onDismiss = {
                             gameController.finishLevelTransition()
-                            gameController.emitLevelLoaded(newFrame)
-                            loadedPuzzleId.value = currentPuzzleId
+                            surface.loadLevel(
+                                staticFrame = newFrame,
+                                playerPosition = gameController.playerPosition,
+                                boxPositions = gameController.boxPositions,
+                            )
+                            loadedBoardKey.value = LoadedBoardKey(currentPuzzleId, boardSize)
                         }
                     }
                 },
@@ -236,13 +211,12 @@ fun GameScreen(
                 onToggleStar = { gameController.toggleStar() },
             )
 
-            Box(
+            Spacer(
                 modifier =
                     Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-            ) {
-            }
+            )
 
             if (uiMode == GameController.UiMode.GAMEPLAY) {
                 GameHud(
