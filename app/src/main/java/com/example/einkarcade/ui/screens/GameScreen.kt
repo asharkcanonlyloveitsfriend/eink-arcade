@@ -24,7 +24,9 @@ import com.example.einkarcade.GameController
 import com.example.einkarcade.catalog.RepositoryLevelCatalog
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.ui.GameHud
+import com.example.einkarcade.ui.GameRenderEvent
 import com.example.einkarcade.ui.GameTitleBar
+import com.example.einkarcade.ui.GameUiMode
 import com.example.einkarcade.ui.SideControlsOverlay
 import com.example.einkarcade.ui.modes.LevelPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSetPickerOverlay
@@ -64,7 +66,7 @@ fun GameScreen(
     var pickerRefreshNonce by remember { mutableLongStateOf(0L) }
 
     DisposableEffect(gameController, surface) {
-        val renderHandler: (GameController.RenderEvent) -> Unit = surface::applyEvent
+        val renderHandler: (GameRenderEvent) -> Unit = surface::applyEvent
         val tapHandler: (Position) -> Unit = { position ->
             surface.selectedBox =
                 GameInputHandler.handleTap(
@@ -100,7 +102,7 @@ fun GameScreen(
 
     LaunchedEffect(boardSize, uiMode, currentPuzzleId, gameController, surface) {
         val boardKey = LoadedBoardKey(currentPuzzleId, boardSize)
-        if (uiMode == GameController.UiMode.GAMEPLAY &&
+        if (uiMode == GameUiMode.GAMEPLAY &&
             boardSize != IntSize.Zero &&
             loadedBoardKey.value != boardKey
         ) {
@@ -114,7 +116,7 @@ fun GameScreen(
     }
 
     LaunchedEffect(uiMode) {
-        if (uiMode == GameController.UiMode.LEVEL_TRANSITION) {
+        if (uiMode == GameUiMode.LEVEL_TRANSITION) {
             loadedBoardKey.value = null
         }
     }
@@ -136,7 +138,7 @@ fun GameScreen(
             factory = { surface },
         )
 
-        if (uiMode == GameController.UiMode.LEVEL_TRANSITION) {
+        if (uiMode == GameUiMode.LEVEL_TRANSITION) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
@@ -178,7 +180,7 @@ fun GameScreen(
             )
         }
 
-        if (uiMode == GameController.UiMode.LEVEL_SOLVED) {
+        if (uiMode == GameUiMode.LEVEL_SOLVED) {
             AndroidView(
                 modifier =
                     Modifier
@@ -218,7 +220,7 @@ fun GameScreen(
                         .fillMaxWidth(),
             )
 
-            if (uiMode == GameController.UiMode.GAMEPLAY) {
+            if (uiMode == GameUiMode.GAMEPLAY) {
                 GameHud(
                     currentRating = screenState.rating,
                     onThumbUp = { gameController.toggleThumbUp() },
@@ -227,11 +229,11 @@ fun GameScreen(
             }
         }
 
-        if (uiMode != GameController.UiMode.LEVEL_TRANSITION) {
+        if (uiMode != GameUiMode.LEVEL_TRANSITION) {
             SideControlsOverlay(
                 showRestartButton = gameController.showRestartControl.value,
                 onRestart = { gameController.restart() },
-                onSkip = { gameController.skipLevel() },
+                onSkip = { gameController.nextLevel() },
             )
         }
 

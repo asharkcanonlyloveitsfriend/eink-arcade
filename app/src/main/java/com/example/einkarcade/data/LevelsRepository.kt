@@ -23,17 +23,13 @@ import java.util.concurrent.Executors
 // Repository for loading/saving level sets.
 class LevelsRepository(
     private val context: Context,
-) {
-    companion object {
-        private const val DEFAULT_SYNC_ENDPOINT = "http://192.168.0.75:8000/api/sync"
-    }
-
+) : LevelDataSource {
     private val database = LevelsDatabase.getInstance(context)
     private val dao = database.levelsDao()
     private val utcFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
 
-    fun loadSets(): List<LevelSet>? {
+    override fun loadSets(): List<LevelSet>? {
         if (dao.countLevelSets() == 0) {
             bootstrapFromServer()
         }
@@ -69,7 +65,7 @@ class LevelsRepository(
         dao.updatePuzzleStarred(level.puzzleId, level.isStarred)
     }
 
-    fun recordCompletion(
+    override fun recordCompletion(
         level: Level,
         solutionHistory: List<List<com.example.einkarcade.sokoban.Position>>,
     ): String {
@@ -137,7 +133,11 @@ class LevelsRepository(
         return result
     }
 
-    fun syncWithServer(endpoint: String = DEFAULT_SYNC_ENDPOINT) {
+    override fun syncWithServer() {
+        syncWithServer(DEFAULT_SYNC_ENDPOINT)
+    }
+
+    fun syncWithServer(endpoint: String) {
         val requestJson = buildSyncRequestJson(dao.getPuzzlesForSync())
         val responseJson = postJson(endpoint, requestJson)
         val response = parseSyncResponse(responseJson)
@@ -303,5 +303,9 @@ class LevelsRepository(
         if (dao.countLevelSets() == 0) {
             throw IllegalStateException("BootstrapFailed: server returned no level sets")
         }
+    }
+
+    companion object {
+        private const val DEFAULT_SYNC_ENDPOINT = "http://192.168.0.75:8000/api/sync"
     }
 }

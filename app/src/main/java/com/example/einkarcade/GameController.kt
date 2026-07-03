@@ -2,103 +2,49 @@ package com.example.einkarcade
 
 import android.content.Context
 import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import com.example.einkarcade.appstate.LastSelectionStore
-import com.example.einkarcade.catalog.LevelBoardGeometry
-import com.example.einkarcade.catalog.LevelBoardPoint
-import com.example.einkarcade.catalog.LevelBoardTile
+import com.example.einkarcade.appstate.SelectionStore
 import com.example.einkarcade.catalog.LevelCatalog
 import com.example.einkarcade.catalog.LevelSummary
+import com.example.einkarcade.catalog.LevelSummaryMapper
 import com.example.einkarcade.catalog.RepositoryLevelCatalog
 import com.example.einkarcade.content.LevelSet
+import com.example.einkarcade.data.LevelDataSource
 import com.example.einkarcade.data.LevelsRepository
-import com.example.einkarcade.selection.DefaultLevelPolicy
-import com.example.einkarcade.sokoban.GameEngine
+import com.example.einkarcade.session.CompletionService
+import com.example.einkarcade.session.GameSession
+import com.example.einkarcade.session.LevelNavigator
+import com.example.einkarcade.session.LevelPreferenceService
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
-import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.sokoban.TileMap
+import com.example.einkarcade.ui.GameRenderEvent
+import com.example.einkarcade.ui.GameScreenState
+import com.example.einkarcade.ui.GameUiMode
+import com.example.einkarcade.ui.LevelTransitionSnapshot
 
 class GameController(
     context: Context,
     injectedSets: List<LevelSet>? = null,
-    private val lastSelectionStore: LastSelectionStore = LastSelectionStore(context),
-    private val levelCatalog: LevelCatalog = RepositoryLevelCatalog(context, injectedSets),
+    private val selectionStore: SelectionStore = LastSelectionStore(context),
+    levelCatalog: LevelCatalog = RepositoryLevelCatalog(context, injectedSets),
+    private val dataSource: LevelDataSource = LevelsRepository(context),
 ) {
-    private val repository = LevelsRepository(context)
-
-    data class GameScreenState(
-        val setName: String,
-        val setId: Int,
-        val levelName: String,
-        val puzzleId: Int,
-        val rating: Int,
-        val isStarred: Boolean,
-        val tileMap: TileMap,
-    )
-
-    data class LevelTransitionSnapshot(
-        val oldTileMap: TileMap,
-    )
-
+    private val preferenceService = LevelPreferenceService(levelCatalog)
+    private val completionService = CompletionService(dataSource)
     private val gameScreenState = mutableStateOf<GameScreenState?>(null)
-
-    private var levelSets: List<LevelSet> = emptyList()
-    private var currentSetIndex: Int = 0
-    private var currentLevelIndex: Int = 0
-    private lateinit var level: Level
-    private lateinit var gameEngine: GameEngine
-
-    enum class UiMode {
-        GAMEPLAY,
-        LEVEL_SOLVED,
-        LEVEL_TRANSITION,
-    }
-
-    private val uiModeState = mutableLongStateOf(UiMode.GAMEPLAY.ordinal.toLong())
-
-    val uiMode: UiMode
-        get() = UiMode.entries[uiModeState.longValue.toInt()]
-
+    private val uiModeState = mutableStateOf(GameUiMode.GAMEPLAY)
     private val transitionSnapshotState = mutableStateOf<LevelTransitionSnapshot?>(null)
     private val showRestartControlState = mutableStateOf(false)
-
-    sealed interface RenderEvent {
-        data class StateChanged(
-            val playerPosition: Position,
-            val boxPositions: Set<Position>,
-            val annotation: StateChangeAnnotation? = null,
-        ) : RenderEvent
-
-        sealed interface StateChangeAnnotation {
-            data class BoxRemoved(
-                val position: Position,
-            ) : StateChangeAnnotation
-
-            data class BoxMoved(
-                val path: List<Position>,
-            ) : StateChangeAnnotation
-        }
-
-        data object LevelSolvedWithCheat : RenderEvent
-
-        data object MoveRejected : RenderEvent
-    }
+    private lateinit var navigator: LevelNavigator
+    private lateinit var session: GameSession
 
     val screenState: State<GameScreenState?>
         get() = gameScreenState
 
-    var onRenderEvent: ((RenderEvent) -> Unit)? = null
-
-    val playerPosition: Position
-        get() = gameEngine.playerPosition
-
-    val boxPositions: Set<Position>
-        get() = gameEngine.boxPositions
-
-    val tileMap: TileMap
-        get() = requireGameScreenState().tileMap
+    val uiMode: GameUiMode
+        get() = uiModeState.value
 
     val transitionSnapshot: State<LevelTransitionSnapshot?>
         get() = transitionSnapshotState
@@ -106,198 +52,94 @@ class GameController(
     val showRestartControl: State<Boolean>
         get() = showRestartControlState
 
-    val levelName: String
-        get() = requireGameScreenState().levelName
+    val playerPosition: Position
+        get() = requireSession().engine.playerPosition
+
+    val boxPositions: Set<Position>
+        get() = requireSession().engine.boxPositions
+
+    val tileMap: TileMap
+        get() = requireScreenState().tileMap
 
     val currentPuzzleId: Int
-        get() = requireGameScreenState().puzzleId
+        get() = requireScreenState().puzzleId
+
+    var onRenderEvent: ((GameRenderEvent) -> Unit)? = null
 
     init {
-        val sets = injectedSets ?: (loadLevelSets() ?: emptyList())
-        rebuildState(sets)
+        rebuildState(injectedSets ?: dataSource.loadSets().orEmpty())
     }
 
     fun selectSetById(setId: Int) {
-        val setIdx = levelSets.indexOfFirst { it.id == setId }
-        if (setIdx == -1) return
-
-        val levels = levelSets[setIdx].levels
-        val levelIdx = DefaultLevelPolicy.pickIndex(levels)
-        beginLevelTransition(nextSetIndex = setIdx, nextLevelIndex = levelIdx)
-    }
-
-    fun levels(): List<Level> = levelsInCurrentSet
-
-    fun getCurrentLevelSummaries(): List<LevelSummary> =
-        levelsInCurrentSet.map { level ->
-            LevelSummary(
-                puzzleId = level.puzzleId,
-                name = level.name,
-                isCompleted = level.isCompleted,
-                rating = level.rating,
-                isStarred = level.isStarred,
-                boardGeometry = level.toBoardGeometry(),
-            )
-        }
-
-    fun getCurrentRating(): Int = requireGameScreenState().rating
-
-    fun toggleThumbUp() {
-        toggleLikeByPuzzleId(currentPuzzleId)
-    }
-
-    fun toggleThumbDown() {
-        toggleDislikeByPuzzleId(currentPuzzleId)
-    }
-
-    fun toggleStar() {
-        toggleStarByPuzzleId(currentPuzzleId)
-    }
-
-    fun toggleLikeByPuzzleId(puzzleId: Int) {
-        val target = levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId } ?: return
-        val nextRating = if (target.rating == 1) 0 else 1
-        levelCatalog.setRating(puzzleId, nextRating)
-        target.setRating(nextRating)
-        if (puzzleId == currentPuzzleId) {
-            refreshRating(nextRating)
-        }
-    }
-
-    fun toggleDislikeByPuzzleId(puzzleId: Int) {
-        val target = levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId } ?: return
-        val nextRating = if (target.rating == -1) 0 else -1
-        levelCatalog.setRating(puzzleId, nextRating)
-        target.setRating(nextRating)
-        if (puzzleId == currentPuzzleId) {
-            refreshRating(nextRating)
-        }
-    }
-
-    fun toggleStarByPuzzleId(puzzleId: Int) {
-        val target = levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId } ?: return
-        val nextStarred = !target.isStarred
-        levelCatalog.setStarred(puzzleId, nextStarred)
-        target.setStarred(nextStarred)
-        if (puzzleId == currentPuzzleId) {
-            refreshStarred(nextStarred)
-        }
-    }
-
-    fun syncWithServer() {
-        repository.syncWithServer()
-        val sets = loadLevelSets() ?: emptyList()
-        rebuildState(sets)
+        beginLevelTransition { navigator.selectSet(setId) }
     }
 
     fun selectLevelByPuzzleId(puzzleId: Int) {
-        val index = levelsInCurrentSet.indexOfFirst { it.puzzleId == puzzleId }
-        if (index == -1) return
-        beginLevelTransition(nextSetIndex = currentSetIndex, nextLevelIndex = index)
+        beginLevelTransition { navigator.selectLevel(puzzleId) }
+    }
+
+    fun nextLevel() {
+        beginLevelTransition { navigator.selectNextLevel() }
+    }
+
+    fun levels(): List<Level> = navigator.levelsInCurrentSet
+
+    fun getCurrentLevelSummaries(): List<LevelSummary> =
+        navigator.levelsInCurrentSet.map(LevelSummaryMapper::map)
+
+    fun getCurrentRating(): Int = requireScreenState().rating
+
+    fun toggleThumbUp() = toggleLikeByPuzzleId(currentPuzzleId)
+
+    fun toggleThumbDown() = toggleDislikeByPuzzleId(currentPuzzleId)
+
+    fun toggleStar() = toggleStarByPuzzleId(currentPuzzleId)
+
+    fun toggleLikeByPuzzleId(puzzleId: Int) {
+        val target = findCurrentSetLevel(puzzleId) ?: return
+        val rating = preferenceService.toggleLike(target)
+        if (puzzleId == currentPuzzleId) updateScreenState { it.copy(rating = rating) }
+    }
+
+    fun toggleDislikeByPuzzleId(puzzleId: Int) {
+        val target = findCurrentSetLevel(puzzleId) ?: return
+        val rating = preferenceService.toggleDislike(target)
+        if (puzzleId == currentPuzzleId) updateScreenState { it.copy(rating = rating) }
+    }
+
+    fun toggleStarByPuzzleId(puzzleId: Int) {
+        val target = findCurrentSetLevel(puzzleId) ?: return
+        val starred = preferenceService.toggleStar(target)
+        if (puzzleId == currentPuzzleId) updateScreenState { it.copy(isStarred = starred) }
+    }
+
+    fun syncWithServer() {
+        dataSource.syncWithServer()
+        rebuildState(dataSource.loadSets().orEmpty())
     }
 
     fun restart() {
-        gameEngine = GameEngine(level)
-        refreshShowRestartControl()
+        requireSession().restart()
+        refreshRestartControl()
         emitStateChanged()
-        uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
-    }
-
-    private fun beginLevelTransition(
-        nextSetIndex: Int,
-        nextLevelIndex: Int,
-    ) {
-        if (levelSets.isEmpty()) return
-        val oldTileMap = requireGameScreenState().tileMap
-        val oldPuzzleId = currentPuzzleId
-        if (!applyLevelSelection(
-                nextSetIndex = nextSetIndex,
-                nextLevelIndex = nextLevelIndex,
-            )
-        ) {
-            return
-        }
-        if (currentPuzzleId == oldPuzzleId) return
-        startTransition(oldTileMap)
+        uiModeState.value = GameUiMode.GAMEPLAY
     }
 
     fun finishLevelTransition() {
         transitionSnapshotState.value = null
-        uiModeState.longValue = UiMode.GAMEPLAY.ordinal.toLong()
-    }
-
-    fun nextLevel() {
-        val levels = levelsInCurrentSet
-        val nextIndex = (currentLevelIndex + 1) % levels.size
-        beginLevelTransition(nextSetIndex = currentSetIndex, nextLevelIndex = nextIndex)
-    }
-
-    fun skipLevel() {
-        val levels = levelsInCurrentSet
-        if (levels.size < 2) return
-
-        val skippedLevel = levels[currentLevelIndex]
-        val reorderedLevels =
-            buildList(levels.size) {
-                levels.forEachIndexed { index, level ->
-                    if (index != currentLevelIndex) {
-                        add(level)
-                    }
-                }
-                add(skippedLevel)
-            }
-
-        val mutableSets = levelSets.toMutableList()
-        val currentSet = mutableSets[currentSetIndex]
-        mutableSets[currentSetIndex] = currentSet.copy(levels = reorderedLevels)
-        levelSets = mutableSets
-
-        val nextLevelIndex =
-            if (currentLevelIndex >= reorderedLevels.lastIndex) {
-                0
-            } else {
-                currentLevelIndex
-            }
-        beginLevelTransition(nextSetIndex = currentSetIndex, nextLevelIndex = nextLevelIndex)
-    }
-
-    private fun startTransition(oldTileMap: TileMap) {
-        transitionSnapshotState.value = LevelTransitionSnapshot(oldTileMap = oldTileMap)
-        uiModeState.longValue = UiMode.LEVEL_TRANSITION.ordinal.toLong()
-    }
-
-    private fun applyLevelSelection(
-        nextSetIndex: Int,
-        nextLevelIndex: Int,
-    ): Boolean {
-        if (levelSets.isEmpty()) return false
-        val resolvedSetIndex = nextSetIndex.coerceIn(0, levelSets.lastIndex)
-        val levels = levelSets[resolvedSetIndex].levels
-        if (levels.isEmpty()) return false
-        val resolvedLevelIndex = nextLevelIndex.coerceIn(0, levels.lastIndex)
-
-        currentSetIndex = resolvedSetIndex
-        currentLevelIndex = resolvedLevelIndex
-        level = levels[currentLevelIndex]
-        gameEngine = GameEngine(level)
-        refreshShowRestartControl()
-        persistSelection()
-        refreshGameScreenState()
-        return true
+        uiModeState.value = GameUiMode.GAMEPLAY
     }
 
     fun undo(): Boolean {
-        if (uiMode != UiMode.GAMEPLAY) return false
-        if (gameEngine.undo() == null) return false
-        refreshShowRestartControl()
+        if (uiMode != GameUiMode.GAMEPLAY || requireSession().engine.undo() == null) return false
+        refreshRestartControl()
         emitStateChanged()
         return true
     }
 
     fun movePlayerTo(position: Position) {
-        val changed = gameEngine.movePlayerTo(position)
-        if (changed) {
-            refreshShowRestartControl()
+        if (requireSession().engine.movePlayerTo(position)) {
+            refreshRestartControl()
             emitStateChanged()
         }
     }
@@ -306,94 +148,69 @@ class GameController(
         boxFrom: Position,
         boxTo: Position,
     ) {
-        if (tileMap.isVoid(boxTo)) {
-            val removed = gameEngine.pushBoxIntoVoid(boxFrom, boxTo)
-            if (!removed) {
-                onRenderEvent?.invoke(RenderEvent.MoveRejected)
-                return
+        val session = requireSession()
+        val annotation =
+            if (tileMap.isVoid(boxTo)) {
+                if (!session.engine.pushBoxIntoVoid(boxFrom, boxTo)) {
+                    emit(GameRenderEvent.MoveRejected)
+                    return
+                }
+                GameRenderEvent.StateChangeAnnotation.BoxRemoved(boxTo)
+            } else {
+                val path = session.engine.moveBoxTo(boxFrom, boxTo)
+                if (path == null) {
+                    emit(GameRenderEvent.MoveRejected)
+                    return
+                }
+                GameRenderEvent.StateChangeAnnotation.BoxMoved(path)
             }
-            refreshShowRestartControl()
-            emitStateChanged(
-                RenderEvent.StateChangeAnnotation.BoxRemoved(boxTo),
-            )
-            recordCompletionIfSolved()
-            updateUiModeIfSolved()
-            return
+
+        refreshRestartControl()
+        emitStateChanged(annotation)
+        when (completionService.record(session)) {
+            CompletionService.Result.NOT_SOLVED -> Unit
+            CompletionService.Result.CLEAN_SOLUTION -> uiModeState.value = GameUiMode.LEVEL_SOLVED
+            CompletionService.Result.CHEAT_SOLUTION -> {
+                uiModeState.value = GameUiMode.LEVEL_SOLVED
+                emit(GameRenderEvent.LevelSolvedWithCheat)
+            }
         }
-        val boxPath = gameEngine.moveBoxTo(boxFrom, boxTo)
-        if (boxPath == null) {
-            onRenderEvent?.invoke(RenderEvent.MoveRejected)
-            return
-        }
-        refreshShowRestartControl()
-        emitStateChanged(
-            RenderEvent.StateChangeAnnotation.BoxMoved(boxPath),
-        )
-        recordCompletionIfSolved()
-        updateUiModeIfSolved()
     }
 
-    private val levelsInCurrentSet: List<Level>
-        get() = levelSets[currentSetIndex].levels
-
-    private fun emitStateChanged(annotation: RenderEvent.StateChangeAnnotation? = null) {
-        onRenderEvent?.invoke(
-            RenderEvent.StateChanged(
-                playerPosition = gameEngine.playerPosition,
-                boxPositions = gameEngine.boxPositions,
-                annotation = annotation,
-            ),
-        )
+    private fun beginLevelTransition(select: () -> Boolean) {
+        if (!::navigator.isInitialized || !navigator.hasLevels) return
+        val oldTileMap = tileMap
+        if (!select()) return
+        startSession()
+        transitionSnapshotState.value = LevelTransitionSnapshot(oldTileMap)
+        uiModeState.value = GameUiMode.LEVEL_TRANSITION
     }
-
-    private fun loadLevelSets(): List<LevelSet>? = repository.loadSets()
 
     private fun rebuildState(sets: List<LevelSet>) {
-        val nonEmpty = sets.filter { it.levels.isNotEmpty() }
-        levelSets = nonEmpty
-        currentSetIndex = 0
-        currentLevelIndex = 0
+        navigator = LevelNavigator(sets, selectionStore)
         transitionSnapshotState.value = null
-        if (levelSets.isEmpty()) {
+        uiModeState.value = GameUiMode.GAMEPLAY
+        if (!navigator.hasLevels) {
+            gameScreenState.value = null
             showRestartControlState.value = false
             return
         }
-        restoreLastSelection()
-        gameEngine = GameEngine(level)
-        refreshShowRestartControl()
-        persistSelection()
-        refreshGameScreenState()
+        startSession()
     }
 
-    private fun refreshShowRestartControl() {
-        showRestartControlState.value = !gameEngine.isAtStart
+    private fun startSession() {
+        session = GameSession(navigator.currentLevel)
+        refreshRestartControl()
+        refreshScreenState()
     }
 
-    private fun restoreLastSelection() {
-        level = levelsInCurrentSet[currentLevelIndex]
-        val (savedSetId, savedPuzzleId) = lastSelectionStore.load()
-        val setIdx = levelSets.indexOfFirst { it.id == savedSetId }
-        if (setIdx != -1) {
-            currentSetIndex = setIdx
-            val levelIdx = levelsInCurrentSet.indexOfFirst { it.puzzleId == savedPuzzleId }
-            if (levelIdx != -1) {
-                currentLevelIndex = levelIdx
-            }
-        }
-        level = levelsInCurrentSet[currentLevelIndex]
-    }
-
-    private fun persistSelection() {
-        lastSelectionStore.save(levelSets[currentSetIndex].id, level.puzzleId)
-    }
-
-    private fun requireGameScreenState(): GameScreenState = requireNotNull(gameScreenState.value) { "Game screen state is not initialized" }
-
-    private fun refreshGameScreenState() {
+    private fun refreshScreenState() {
+        val level = navigator.currentLevel
+        val set = navigator.currentSet
         gameScreenState.value =
             GameScreenState(
-                setName = levelSets[currentSetIndex].name,
-                setId = levelSets[currentSetIndex].id,
+                setName = set.name,
+                setId = set.id,
                 levelName = level.name,
                 puzzleId = level.puzzleId,
                 rating = level.rating,
@@ -402,59 +219,37 @@ class GameController(
             )
     }
 
-    private fun refreshRating(rating: Int) {
-        val current = requireGameScreenState()
-        gameScreenState.value = current.copy(rating = rating)
+    private fun findCurrentSetLevel(puzzleId: Int): Level? =
+        navigator.levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId }
+
+    private fun refreshRestartControl() {
+        showRestartControlState.value = !requireSession().engine.isAtStart
     }
 
-    private fun refreshStarred(isStarred: Boolean) {
-        val current = requireGameScreenState()
-        gameScreenState.value = current.copy(isStarred = isStarred)
-    }
-
-    private fun recordCompletionIfSolved() {
-        if (gameEngine.isCleanSolution) {
-            val timestamp =
-                repository.recordCompletion(
-                    level,
-                    gameEngine.getBoxMoveHistory(),
-                )
-            level.markCompleted(timestamp)
-        }
-    }
-
-    private fun updateUiModeIfSolved() {
-        if (gameEngine.isLevelSolved) {
-            uiModeState.longValue = UiMode.LEVEL_SOLVED.ordinal.toLong()
-            if (!gameEngine.isCleanSolution) {
-                onRenderEvent?.invoke(RenderEvent.LevelSolvedWithCheat)
-            }
-        }
-    }
-
-    private fun Level.toBoardGeometry(): LevelBoardGeometry {
-        val rowCount = grid.size
-        val columnCount = grid.firstOrNull()?.size ?: 0
-        val tiles =
-            grid.flatMap { row ->
-                row.map { tile ->
-                    when (tile) {
-                        Tile.FLOOR -> LevelBoardTile.FLOOR
-                        Tile.GOAL -> LevelBoardTile.GOAL
-                        Tile.VOID -> LevelBoardTile.VOID
-                    }
-                }
-            }
-
-        return LevelBoardGeometry(
-            rowCount = rowCount,
-            columnCount = columnCount,
-            tiles = tiles,
-            player = LevelBoardPoint(playerStart.row, playerStart.col),
-            boxes =
-                boxPositions
-                    .map { LevelBoardPoint(it.row, it.col) }
-                    .sortedWith(compareBy({ it.row }, { it.col })),
+    private fun emitStateChanged(annotation: GameRenderEvent.StateChangeAnnotation? = null) {
+        val engine = requireSession().engine
+        emit(
+            GameRenderEvent.StateChanged(
+                playerPosition = engine.playerPosition,
+                boxPositions = engine.boxPositions,
+                annotation = annotation,
+            ),
         )
+    }
+
+    private fun emit(event: GameRenderEvent) {
+        onRenderEvent?.invoke(event)
+    }
+
+    private fun requireScreenState(): GameScreenState =
+        requireNotNull(gameScreenState.value) { "Game screen state is not initialized" }
+
+    private fun requireSession(): GameSession {
+        check(::session.isInitialized) { "Game session is not initialized" }
+        return session
+    }
+
+    private fun updateScreenState(transform: (GameScreenState) -> GameScreenState) {
+        gameScreenState.value = transform(requireScreenState())
     }
 }

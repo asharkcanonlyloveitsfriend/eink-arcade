@@ -6,9 +6,9 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.View
-import com.example.einkarcade.GameController
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
+import com.example.einkarcade.ui.GameRenderEvent
 import com.example.einkarcade.ui.rendering.anim.AnimationRunner
 import com.example.einkarcade.ui.rendering.anim.BlinkAnimation
 import com.example.einkarcade.ui.rendering.anim.BoxPathAnimation
@@ -84,9 +84,9 @@ internal class GameBoardView(
         onTapCell = handler
     }
 
-    fun applyEvent(event: GameController.RenderEvent) {
+    fun applyEvent(event: GameRenderEvent) {
         when (event) {
-            is GameController.RenderEvent.StateChanged -> {
+            is GameRenderEvent.StateChanged -> {
                 onStateChanged(
                     playerPosition = event.playerPosition,
                     boxPositions = event.boxPositions,
@@ -94,11 +94,11 @@ internal class GameBoardView(
                 )
             }
 
-            is GameController.RenderEvent.MoveRejected -> {
+            is GameRenderEvent.MoveRejected -> {
                 onMoveRejected()
             }
 
-            is GameController.RenderEvent.LevelSolvedWithCheat -> {
+            is GameRenderEvent.LevelSolvedWithCheat -> {
                 onLevelSolvedWithCheat()
             }
         }
@@ -186,7 +186,7 @@ internal class GameBoardView(
     private fun onStateChanged(
         playerPosition: Position,
         boxPositions: Set<Position>,
-        annotation: GameController.RenderEvent.StateChangeAnnotation?,
+        annotation: GameRenderEvent.StateChangeAnnotation?,
     ) {
         val viewport = staticFrame!!.viewport
         val previousPlayer = this.playerPosition!!
@@ -216,11 +216,11 @@ internal class GameBoardView(
         }
 
         when (annotation) {
-            is GameController.RenderEvent.StateChangeAnnotation.BoxMoved -> {
+            is GameRenderEvent.StateChangeAnnotation.BoxMoved -> {
                 onBoxMoved(annotation.path)
             }
 
-            is GameController.RenderEvent.StateChangeAnnotation.BoxRemoved -> {
+            is GameRenderEvent.StateChangeAnnotation.BoxRemoved -> {
                 onBoxRemoved(annotation.position)
             }
 
