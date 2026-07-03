@@ -73,15 +73,16 @@ data class Level(
 
         /** Parses Sokoban ASCII into a base grid (VOID/FLOOR/GOAL) and extracts player + boxes. */
         private fun parseAscii(ascii: String): ParsedAscii {
-            val lines = ascii.lines()
-            val maxWidth = lines.maxOfOrNull { it.length } ?: 0
+            val lines = ascii.trimEnd('\n', '\r').lines()
+            val width = lines.firstOrNull()?.length ?: 0
+            require(lines.all { it.length == width }) { "Level rows must all have the same width" }
 
             var playerStart: Position? = null
             val boxes = mutableSetOf<Position>()
 
             val grid =
                 lines.mapIndexed { rowIndex, line ->
-                    line.padEnd(maxWidth).mapIndexed { colIndex, ch ->
+                    line.mapIndexed { colIndex, ch ->
                         val position = Position(rowIndex, colIndex)
                         when (ch) {
                             '#' -> {
