@@ -30,18 +30,18 @@ class MainActivityTest {
                                     Level.fromAscii(
                                         "Level 1",
                                         """
-                                        ####
+                                        #####
                                         #@$.#
-                                        ####
+                                        #####
                                         """.trimIndent(),
                                         puzzleId = 101,
                                     ),
                                     Level.fromAscii(
                                         "Level 2",
                                         """
-                                        #####
+                                        ######
                                         #@ $.#
-                                        #####
+                                        ######
                                         """.trimIndent(),
                                         puzzleId = 102,
                                     ),
