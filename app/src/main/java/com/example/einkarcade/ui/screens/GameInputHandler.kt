@@ -11,7 +11,7 @@ internal object GameInputHandler {
     ): Position? {
         if (gameController.tileMap.isVoid(tappedPosition)) {
             if (selectedBox != null) {
-                gameController.moveBoxTo(selectedBox, tappedPosition)
+                gameController.moveBox(selectedBox, tappedPosition)
             }
             return null
         }
@@ -23,7 +23,7 @@ internal object GameInputHandler {
             }
         }
         if (selectedBox != null) {
-            gameController.moveBoxTo(selectedBox, tappedPosition)
+            gameController.moveBox(selectedBox, tappedPosition)
         } else {
             gameController.movePlayerTo(tappedPosition)
         }

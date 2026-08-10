@@ -3,7 +3,7 @@ package com.example.einkarcade.session
 import com.example.einkarcade.catalog.LevelCatalog
 import com.example.einkarcade.sokoban.Level
 
-class LevelPreferenceService(
+class LevelMetadataService(
     private val catalog: LevelCatalog,
 ) {
     fun toggleLike(level: Level): Int {

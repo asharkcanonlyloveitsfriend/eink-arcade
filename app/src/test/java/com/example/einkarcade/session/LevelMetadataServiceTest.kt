@@ -8,11 +8,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class LevelPreferenceServiceTest {
+class LevelMetadataServiceTest {
     @Test
     fun togglesPreferencesAndPersistsThem() {
         val catalog = FakeCatalog()
-        val service = LevelPreferenceService(catalog)
+        val service = LevelMetadataService(catalog)
         val level = Level.fromAscii("Test", "@ $.", 7)
 
         assertEquals(1, service.toggleLike(level))
@@ -26,9 +26,23 @@ class LevelPreferenceServiceTest {
     private class FakeCatalog : LevelCatalog {
         var rating: Pair<Int, Int>? = null
         var starred: Pair<Int, Boolean>? = null
+
         override fun getSetSummaries(): List<LevelSetSummary> = emptyList()
+
         override fun getLevelSummaries(setId: Int): List<LevelSummary> = emptyList()
-        override fun setRating(puzzleId: Int, rating: Int) { this.rating = puzzleId to rating }
-        override fun setStarred(puzzleId: Int, isStarred: Boolean) { starred = puzzleId to isStarred }
+
+        override fun setRating(
+            puzzleId: Int,
+            rating: Int,
+        ) {
+            this.rating = puzzleId to rating
+        }
+
+        override fun setStarred(
+            puzzleId: Int,
+            isStarred: Boolean,
+        ) {
+            starred = puzzleId to isStarred
+        }
     }
 }

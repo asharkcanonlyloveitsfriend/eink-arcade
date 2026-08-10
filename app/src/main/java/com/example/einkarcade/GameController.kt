@@ -12,10 +12,11 @@ import com.example.einkarcade.catalog.RepositoryLevelCatalog
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.data.LevelDataSource
 import com.example.einkarcade.data.LevelsRepository
-import com.example.einkarcade.session.CompletionService
 import com.example.einkarcade.session.GameSession
+import com.example.einkarcade.session.LevelCompletionRecorder
+import com.example.einkarcade.session.LevelMetadataService
 import com.example.einkarcade.session.LevelNavigator
-import com.example.einkarcade.session.LevelPreferenceService
+import com.example.einkarcade.sokoban.GameEngine
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
@@ -31,8 +32,8 @@ class GameController(
     levelCatalog: LevelCatalog = RepositoryLevelCatalog(context, injectedSets),
     private val dataSource: LevelDataSource = LevelsRepository(context),
 ) {
-    private val preferenceService = LevelPreferenceService(levelCatalog)
-    private val completionService = CompletionService(dataSource)
+    private val levelMetadataService = LevelMetadataService(levelCatalog)
+    private val levelCompletionRecorder = LevelCompletionRecorder(dataSource)
     private val gameScreenState = mutableStateOf<GameScreenState?>(null)
     private val uiModeState = mutableStateOf(GameUiMode.GAMEPLAY)
     private val transitionSnapshotState = mutableStateOf<LevelTransitionSnapshot?>(null)
@@ -53,10 +54,10 @@ class GameController(
         get() = showRestartControlState
 
     val playerPosition: Position
-        get() = requireSession().engine.playerPosition
+        get() = requireSession().playerPosition
 
     val boxPositions: Set<Position>
-        get() = requireSession().engine.boxPositions
+        get() = requireSession().boxPositions
 
     val tileMap: TileMap
         get() = requireScreenState().tileMap
@@ -84,8 +85,7 @@ class GameController(
 
     fun levels(): List<Level> = navigator.levelsInCurrentSet
 
-    fun getCurrentLevelSummaries(): List<LevelSummary> =
-        navigator.levelsInCurrentSet.map(LevelSummaryMapper::map)
+    fun getCurrentLevelSummaries(): List<LevelSummary> = navigator.levelsInCurrentSet.map(LevelSummaryMapper::map)
 
     fun getCurrentRating(): Int = requireScreenState().rating
 
@@ -97,19 +97,19 @@ class GameController(
 
     fun toggleLikeByPuzzleId(puzzleId: Int) {
         val target = findCurrentSetLevel(puzzleId) ?: return
-        val rating = preferenceService.toggleLike(target)
+        val rating = levelMetadataService.toggleLike(target)
         if (puzzleId == currentPuzzleId) updateScreenState { it.copy(rating = rating) }
     }
 
     fun toggleDislikeByPuzzleId(puzzleId: Int) {
         val target = findCurrentSetLevel(puzzleId) ?: return
-        val rating = preferenceService.toggleDislike(target)
+        val rating = levelMetadataService.toggleDislike(target)
         if (puzzleId == currentPuzzleId) updateScreenState { it.copy(rating = rating) }
     }
 
     fun toggleStarByPuzzleId(puzzleId: Int) {
         val target = findCurrentSetLevel(puzzleId) ?: return
-        val starred = preferenceService.toggleStar(target)
+        val starred = levelMetadataService.toggleStar(target)
         if (puzzleId == currentPuzzleId) updateScreenState { it.copy(isStarred = starred) }
     }
 
@@ -131,46 +131,56 @@ class GameController(
     }
 
     fun undo(): Boolean {
-        if (uiMode != GameUiMode.GAMEPLAY || requireSession().engine.undo() == null) return false
+        if (uiMode != GameUiMode.GAMEPLAY || !requireSession().undo()) return false
         refreshRestartControl()
         emitStateChanged()
         return true
     }
 
     fun movePlayerTo(position: Position) {
-        if (requireSession().engine.movePlayerTo(position)) {
+        if (requireSession().movePlayerTo(position)) {
             refreshRestartControl()
             emitStateChanged()
         }
     }
 
-    fun moveBoxTo(
+    fun moveBox(
         boxFrom: Position,
         boxTo: Position,
     ) {
         val session = requireSession()
         val annotation =
-            if (tileMap.isVoid(boxTo)) {
-                if (!session.engine.pushBoxIntoVoid(boxFrom, boxTo)) {
+            when (val result = session.moveBox(boxFrom, boxTo)) {
+                GameEngine.BoxMoveResult.Rejected -> {
                     emit(GameRenderEvent.MoveRejected)
                     return
                 }
-                GameRenderEvent.StateChangeAnnotation.BoxRemoved(boxTo)
-            } else {
-                val path = session.engine.moveBoxTo(boxFrom, boxTo)
-                if (path == null) {
-                    emit(GameRenderEvent.MoveRejected)
-                    return
+
+                is GameEngine.BoxMoveResult.Moved -> {
+                    GameRenderEvent.StateChangeAnnotation.BoxMoved(
+                        result.path,
+                    )
                 }
-                GameRenderEvent.StateChangeAnnotation.BoxMoved(path)
+
+                is GameEngine.BoxMoveResult.Removed -> {
+                    GameRenderEvent.StateChangeAnnotation.BoxRemoved(
+                        result.position,
+                    )
+                }
             }
 
         refreshRestartControl()
         emitStateChanged(annotation)
-        when (completionService.record(session)) {
-            CompletionService.Result.NOT_SOLVED -> Unit
-            CompletionService.Result.CLEAN_SOLUTION -> uiModeState.value = GameUiMode.LEVEL_SOLVED
-            CompletionService.Result.CHEAT_SOLUTION -> {
+        when (levelCompletionRecorder.record(session)) {
+            LevelCompletionRecorder.Result.NOT_SOLVED -> {
+                Unit
+            }
+
+            LevelCompletionRecorder.Result.CLEAN_SOLUTION -> {
+                uiModeState.value = GameUiMode.LEVEL_SOLVED
+            }
+
+            LevelCompletionRecorder.Result.CHEAT_SOLUTION -> {
                 uiModeState.value = GameUiMode.LEVEL_SOLVED
                 emit(GameRenderEvent.LevelSolvedWithCheat)
             }
@@ -219,19 +229,18 @@ class GameController(
             )
     }
 
-    private fun findCurrentSetLevel(puzzleId: Int): Level? =
-        navigator.levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId }
+    private fun findCurrentSetLevel(puzzleId: Int): Level? = navigator.levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId }
 
     private fun refreshRestartControl() {
-        showRestartControlState.value = !requireSession().engine.isAtStart
+        showRestartControlState.value = !requireSession().isAtStart
     }
 
     private fun emitStateChanged(annotation: GameRenderEvent.StateChangeAnnotation? = null) {
-        val engine = requireSession().engine
+        val session = requireSession()
         emit(
             GameRenderEvent.StateChanged(
-                playerPosition = engine.playerPosition,
-                boxPositions = engine.boxPositions,
+                playerPosition = session.playerPosition,
+                boxPositions = session.boxPositions,
                 annotation = annotation,
             ),
         )
@@ -241,8 +250,7 @@ class GameController(
         onRenderEvent?.invoke(event)
     }
 
-    private fun requireScreenState(): GameScreenState =
-        requireNotNull(gameScreenState.value) { "Game screen state is not initialized" }
+    private fun requireScreenState(): GameScreenState = requireNotNull(gameScreenState.value) { "Game screen state is not initialized" }
 
     private fun requireSession(): GameSession {
         check(::session.isInitialized) { "Game session is not initialized" }

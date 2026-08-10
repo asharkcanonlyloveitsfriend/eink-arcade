@@ -31,7 +31,7 @@ class GameEngine(
     val isAtStart: Boolean
         get() =
             gameState.playerPosition == level.playerStart &&
-                gameState.boxPositions == level.boxPositions
+                boxMoveHistory.isEmpty()
 
     fun getBoxMoveHistory(): List<List<Position>> = boxMoveHistory.toList()
 
@@ -59,12 +59,22 @@ class GameEngine(
         return path
     }
 
-    fun moveBoxTo(
+    fun moveBox(
         from: Position,
         to: Position,
-    ): List<Position>? {
-        if (isLevelSolved) return null
-        if (!gameState.hasBoxAt(from)) return null
+    ): BoxMoveResult =
+        if (level.tileMap.isVoid(to)) {
+            pushBoxIntoVoid(from, to)
+        } else {
+            performBoxMove(from, to)
+        }
+
+    private fun performBoxMove(
+        from: Position,
+        to: Position,
+    ): BoxMoveResult {
+        if (isLevelSolved) return BoxMoveResult.Rejected
+        if (!gameState.hasBoxAt(from)) return BoxMoveResult.Rejected
 
         val boxPathfinder =
             BoxPathfinder(
@@ -73,7 +83,7 @@ class GameEngine(
                 playerStart = playerPosition,
             )
 
-        val boxPath = boxPathfinder.findBoxPath(to) ?: return null
+        val boxPath = boxPathfinder.findBoxPath(to) ?: return BoxMoveResult.Rejected
         val finalPlayerPosition =
             if (boxPath.size >= 2) {
                 boxPath[boxPath.size - 2]
@@ -86,30 +96,42 @@ class GameEngine(
         addUndoCredit()
         gameState.moveBox(from, to)
         gameState.movePlayer(finalPlayerPosition)
-        return boxPath
+        return BoxMoveResult.Moved(boxPath)
     }
 
-    fun pushBoxIntoVoid(
+    private fun pushBoxIntoVoid(
         from: Position,
         to: Position,
-    ): Boolean {
-        if (isLevelSolved) return false
-        if (!gameState.hasBoxAt(from)) return false
+    ): BoxMoveResult {
+        if (isLevelSolved) return BoxMoveResult.Rejected
+        if (!gameState.hasBoxAt(from)) return BoxMoveResult.Rejected
 
         val dirRow = from.row - playerPosition.row
         val dirCol = from.col - playerPosition.col
         val isAdjacentPush = abs(dirRow) + abs(dirCol) == 1
         val pushedTo = Position(from.row + dirRow, from.col + dirCol)
 
-        if (!isAdjacentPush) return false
-        if (pushedTo != to) return false
-        if (!level.tileMap.isVoid(to)) return false
+        if (!isAdjacentPush) return BoxMoveResult.Rejected
+        if (pushedTo != to) return BoxMoveResult.Rejected
+        if (!level.tileMap.isVoid(to)) return BoxMoveResult.Rejected
 
         boxMoveHistory.add(listOf(from, to))
         addUndoCredit()
         gameState.removeBox(from)
         gameState.movePlayer(from)
-        return true
+        return BoxMoveResult.Removed(to)
+    }
+
+    sealed interface BoxMoveResult {
+        data class Moved(
+            val path: List<Position>,
+        ) : BoxMoveResult
+
+        data class Removed(
+            val position: Position,
+        ) : BoxMoveResult
+
+        data object Rejected : BoxMoveResult
     }
 
     fun movePlayerTo(position: Position): Boolean {

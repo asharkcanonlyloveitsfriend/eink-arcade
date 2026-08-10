@@ -2,7 +2,7 @@ package com.example.einkarcade.session
 
 import com.example.einkarcade.data.LevelDataSource
 
-class CompletionService(
+class LevelCompletionRecorder(
     private val dataSource: LevelDataSource,
 ) {
     enum class Result {
@@ -12,11 +12,10 @@ class CompletionService(
     }
 
     fun record(session: GameSession): Result {
-        val engine = session.engine
-        if (!engine.isLevelSolved) return Result.NOT_SOLVED
-        if (!engine.isCleanSolution) return Result.CHEAT_SOLUTION
+        if (!session.isLevelSolved) return Result.NOT_SOLVED
+        if (!session.isCleanSolution) return Result.CHEAT_SOLUTION
 
-        val timestamp = dataSource.recordCompletion(session.level, engine.getBoxMoveHistory())
+        val timestamp = dataSource.recordCompletion(session.level, session.boxMoveHistory)
         session.level.markCompleted(timestamp)
         return Result.CLEAN_SOLUTION
     }
