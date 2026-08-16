@@ -2,7 +2,6 @@
 
 package com.example.einkarcade.ui.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +21,6 @@ import com.example.einkarcade.catalog.RepositoryLevelCatalog
 import com.example.einkarcade.ui.GameHud
 import com.example.einkarcade.ui.GameTitleBar
 import com.example.einkarcade.ui.GameUiMode
-import com.example.einkarcade.ui.SideControlsOverlay
 import com.example.einkarcade.ui.modes.LevelPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSetPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSolvedOverlay
@@ -44,10 +42,6 @@ fun GameScreen(
     var showLevelPicker by remember { mutableStateOf(false) }
     var showLevelSetPicker by remember { mutableStateOf(false) }
     var pickerRefreshNonce by remember { mutableLongStateOf(0L) }
-
-    BackHandler(enabled = true) {
-        gameController.undo()
-    }
 
     Box(
         modifier =
@@ -76,7 +70,7 @@ fun GameScreen(
                             gameController.toggleThumbDown()
                             setRating(gameController.getCurrentRating())
                         }
-                        onAdvance = { gameController.nextLevel() }
+                        onAdvance = { gameController.advanceToNextLevel() }
                     }
                 },
             )
@@ -106,14 +100,6 @@ fun GameScreen(
                     onThumbDown = { gameController.toggleThumbDown() },
                 )
             }
-        }
-
-        if (uiMode != GameUiMode.LEVEL_TRANSITION) {
-            SideControlsOverlay(
-                showRestartButton = gameController.showRestartControl.value,
-                onRestart = { gameController.restart() },
-                onSkip = { gameController.nextLevel() },
-            )
         }
 
         if (showLevelPicker) {

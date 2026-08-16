@@ -41,7 +41,7 @@ internal class GameBoardView(
     private var boxPositions: Set<Position> = emptySet()
     private var playerPosition: Position? = null
 
-    private var onTapCell: ((Position) -> Unit)? = null
+    private var onTapCell: ((Position, Long) -> Unit)? = null
     var selectedBox: Position? = null
         set(value) {
             val previous = field
@@ -69,7 +69,7 @@ internal class GameBoardView(
                 val position =
                     viewport.screenToInnerCell(event.x, event.y)
                         ?: return@setOnTouchListener true
-                onTapCell?.invoke(position)
+                onTapCell?.invoke(position, event.eventTime)
             }
             true
         }
@@ -80,7 +80,7 @@ internal class GameBoardView(
         drawInternal(canvas)
     }
 
-    fun setOnTapCell(handler: ((Position) -> Unit)?) {
+    fun setOnTapCell(handler: ((Position, Long) -> Unit)?) {
         onTapCell = handler
     }
 

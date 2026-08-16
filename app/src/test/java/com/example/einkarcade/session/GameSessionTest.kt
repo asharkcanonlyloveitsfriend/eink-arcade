@@ -19,16 +19,16 @@ class GameSessionTest {
     }
 
     @Test
-    fun undoRestoresThePreviousBoxMove() {
+    fun undoRestoresThePreviousBoxMoveOnlyAtItsDestination() {
         val session = GameSession(Level.fromAscii("Test", "@ $."))
         val path = listOf(Position(0, 2), Position(0, 3))
         session.moveBox(path.first(), path.last())
 
-        assertTrue(session.undo())
+        assertTrue(session.undoLastMoveAt(path.last()))
 
         assertEquals(setOf(path.first()), session.boxPositions)
         assertEquals(Position(0, 1), session.playerPosition)
-        assertFalse(session.undo())
+        assertFalse(session.undoLastMoveAt(path.last()))
     }
 
     @Test

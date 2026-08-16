@@ -2,6 +2,7 @@
 
 package com.example.einkarcade.ui.screens
 
+import android.view.ViewConfiguration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -42,19 +43,43 @@ internal fun GameBoardHost(
     val currentPuzzleId = screenState.puzzleId
     val context = LocalContext.current
     val surface = remember(context) { GameBoardView(context) }
+    val stationaryTapTracker =
+        remember { StationaryTapTracker(ViewConfiguration.getDoubleTapTimeout().toLong()) }
     var boardSize by remember { mutableStateOf(IntSize.Zero) }
     val loadedBoardKey =
         remember(gameController, surface) { mutableStateOf<LoadedBoardKey?>(null) }
 
     DisposableEffect(gameController, surface) {
         val renderHandler: (GameRenderEvent) -> Unit = surface::applyEvent
-        val tapHandler: (Position) -> Unit = { position ->
-            surface.selectedBox =
-                GameInputHandler.handleTap(
+        val tapHandler: (Position, Long) -> Unit = { position, eventTimeMillis ->
+            val isDoubleTap = stationaryTapTracker.consumeMatchingTap(position, eventTimeMillis)
+            val wasHandledAsGesture =
+                when {
+                    isDoubleTap && position == gameController.playerPosition -> {
+                        gameController.restart()
+                        true
+                    }
+
+                    isDoubleTap -> gameController.undoLastMoveAt(position)
+                    else -> false
+                }
+            if (!wasHandledAsGesture) {
+                val playerPositionBeforeTap = gameController.playerPosition
+                val boxPositionsBeforeTap = gameController.boxPositions
+                surface.selectedBox =
+                    GameInputHandler.handleTap(
+                        tappedPosition = position,
+                        gameController = gameController,
+                        selectedBox = surface.selectedBox,
+                    )
+                stationaryTapTracker.recordTap(
                     tappedPosition = position,
-                    gameController = gameController,
-                    selectedBox = surface.selectedBox,
+                    eventTimeMillis = eventTimeMillis,
+                    causedEntityMove =
+                        gameController.playerPosition != playerPositionBeforeTap ||
+                            gameController.boxPositions != boxPositionsBeforeTap,
                 )
+            }
         }
         gameController.onRenderEvent = renderHandler
         surface.setOnTapCell(tapHandler)
@@ -99,6 +124,7 @@ internal fun GameBoardHost(
     LaunchedEffect(uiMode) {
         if (uiMode == GameUiMode.LEVEL_TRANSITION) {
             loadedBoardKey.value = null
+            stationaryTapTracker.clear()
         }
     }
 

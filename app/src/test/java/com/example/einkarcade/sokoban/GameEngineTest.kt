@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,17 +14,10 @@ class GameEngineTest {
     private val fourthBoxPosition = Position(1, 6)
 
     @Test
-    fun constructorRejectsNegativeUndoLimit() {
-        assertThrows(IllegalArgumentException::class.java) {
-            createSingleBoxHallwayEngine(maxUndosAllowed = -1)
-        }
-    }
-
-    @Test
     fun undoIsUnavailableBeforeABoxMove() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+        val engine = createSingleBoxHallwayEngine()
 
-        assertNull(engine.undo())
+        assertNull(engine.undoLastMoveAt(firstBoxPosition))
     }
 
     @Test
@@ -56,37 +48,38 @@ class GameEngineTest {
     }
 
     @Test
-    fun boxMovesAddUndoCreditsUpToTheLimit() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 2)
+    fun everyMoveInHistoryCanBeUndoneInReverseOrder() {
+        val engine = createSingleBoxHallwayEngine()
 
         assertMoved(engine.moveBox(firstBoxPosition, secondBoxPosition))
         assertMoved(engine.moveBox(secondBoxPosition, thirdBoxPosition))
         assertMoved(engine.moveBox(thirdBoxPosition, fourthBoxPosition))
 
-        assertNotNull(engine.undo())
-        assertNotNull(engine.undo())
-        assertNull(engine.undo())
-        assertEquals(setOf(secondBoxPosition), engine.boxPositions)
+        assertNotNull(engine.undoLastMoveAt(fourthBoxPosition))
+        assertNotNull(engine.undoLastMoveAt(thirdBoxPosition))
+        assertNotNull(engine.undoLastMoveAt(secondBoxPosition))
+        assertEquals(setOf(firstBoxPosition), engine.boxPositions)
+        assertNull(engine.undoLastMoveAt(firstBoxPosition))
     }
 
     @Test
-    fun boxMoveAfterUndoAddsANewUndoCredit() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+    fun boxMoveAfterUndoCanBeUndoneAgain() {
+        val engine = createSingleBoxHallwayEngine()
 
         assertMoved(engine.moveBox(firstBoxPosition, secondBoxPosition))
-        assertNotNull(engine.undo())
-        assertNull(engine.undo())
+        assertNotNull(engine.undoLastMoveAt(secondBoxPosition))
+        assertNull(engine.undoLastMoveAt(firstBoxPosition))
 
         assertMoved(engine.moveBox(firstBoxPosition, secondBoxPosition))
 
-        assertNotNull(engine.undo())
-        assertNull(engine.undo())
+        assertNotNull(engine.undoLastMoveAt(secondBoxPosition))
+        assertNull(engine.undoLastMoveAt(firstBoxPosition))
         assertEquals(setOf(firstBoxPosition), engine.boxPositions)
     }
 
     @Test
     fun playerCanMoveThroughOpenFloorButNotThroughABox() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+        val engine = createSingleBoxHallwayEngine()
 
         assertTrue(engine.movePlayerTo(Position(1, 2)))
         assertEquals(Position(1, 2), engine.playerPosition)
@@ -95,7 +88,7 @@ class GameEngineTest {
 
     @Test
     fun movingPlayerToCurrentPositionIsRejected() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+        val engine = createSingleBoxHallwayEngine()
 
         assertTrue(engine.movePlayerTo(Position(1, 2)))
         assertFalse(engine.movePlayerTo(Position(1, 2)))
@@ -103,7 +96,7 @@ class GameEngineTest {
 
     @Test
     fun movingTheBoxOntoTheGoalSolvesTheLevel() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+        val engine = createSingleBoxHallwayEngine()
 
         val result = engine.moveBox(firstBoxPosition, Position(1, 7))
 
@@ -126,7 +119,7 @@ class GameEngineTest {
 
     @Test
     fun playerCannotMoveAfterLevelIsSolved() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+        val engine = createSingleBoxHallwayEngine()
 
         assertMoved(engine.moveBox(firstBoxPosition, Position(1, 7)))
 
@@ -135,7 +128,7 @@ class GameEngineTest {
 
     @Test
     fun movingABoxToAnUnreachableFloorIsRejected() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+        val engine = createSingleBoxHallwayEngine()
 
         assertEquals(
             GameEngine.BoxMoveResult.Rejected,
@@ -145,25 +138,19 @@ class GameEngineTest {
 
     @Test
     fun undoRestoresBoxPositionButLeavesPlayerBehindBox() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 1)
+        val engine = createSingleBoxHallwayEngine()
 
         val path = requireMovedPath(engine.moveBox(firstBoxPosition, secondBoxPosition))
-        assertEquals(path, engine.undo())
+        assertNull(engine.undoLastMoveAt(firstBoxPosition))
+        assertEquals(setOf(secondBoxPosition), engine.boxPositions)
+
+        assertEquals(path, engine.undoLastMoveAt(secondBoxPosition))
 
         assertEquals(setOf(firstBoxPosition), engine.boxPositions)
         assertEquals(Position(1, 2), engine.playerPosition)
         assertFalse(engine.isAtStart)
         assertEquals(emptyList<List<Position>>(), engine.getBoxMoveHistory())
-        assertNull(engine.undo())
-    }
-
-    @Test
-    fun zeroUndoLimitDoesNotAllowUndo() {
-        val engine = createSingleBoxHallwayEngine(maxUndosAllowed = 0)
-
-        assertMoved(engine.moveBox(firstBoxPosition, secondBoxPosition))
-
-        assertNull(engine.undo())
+        assertNull(engine.undoLastMoveAt(firstBoxPosition))
     }
 
     @Test
@@ -189,7 +176,7 @@ class GameEngineTest {
         val engine = createBoxAdjacentToVoidEngine()
 
         assertEquals(GameEngine.BoxMoveResult.Removed(void), engine.moveBox(box, void))
-        assertEquals(listOf(box, void), engine.undo())
+        assertEquals(listOf(box, void), engine.undoLastMoveAt(void))
 
         assertEquals(setOf(box), engine.boxPositions)
         assertEquals(player, engine.playerPosition)
@@ -216,19 +203,7 @@ class GameEngineTest {
         )
     }
 
-    @Test
-    fun movingABoxIntoVoidCannotBeUndoneWhenUndoLimitIsZero() {
-        val engine = createBoxAdjacentToVoidEngine(maxUndosAllowed = 0)
-
-        assertEquals(
-            GameEngine.BoxMoveResult.Removed(Position(1, 3)),
-            engine.moveBox(Position(1, 2), Position(1, 3)),
-        )
-
-        assertNull(engine.undo())
-    }
-
-    private fun createSingleBoxHallwayEngine(maxUndosAllowed: Int): GameEngine =
+    private fun createSingleBoxHallwayEngine(): GameEngine =
         GameEngine(
             level =
                 Level.fromAscii(
@@ -239,7 +214,6 @@ class GameEngineTest {
                     #########
                     """.trimIndent(),
                 ),
-            maxUndosAllowed = maxUndosAllowed,
         )
 
     private fun requireMovedPath(result: GameEngine.BoxMoveResult): List<Position> =
@@ -249,7 +223,7 @@ class GameEngineTest {
         assertTrue(result is GameEngine.BoxMoveResult.Moved)
     }
 
-    private fun createBoxAdjacentToVoidEngine(maxUndosAllowed: Int = 1): GameEngine =
+    private fun createBoxAdjacentToVoidEngine(): GameEngine =
         GameEngine(
             Level.fromAscii(
                 "Void push test",
@@ -259,6 +233,5 @@ class GameEngineTest {
                 #####
                 """.trimIndent(),
             ),
-            maxUndosAllowed = maxUndosAllowed,
         )
 }

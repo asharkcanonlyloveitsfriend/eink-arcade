@@ -2,19 +2,11 @@ package com.example.einkarcade.sokoban
 
 import kotlin.math.abs
 
-private const val MAX_UNDOS_ALLOWED = 3
-
 class GameEngine(
     private val level: Level,
-    private val maxUndosAllowed: Int = MAX_UNDOS_ALLOWED,
 ) {
-    init {
-        require(maxUndosAllowed >= 0) { "maxUndosAllowed must be non-negative" }
-    }
-
     private var gameState = GameState.fromLevel(level)
     private val boxMoveHistory: MutableList<List<Position>> = mutableListOf()
-    private var undosAvailable: Int = 0
 
     val playerPosition: Position
         get() = gameState.playerPosition
@@ -35,8 +27,12 @@ class GameEngine(
 
     fun getBoxMoveHistory(): List<List<Position>> = boxMoveHistory.toList()
 
-    fun undo(): List<Position>? {
-        if (undosAvailable <= 0) return null
+    fun undoLastMoveAt(position: Position): List<Position>? {
+        if (boxMoveHistory.lastOrNull()?.last() != position) return null
+        return undoLastMove()
+    }
+
+    private fun undoLastMove(): List<Position>? {
         val path = boxMoveHistory.removeLastOrNull() ?: return null
 
         val boxFrom = path.first()
@@ -55,7 +51,6 @@ class GameEngine(
         gameState.removeBox(boxTo)
         gameState.addBox(boxFrom)
         gameState.movePlayer(newPlayerPosition)
-        undosAvailable--
         return path
     }
 
@@ -93,7 +88,6 @@ class GameEngine(
 
         // Apply the planned move.
         boxMoveHistory.add(boxPath)
-        addUndoCredit()
         gameState.moveBox(from, to)
         gameState.movePlayer(finalPlayerPosition)
         return BoxMoveResult.Moved(boxPath)
@@ -116,7 +110,6 @@ class GameEngine(
         if (!level.tileMap.isVoid(to)) return BoxMoveResult.Rejected
 
         boxMoveHistory.add(listOf(from, to))
-        addUndoCredit()
         gameState.removeBox(from)
         gameState.movePlayer(from)
         return BoxMoveResult.Removed(to)
@@ -143,10 +136,6 @@ class GameEngine(
 
         gameState.movePlayer(position)
         return true
-    }
-
-    private fun addUndoCredit() {
-        undosAvailable = minOf(undosAvailable + 1, maxUndosAllowed)
     }
 
     private val walkableGrid: Array<Array<Boolean>>

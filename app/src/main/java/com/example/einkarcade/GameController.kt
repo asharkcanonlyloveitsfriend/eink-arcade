@@ -37,7 +37,6 @@ class GameController(
     private val gameScreenState = mutableStateOf<GameScreenState?>(null)
     private val uiModeState = mutableStateOf(GameUiMode.GAMEPLAY)
     private val transitionSnapshotState = mutableStateOf<LevelTransitionSnapshot?>(null)
-    private val showRestartControlState = mutableStateOf(false)
     private lateinit var navigator: LevelNavigator
     private lateinit var session: GameSession
 
@@ -49,9 +48,6 @@ class GameController(
 
     val transitionSnapshot: State<LevelTransitionSnapshot?>
         get() = transitionSnapshotState
-
-    val showRestartControl: State<Boolean>
-        get() = showRestartControlState
 
     val playerPosition: Position
         get() = requireSession().playerPosition
@@ -79,7 +75,7 @@ class GameController(
         beginLevelTransition { navigator.selectLevel(puzzleId) }
     }
 
-    fun nextLevel() {
+    fun advanceToNextLevel() {
         beginLevelTransition { navigator.selectNextLevel() }
     }
 
@@ -120,7 +116,6 @@ class GameController(
 
     fun restart() {
         requireSession().restart()
-        refreshRestartControl()
         emitStateChanged()
         uiModeState.value = GameUiMode.GAMEPLAY
     }
@@ -130,16 +125,14 @@ class GameController(
         uiModeState.value = GameUiMode.GAMEPLAY
     }
 
-    fun undo(): Boolean {
-        if (uiMode != GameUiMode.GAMEPLAY || !requireSession().undo()) return false
-        refreshRestartControl()
+    fun undoLastMoveAt(position: Position): Boolean {
+        if (uiMode != GameUiMode.GAMEPLAY || !requireSession().undoLastMoveAt(position)) return false
         emitStateChanged()
         return true
     }
 
     fun movePlayerTo(position: Position) {
         if (requireSession().movePlayerTo(position)) {
-            refreshRestartControl()
             emitStateChanged()
         }
     }
@@ -169,7 +162,6 @@ class GameController(
                 }
             }
 
-        refreshRestartControl()
         emitStateChanged(annotation)
         when (levelCompletionRecorder.record(session)) {
             LevelCompletionRecorder.Result.NOT_SOLVED -> {
@@ -202,7 +194,6 @@ class GameController(
         uiModeState.value = GameUiMode.GAMEPLAY
         if (!navigator.hasLevels) {
             gameScreenState.value = null
-            showRestartControlState.value = false
             return
         }
         startSession()
@@ -210,7 +201,6 @@ class GameController(
 
     private fun startSession() {
         session = GameSession(navigator.currentLevel)
-        refreshRestartControl()
         refreshScreenState()
     }
 
@@ -230,10 +220,6 @@ class GameController(
     }
 
     private fun findCurrentSetLevel(puzzleId: Int): Level? = navigator.levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId }
-
-    private fun refreshRestartControl() {
-        showRestartControlState.value = !requireSession().isAtStart
-    }
 
     private fun emitStateChanged(annotation: GameRenderEvent.StateChangeAnnotation? = null) {
         val session = requireSession()

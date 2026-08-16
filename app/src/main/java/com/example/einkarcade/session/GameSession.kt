@@ -31,7 +31,7 @@ class GameSession(
         engine = GameEngine(level)
     }
 
-    fun undo(): Boolean = engine.undo() != null
+    fun undoLastMoveAt(position: Position): Boolean = engine.undoLastMoveAt(position) != null
 
     fun movePlayerTo(position: Position): Boolean = engine.movePlayerTo(position)
 
