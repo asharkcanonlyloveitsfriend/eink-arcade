@@ -62,8 +62,7 @@ internal class EntityRenderer(
         position: Position,
     ): Rect {
         val origin =
-            Position(position.row + 1, position.col + 1)
-                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+            position.toRenderPoint(viewport.cellSize, viewport.boardLeft, viewport.boardTop)
         val bounds = geometry.boxBoundsPx
 
         val left = (origin.x + bounds.left).toInt()
@@ -79,8 +78,7 @@ internal class EntityRenderer(
         position: Position,
     ): Rect {
         val origin =
-            Position(position.row + 1, position.col + 1)
-                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+            position.toRenderPoint(viewport.cellSize, viewport.boardLeft, viewport.boardTop)
         val bounds = geometry.playerBoundsPx
 
         val left = (origin.x + bounds.left).toInt()
@@ -100,8 +98,7 @@ internal class EntityRenderer(
         position: Position,
     ): Rect {
         val origin =
-            Position(position.row + 1, position.col + 1)
-                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+            position.toRenderPoint(viewport.cellSize, viewport.boardLeft, viewport.boardTop)
 
         val spriteLeft = origin.x + geometry.playerBoundsPx.left
         val spriteTop = origin.y + geometry.playerBoundsPx.top
@@ -124,8 +121,7 @@ internal class EntityRenderer(
     ) {
         if (scale <= 0f) return
         val origin =
-            Position(position.row + 1, position.col + 1)
-                .toRenderPoint(viewport.cellSize, viewport.offsetX, viewport.offsetY)
+            position.toRenderPoint(viewport.cellSize, viewport.boardLeft, viewport.boardTop)
         val bounds = geometry.boxBoundsPx
         val left = origin.x + bounds.left
         val top = origin.y + bounds.top

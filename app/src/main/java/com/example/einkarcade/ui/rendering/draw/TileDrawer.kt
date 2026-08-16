@@ -29,15 +29,13 @@ internal class TileDrawer {
         tileMap: TileMap,
     ) {
         val cellSize = viewport.cellSize
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
         val halfStroke = floorStrokePaint.strokeWidth / 2f
 
         for (rowIndex in 0 until tileMap.rowCount) {
             for (colIndex in 0 until tileMap.columnCount) {
                 val tile = tileMap.tileAt(rowIndex, colIndex)!!
-                val tileLeft = offsetX + (colIndex + 1) * cellSize
-                val tileTop = offsetY + (rowIndex + 1) * cellSize
+                val tileLeft = viewport.cellLeft(colIndex)
+                val tileTop = viewport.cellTop(rowIndex)
                 val tileRight = tileLeft + cellSize
                 val tileBottom = tileTop + cellSize
                 drawTileCell(canvas, tile, tileLeft, tileTop, tileRight, tileBottom, halfStroke)

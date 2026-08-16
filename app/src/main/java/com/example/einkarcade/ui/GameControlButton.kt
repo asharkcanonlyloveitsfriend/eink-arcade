@@ -40,7 +40,7 @@ fun GameControlButton(
     Box(
         modifier =
             modifier
-                .height(48.dp)
+                .height(GAME_CONTROL_HEIGHT_DP.dp)
                 .background(if (isPressed.value) pressedBackgroundColor else backgroundColor)
                 .clickable(
                     interactionSource = interactionSource,

@@ -207,18 +207,18 @@ class LevelTransitionView
         ) {
             private val oldBoardRect: Rect =
                 Rect(
-                    (oldViewport.offsetX + 1f * oldViewport.cellSize).roundToInt(),
-                    (oldViewport.offsetY + 1f * oldViewport.cellSize).roundToInt(),
-                    (oldViewport.offsetX + (oldViewport.cols - 1) * oldViewport.cellSize).roundToInt(),
-                    (oldViewport.offsetY + (oldViewport.rows - 1) * oldViewport.cellSize).roundToInt(),
+                    oldViewport.boardLeft.roundToInt(),
+                    oldViewport.boardTop.roundToInt(),
+                    oldViewport.boardRight.roundToInt(),
+                    oldViewport.boardBottom.roundToInt(),
                 )
 
             private val newBoardRect: Rect =
                 Rect(
-                    (newViewport.offsetX + 1f * newViewport.cellSize).roundToInt(),
-                    (newViewport.offsetY + 1f * newViewport.cellSize).roundToInt(),
-                    (newViewport.offsetX + (newViewport.cols - 1) * newViewport.cellSize).roundToInt(),
-                    (newViewport.offsetY + (newViewport.rows - 1) * newViewport.cellSize).roundToInt(),
+                    newViewport.boardLeft.roundToInt(),
+                    newViewport.boardTop.roundToInt(),
+                    newViewport.boardRight.roundToInt(),
+                    newViewport.boardBottom.roundToInt(),
                 )
 
             val unionBoardRect: Rect =
@@ -233,10 +233,10 @@ class LevelTransitionView
             private val boardBottom = unionBoardRect.bottom.toFloat()
 
             private fun interiorBoardRect(viewport: BoardViewport): Rect {
-                val left = (viewport.offsetX + 1f * viewport.cellSize).roundToInt()
-                val top = (viewport.offsetY + 1f * viewport.cellSize).roundToInt()
-                val right = (viewport.offsetX + (viewport.cols - 1) * viewport.cellSize).roundToInt()
-                val bottom = (viewport.offsetY + (viewport.rows - 1) * viewport.cellSize).roundToInt()
+                val left = viewport.boardLeft.roundToInt()
+                val top = viewport.boardTop.roundToInt()
+                val right = viewport.boardRight.roundToInt()
+                val bottom = viewport.boardBottom.roundToInt()
                 return Rect(left, top, right, bottom)
             }
 
@@ -256,10 +256,10 @@ class LevelTransitionView
                 for (r in 0 until tileMap.rowCount) {
                     for (c in 0 until tileMap.columnCount) {
                         if (tileMap.isVoid(r, c)) {
-                            val left = (viewport.offsetX + (c + 1) * viewport.cellSize).roundToInt()
-                            val top = (viewport.offsetY + (r + 1) * viewport.cellSize).roundToInt()
-                            val right = (viewport.offsetX + (c + 2) * viewport.cellSize).roundToInt()
-                            val bottom = (viewport.offsetY + (r + 2) * viewport.cellSize).roundToInt()
+                            val left = viewport.cellLeft(c).roundToInt()
+                            val top = viewport.cellTop(r).roundToInt()
+                            val right = viewport.cellLeft(c + 1).roundToInt()
+                            val bottom = viewport.cellTop(r + 1).roundToInt()
                             region.op(
                                 Rect(left, top, right, bottom),
                                 Region.Op.UNION,
@@ -295,10 +295,10 @@ class LevelTransitionView
 
                 for (r in 0 until newTileMap.rowCount) {
                     for (c in 0 until newTileMap.columnCount) {
-                        val left = newViewport.offsetX + (c + 1) * newViewport.cellSize
-                        val top = newViewport.offsetY + (r + 1) * newViewport.cellSize
-                        val right = newViewport.offsetX + (c + 2) * newViewport.cellSize
-                        val bottom = newViewport.offsetY + (r + 2) * newViewport.cellSize
+                        val left = newViewport.cellLeft(c)
+                        val top = newViewport.cellTop(r)
+                        val right = newViewport.cellLeft(c + 1)
+                        val bottom = newViewport.cellTop(r + 1)
 
                         val rect =
                             Rect(

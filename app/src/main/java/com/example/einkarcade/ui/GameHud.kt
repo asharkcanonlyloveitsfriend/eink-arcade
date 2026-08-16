@@ -22,7 +22,12 @@ fun GameHud(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = GAME_HUD_TOP_PADDING_DP.dp,
+                    bottom = GAME_HUD_BOTTOM_PADDING_DP.dp,
+                ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GameControlButton(

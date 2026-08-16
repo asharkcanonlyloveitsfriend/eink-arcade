@@ -23,6 +23,8 @@ import com.example.einkarcade.ui.GameRenderEvent
 import com.example.einkarcade.ui.GameUiMode
 import com.example.einkarcade.ui.modes.LevelTransitionView
 import com.example.einkarcade.ui.rendering.GameBoardView
+import com.example.einkarcade.ui.rendering.gameBoardBottomReservedPx
+import com.example.einkarcade.ui.rendering.gameBoardTopReservedPx
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 
 private data class LoadedBoardKey(
@@ -155,6 +157,8 @@ internal fun GameBoardHost(
                             surfaceHeight = height.toFloat(),
                             innerRows = snapshot.oldTileMap.rowCount,
                             innerCols = snapshot.oldTileMap.columnCount,
+                            minimumTopMarginPx = context.gameBoardTopReservedPx(),
+                            minimumBottomMarginPx = context.gameBoardBottomReservedPx(),
                         )
 
                     val newFrame = surface.buildStaticBoardFrame(currentTileMap)

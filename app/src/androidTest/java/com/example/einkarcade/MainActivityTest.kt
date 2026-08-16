@@ -11,6 +11,8 @@ import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
+import com.example.einkarcade.ui.rendering.gameBoardBottomReservedPx
+import com.example.einkarcade.ui.rendering.gameBoardTopReservedPx
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -74,6 +76,8 @@ class MainActivityTest {
                     surfaceHeight = visibleSize.height.toFloat(),
                     innerRows = 3,
                     innerCols = 5,
+                    minimumTopMarginPx = composeTestRule.activity.gameBoardTopReservedPx(),
+                    minimumBottomMarginPx = composeTestRule.activity.gameBoardBottomReservedPx(),
                 )
             click(gridOffsetInMiddleRow(viewport = viewport, col = 2))
             click(gridOffsetInMiddleRow(viewport = viewport, col = 3))
@@ -110,6 +114,6 @@ private fun gridOffsetInMiddleRow(
     col: Int,
 ): Offset =
     Offset(
-        viewport.offsetX + viewport.cellSize * (col + 1.5f),
-        viewport.offsetY + viewport.cellSize * (1 + 1.5f),
+        viewport.cellLeft(col) + viewport.cellSize / 2f,
+        viewport.cellTop(1) + viewport.cellSize / 2f,
     )

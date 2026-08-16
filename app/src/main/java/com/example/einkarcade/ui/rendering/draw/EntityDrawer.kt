@@ -38,12 +38,8 @@ internal class EntityDrawer(
         geometry: ResolvedEntityGeometry,
         bitmapPaint: android.graphics.Paint = assets.bitmapPaint(),
     ) {
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
-
         val origin =
-            Position(position.row + 1, position.col + 1)
-                .toRenderPoint(viewport.cellSize, offsetX, offsetY)
+            position.toRenderPoint(viewport.cellSize, viewport.boardLeft, viewport.boardTop)
 
         val bounds = geometry.boxBoundsPx
         val left = origin.x + bounds.left
@@ -60,12 +56,8 @@ internal class EntityDrawer(
         geometry: ResolvedEntityGeometry,
     ) {
         val bitmapPaint = assets.bitmapPaint()
-        val offsetX = viewport.offsetX
-        val offsetY = viewport.offsetY
-
         val origin =
-            Position(playerPosition.row + 1, playerPosition.col + 1)
-                .toRenderPoint(viewport.cellSize, offsetX, offsetY)
+            playerPosition.toRenderPoint(viewport.cellSize, viewport.boardLeft, viewport.boardTop)
 
         val left = origin.x + geometry.playerInsetPx
         val top = origin.y + geometry.playerInsetPx

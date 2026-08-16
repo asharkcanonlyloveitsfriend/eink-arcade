@@ -34,9 +34,9 @@ internal class BoxPathAnimation(
     private val points: List<PointF> by lazy {
         path.map { position ->
             val cx =
-                viewport.offsetX + (position.col + 1) * viewport.cellSize + viewport.cellSize / 2f
+                viewport.cellLeft(position.col) + viewport.cellSize / 2f
             val cy =
-                viewport.offsetY + (position.row + 1) * viewport.cellSize + viewport.cellSize / 2f
+                viewport.cellTop(position.row) + viewport.cellSize / 2f
             PointF(cx, cy)
         }
     }

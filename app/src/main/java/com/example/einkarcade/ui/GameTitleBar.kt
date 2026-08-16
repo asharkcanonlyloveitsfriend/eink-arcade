@@ -29,7 +29,12 @@ fun GameTitleBar(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = GAME_TITLE_TOP_PADDING_DP.dp,
+                    bottom = GAME_TITLE_BOTTOM_PADDING_DP.dp,
+                ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
