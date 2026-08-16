@@ -570,8 +570,8 @@ private fun LevelMapPreview(
         val startY = cellSize
 
         val floorFillColor = Color.White
-        val goalFillColor = Color(0xFFE4E4E4)
-        val gridLineColor = Color(0xFFCDCDCD)
+        val goalFillColor = Color(0xFFDCDCDC)
+        val gridLineColor = Color(0xFFC0C0C0)
 
         val colEdges =
             IntArray(board.columnCount + 1) { col -> (startX + (col * cellSize)).roundToInt() }

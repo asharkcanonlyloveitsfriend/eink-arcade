@@ -20,7 +20,7 @@ internal class BoxPathAnimation(
     private val pathRect: Rect by lazy { computePathRect() }
     private val pathPaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFD3D3D3.toInt()
+            color = 0xFFC9C9C9.toInt()
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND

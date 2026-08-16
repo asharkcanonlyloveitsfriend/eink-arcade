@@ -11,11 +11,11 @@ internal class TileDrawer {
     private val floorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val floorStrokePaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFF0F0F0.toInt()
+            color = 0xFFE0E0E0.toInt()
             style = Paint.Style.STROKE
             strokeWidth = 2f
         }
-    private val goalFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE0E0E0.toInt() }
+    private val goalFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD8D8D8.toInt() }
     private val goalStrokePaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
