@@ -109,8 +109,7 @@ class GameController(
         if (puzzleId == currentPuzzleId) updateScreenState { it.copy(isStarred = starred) }
     }
 
-    fun syncWithServer() {
-        dataSource.syncWithServer()
+    fun reloadLevelSets() {
         rebuildState(dataSource.loadSets().orEmpty())
     }
 

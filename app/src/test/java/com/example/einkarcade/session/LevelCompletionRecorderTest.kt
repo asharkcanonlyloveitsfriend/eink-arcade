@@ -39,8 +39,6 @@ class LevelCompletionRecorderTest {
 
         override fun loadSets(): List<LevelSet>? = null
 
-        override fun syncWithServer() = Unit
-
         override fun recordCompletion(
             level: Level,
             solutionHistory: List<List<Position>>,

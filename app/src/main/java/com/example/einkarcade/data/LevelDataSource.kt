@@ -12,5 +12,4 @@ interface LevelDataSource {
         solutionHistory: List<List<Position>>,
     ): String
 
-    fun syncWithServer()
 }

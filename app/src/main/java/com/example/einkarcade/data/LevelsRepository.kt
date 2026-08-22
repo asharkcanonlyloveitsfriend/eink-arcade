@@ -9,16 +9,9 @@ import com.example.einkarcade.data.db.PuzzleEntity
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import org.json.JSONArray
-import org.json.JSONException
-import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.Executors
 
 // Repository for loading/saving level sets.
 class LevelsRepository(
@@ -30,9 +23,6 @@ class LevelsRepository(
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
 
     override fun loadSets(): List<LevelSet>? {
-        if (dao.countLevelSets() == 0) {
-            bootstrapFromServer()
-        }
         val sets = dao.getAllLevelSetsWithLevels()
         if (sets.isEmpty()) return null
         return sets.map { set ->
@@ -59,6 +49,64 @@ class LevelsRepository(
 
     fun updateRating(level: Level) {
         dao.updatePuzzleRating(level.puzzleId, level.rating)
+    }
+
+    fun importLevelSet(
+        title: String,
+        grids: Array<String>,
+    ): Int {
+        require(grids.isNotEmpty()) { "Cannot import an empty level set." }
+
+        return database.runInTransaction<Int> {
+            val levelSetId = dao.nextLevelSetId()
+            val firstLevelId = dao.nextLevelId()
+            val firstPuzzleId = dao.nextPuzzleId()
+            val levelSet = LevelSetEntity(id = levelSetId, title = title)
+            val puzzles =
+                grids.mapIndexed { index, grid ->
+                    PuzzleEntity(
+                        id = firstPuzzleId + index,
+                        grid = grid,
+                        lastCompletedAt = null,
+                        rating = 0,
+                        isStarred = false,
+                        userSolution = null,
+                    )
+                }
+            val levels =
+                grids.indices.map { index ->
+                    LevelEntity(
+                        id = firstLevelId + index,
+                        title = "Level ${index + 1}",
+                        levelSetId = levelSetId,
+                        puzzleId = firstPuzzleId + index,
+                    )
+                }
+
+            dao.insertLevelSets(listOf(levelSet))
+            dao.insertPuzzles(puzzles)
+            dao.insertLevels(levels)
+            levelSetId
+        }
+    }
+
+    fun renameLevelSet(
+        levelSetId: Int,
+        title: String,
+    ) {
+        require(title.isNotBlank()) { "A level set title is required." }
+        check(dao.renameLevelSet(levelSetId, title.trim()) == 1) {
+            "The level set no longer exists."
+        }
+    }
+
+    fun deleteLevelSet(levelSetId: Int) {
+        val deletedLevelSets =
+            database.runInTransaction<Int> {
+                dao.deletePuzzlesForLevelSet(levelSetId)
+                dao.deleteLevelSet(levelSetId)
+            }
+        check(deletedLevelSets == 1) { "The level set no longer exists." }
     }
 
     fun updateStarred(level: Level) {
@@ -133,179 +181,4 @@ class LevelsRepository(
         return result
     }
 
-    override fun syncWithServer() {
-        syncWithServer(DEFAULT_SYNC_ENDPOINT)
-    }
-
-    fun syncWithServer(endpoint: String) {
-        val requestJson = buildSyncRequestJson(dao.getPuzzlesForSync())
-        val responseJson = postJson(endpoint, requestJson)
-        val response = parseSyncResponse(responseJson)
-        database.runInTransaction {
-            dao.clearLevels()
-            dao.clearLevelSets()
-            dao.clearPuzzles()
-            dao.insertLevelSets(response.levelSets)
-            dao.insertPuzzles(response.puzzles)
-            dao.insertLevels(response.levels)
-        }
-    }
-
-    private fun buildSyncRequestJson(puzzles: List<PuzzleEntity>): String {
-        val puzzleArray = JSONArray()
-        for (puzzle in puzzles) {
-            val puzzleJson = JSONObject()
-            puzzleJson.put("puzzle_id", puzzle.id)
-            puzzleJson.put("rating", puzzle.rating)
-            puzzleJson.put("is_starred", puzzle.isStarred)
-            if (puzzle.lastCompletedAt == null) {
-                puzzleJson.put("last_completed_at", JSONObject.NULL)
-            } else {
-                puzzleJson.put("last_completed_at", puzzle.lastCompletedAt)
-            }
-            if (puzzle.userSolution == null) {
-                puzzleJson.put("user_solution", JSONObject.NULL)
-            } else {
-                puzzleJson.put("user_solution", puzzle.userSolution)
-            }
-            puzzleArray.put(puzzleJson)
-        }
-        val root = JSONObject()
-        root.put("puzzles", puzzleArray)
-        return root.toString()
-    }
-
-    private data class SyncResponseData(
-        val levelSets: List<LevelSetEntity>,
-        val levels: List<LevelEntity>,
-        val puzzles: List<PuzzleEntity>,
-    )
-
-    @Throws(JSONException::class)
-    private fun parseSyncResponse(jsonText: String): SyncResponseData {
-        val root = JSONObject(jsonText)
-        val levelSetsJson = root.getJSONArray("level_sets")
-        val levelsJson = root.getJSONArray("levels")
-        val puzzlesJson = root.getJSONArray("puzzles")
-
-        val levelSets = ArrayList<LevelSetEntity>(levelSetsJson.length())
-        for (i in 0 until levelSetsJson.length()) {
-            val item = levelSetsJson.getJSONObject(i)
-            levelSets.add(
-                LevelSetEntity(
-                    id = item.getInt("id"),
-                    title = item.getString("title"),
-                ),
-            )
-        }
-
-        val puzzles = ArrayList<PuzzleEntity>(puzzlesJson.length())
-        for (i in 0 until puzzlesJson.length()) {
-            val item = puzzlesJson.getJSONObject(i)
-            val lastCompletedAt =
-                if (item.isNull("last_completed_at")) {
-                    null
-                } else {
-                    item.getString("last_completed_at")
-                }
-            val userSolution =
-                if (item.isNull("user_solution")) {
-                    null
-                } else {
-                    item.getString("user_solution")
-                }
-            puzzles.add(
-                PuzzleEntity(
-                    id = item.getInt("id"),
-                    grid = item.getString("grid"),
-                    rating = item.getInt("rating"),
-                    isStarred = parseBooleanField(item, "is_starred"),
-                    lastCompletedAt = lastCompletedAt,
-                    userSolution = userSolution,
-                ),
-            )
-        }
-
-        val levels = ArrayList<LevelEntity>(levelsJson.length())
-        for (i in 0 until levelsJson.length()) {
-            val item = levelsJson.getJSONObject(i)
-            levels.add(
-                LevelEntity(
-                    id = item.getInt("id"),
-                    title = item.getString("title"),
-                    levelSetId = item.getInt("level_set_id"),
-                    puzzleId = item.getInt("puzzle_id"),
-                ),
-            )
-        }
-        return SyncResponseData(levelSets = levelSets, levels = levels, puzzles = puzzles)
-    }
-
-    private fun parseBooleanField(
-        item: JSONObject,
-        key: String,
-    ): Boolean {
-        val raw = item.opt(key)
-        return when (raw) {
-            is Boolean -> raw
-            is Number -> raw.toInt() != 0
-            is String -> raw.equals("true", ignoreCase = true) || raw == "1"
-            else -> false
-        }
-    }
-
-    @Throws(Exception::class)
-    private fun postJson(
-        endpoint: String,
-        body: String,
-    ): String {
-        val url = URL(endpoint)
-        val connection =
-            (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 10_000
-                readTimeout = 15_000
-                doInput = true
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json")
-            }
-        connection.outputStream.use { stream ->
-            stream.write(body.toByteArray(Charsets.UTF_8))
-        }
-        val responseCode = connection.responseCode
-        val stream =
-            if (responseCode in 200..299) {
-                connection.inputStream
-            } else {
-                connection.errorStream
-            }
-        val response = BufferedReader(InputStreamReader(stream)).use { it.readText() }
-        connection.disconnect()
-        if (responseCode !in 200..299) {
-            throw RuntimeException("Sync failed ($responseCode): $response")
-        }
-        return response
-    }
-
-    private fun bootstrapFromServer() {
-        val executor = Executors.newSingleThreadExecutor()
-        try {
-            val future = executor.submit { syncWithServer() }
-            future.get()
-        } catch (e: Exception) {
-            throw IllegalStateException(
-                "BootstrapFailed: server unreachable or sync error. Is the server running?",
-                e,
-            )
-        } finally {
-            executor.shutdown()
-        }
-        if (dao.countLevelSets() == 0) {
-            throw IllegalStateException("BootstrapFailed: server returned no level sets")
-        }
-    }
-
-    companion object {
-        private const val DEFAULT_SYNC_ENDPOINT = "http://192.168.0.75:8000/api/sync"
-    }
 }
