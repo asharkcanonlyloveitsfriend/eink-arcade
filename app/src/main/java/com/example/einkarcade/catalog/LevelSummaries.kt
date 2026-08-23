@@ -1,5 +1,8 @@
 package com.example.einkarcade.catalog
 
+import com.example.einkarcade.sokoban.Position
+import com.example.einkarcade.sokoban.TileMap
+
 data class LevelSetSummary(
     val id: Int,
     val name: String,
@@ -15,21 +18,7 @@ data class LevelSummary(
 )
 
 data class LevelBoardGeometry(
-    val rowCount: Int,
-    val columnCount: Int,
-    val tiles: List<LevelBoardTile>,
-    val player: LevelBoardPoint,
-    val boxes: List<LevelBoardPoint>,
-) {
-    fun tileAt(
-        row: Int,
-        col: Int,
-    ): LevelBoardTile = tiles[row * columnCount + col]
-}
-
-data class LevelBoardPoint(
-    val row: Int,
-    val col: Int,
+    val tileMap: TileMap,
+    val player: Position,
+    val boxes: Set<Position>,
 )
-
-enum class LevelBoardTile { FLOOR, GOAL, VOID }

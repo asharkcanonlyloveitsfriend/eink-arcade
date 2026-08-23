@@ -7,20 +7,24 @@ import com.example.einkarcade.sokoban.Tile
 import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 
-internal class TileDrawer {
+internal class TileDrawer(
+    usePreviewStyle: Boolean = false,
+) {
+    private val strokeWidthPx = if (usePreviewStyle) 1f else 2f
+
     private val floorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val floorStrokePaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFE0E0E0.toInt()
+            color = if (usePreviewStyle) 0xFFCCCCCC.toInt() else 0xFFE0E0E0.toInt()
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = strokeWidthPx
         }
     private val goalFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD8D8D8.toInt() }
     private val goalStrokePaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = strokeWidthPx
         }
 
     fun drawTiles(
