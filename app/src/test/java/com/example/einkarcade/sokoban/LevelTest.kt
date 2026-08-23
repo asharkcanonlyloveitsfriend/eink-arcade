@@ -60,16 +60,11 @@ class LevelTest {
     }
 
     @Test
-    fun ratingAndCompletionStateCanBeUpdated() {
+    fun completionStateCanBeUpdated() {
         val level = Level.fromAscii("State", "@")
 
-        assertEquals(1, level.toggleThumbUp())
-        assertEquals(0, level.toggleThumbUp())
-        assertEquals(-1, level.toggleThumbDown())
-        level.setStarred(true)
         level.markCompleted("2026-07-03T10:00:00Z")
 
-        assertTrue(level.isStarred)
         assertTrue(level.isCompleted)
         assertEquals("2026-07-03T10:00:00Z", level.completedAt)
 

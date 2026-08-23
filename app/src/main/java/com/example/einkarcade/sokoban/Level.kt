@@ -8,11 +8,6 @@ data class Level(
     val boxPositions: Set<Position>,
     val puzzleId: Int = -1,
 ) {
-    // -1 = thumbs down, 0 = none, 1 = thumbs up. Not part of equality/hashCode.
-    var rating: Int = 0
-        private set
-    var isStarred: Boolean = false
-        private set
     var completedAt: String? = null
         private set
 
@@ -22,30 +17,12 @@ data class Level(
     val tileMap: TileMap
         get() = TileMap(grid)
 
-    fun setRating(value: Int) {
-        rating = value
-    }
-
-    fun setStarred(value: Boolean) {
-        isStarred = value
-    }
-
     fun markCompleted(timestamp: String) {
         completedAt = timestamp
     }
 
     fun setCompletedAt(value: String?) {
         completedAt = value
-    }
-
-    fun toggleThumbUp(): Int {
-        rating = if (rating == 1) 0 else 1
-        return rating
-    }
-
-    fun toggleThumbDown(): Int {
-        rating = if (rating == -1) 0 else -1
-        return rating
     }
 
     companion object {

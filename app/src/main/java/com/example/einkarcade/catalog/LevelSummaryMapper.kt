@@ -9,8 +9,6 @@ object LevelSummaryMapper {
             puzzleId = level.puzzleId,
             name = level.name,
             isCompleted = level.isCompleted,
-            rating = level.rating,
-            isStarred = level.isStarred,
             boardGeometry = mapGeometry(level),
         )
 

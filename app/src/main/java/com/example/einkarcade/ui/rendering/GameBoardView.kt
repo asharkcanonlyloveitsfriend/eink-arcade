@@ -8,7 +8,6 @@ import android.view.MotionEvent
 import android.view.View
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
-import com.example.einkarcade.ui.GAME_BOARD_BOTTOM_UI_RESERVE_DP
 import com.example.einkarcade.ui.GAME_BOARD_TOP_UI_RESERVE_DP
 import com.example.einkarcade.ui.GameRenderEvent
 import com.example.einkarcade.ui.rendering.anim.AnimationRunner
@@ -24,8 +23,6 @@ import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
 import com.example.einkarcade.ui.rendering.geom.screenToInnerCell
 
 internal fun Context.gameBoardTopReservedPx(): Float = GAME_BOARD_TOP_UI_RESERVE_DP * resources.displayMetrics.density
-
-internal fun Context.gameBoardBottomReservedPx(): Float = GAME_BOARD_BOTTOM_UI_RESERVE_DP * resources.displayMetrics.density
 
 @SuppressLint("ClickableViewAccessibility")
 internal class GameBoardView(
@@ -120,7 +117,6 @@ internal class GameBoardView(
                 innerRows = tileMap.rowCount,
                 innerCols = tileMap.columnCount,
                 minimumTopMarginPx = context.gameBoardTopReservedPx(),
-                minimumBottomMarginPx = context.gameBoardBottomReservedPx(),
             )
 
         staticBoardRenderer.rebuildStaticLayout(

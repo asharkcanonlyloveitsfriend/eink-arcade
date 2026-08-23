@@ -8,8 +8,6 @@ data class GameScreenState(
     val setId: Int,
     val levelName: String,
     val puzzleId: Int,
-    val rating: Int,
-    val isStarred: Boolean,
     val tileMap: TileMap,
 )
 

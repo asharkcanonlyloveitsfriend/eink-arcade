@@ -34,8 +34,6 @@ class LevelsRepository(
                             levelWithPuzzle.puzzle.grid,
                             levelWithPuzzle.level.puzzleId,
                         )
-                    level.setRating(levelWithPuzzle.puzzle.rating)
-                    level.setStarred(levelWithPuzzle.puzzle.isStarred)
                     level.setCompletedAt(levelWithPuzzle.puzzle.lastCompletedAt)
                     level
                 }
@@ -45,10 +43,6 @@ class LevelsRepository(
                 levels = levels,
             )
         }
-    }
-
-    fun updateRating(level: Level) {
-        dao.updatePuzzleRating(level.puzzleId, level.rating)
     }
 
     fun importLevelSet(
@@ -68,8 +62,6 @@ class LevelsRepository(
                         id = firstPuzzleId + index,
                         grid = grid,
                         lastCompletedAt = null,
-                        rating = 0,
-                        isStarred = false,
                         userSolution = null,
                     )
                 }
@@ -107,10 +99,6 @@ class LevelsRepository(
                 dao.deleteLevelSet(levelSetId)
             }
         check(deletedLevelSets == 1) { "The level set no longer exists." }
-    }
-
-    fun updateStarred(level: Level) {
-        dao.updatePuzzleStarred(level.puzzleId, level.isStarred)
     }
 
     override fun recordCompletion(

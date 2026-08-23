@@ -11,7 +11,6 @@ import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.ui.rendering.geom.BoardViewport
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
-import com.example.einkarcade.ui.rendering.gameBoardBottomReservedPx
 import com.example.einkarcade.ui.rendering.gameBoardTopReservedPx
 import org.junit.After
 import org.junit.Rule
@@ -77,7 +76,6 @@ class MainActivityTest {
                     innerRows = 3,
                     innerCols = 5,
                     minimumTopMarginPx = composeTestRule.activity.gameBoardTopReservedPx(),
-                    minimumBottomMarginPx = composeTestRule.activity.gameBoardBottomReservedPx(),
                 )
             click(gridOffsetInMiddleRow(viewport = viewport, col = 2))
             click(gridOffsetInMiddleRow(viewport = viewport, col = 3))

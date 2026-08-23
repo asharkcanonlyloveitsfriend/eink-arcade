@@ -37,18 +37,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.einkarcade.R
-import com.example.einkarcade.catalog.LevelCatalog
 import com.example.einkarcade.catalog.LevelSetSummary
 
 @Composable
 fun LevelSetPickerOverlay(
-    catalog: LevelCatalog,
+    setOptions: List<LevelSetSummary>,
     selectedSetId: Int?,
     onPickSet: (setId: Int) -> Unit,
     onImport: () -> Unit,
     onRename: (setId: Int, title: String) -> Unit,
     onDelete: (setId: Int) -> Unit,
-    refreshNonce: Long,
     errorTitle: String?,
     errorMessage: String?,
     onDismissError: () -> Unit,
@@ -56,7 +54,6 @@ fun LevelSetPickerOverlay(
 ) {
     BackHandler { onDismiss() }
 
-    val setOptions = remember(catalog, refreshNonce) { catalog.getSetSummaries() }
     var setBeingRenamed by remember { mutableStateOf<LevelSetSummary?>(null) }
     var renameTitle by remember { mutableStateOf("") }
     var setBeingDeleted by remember { mutableStateOf<LevelSetSummary?>(null) }

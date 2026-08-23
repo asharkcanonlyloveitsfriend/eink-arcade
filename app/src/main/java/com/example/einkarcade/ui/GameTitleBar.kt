@@ -5,6 +5,7 @@ package com.example.einkarcade.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -14,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.einkarcade.R
 
 @Composable
 fun GameTitleBar(
@@ -22,8 +22,6 @@ fun GameTitleBar(
     levelName: String,
     onOpenSetPicker: () -> Unit,
     onOpenLevelPicker: () -> Unit,
-    isStarred: Boolean,
-    onToggleStar: () -> Unit,
 ) {
     Row(
         modifier =
@@ -67,20 +65,6 @@ fun GameTitleBar(
             )
         }
 
-        Box(
-            modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-            GameControlButton(
-                onClick = onToggleStar,
-                drawableResId =
-                    if (isStarred) {
-                        R.drawable.ic_star_filled
-                    } else {
-                        R.drawable.ic_star
-                    },
-                contentDescription = "Star level",
-            )
-        }
+        Spacer(modifier = Modifier.weight(1f))
     }
 }

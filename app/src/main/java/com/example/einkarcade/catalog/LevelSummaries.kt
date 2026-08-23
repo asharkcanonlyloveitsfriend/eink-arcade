@@ -11,8 +11,6 @@ data class LevelSummary(
     val puzzleId: Int,
     val name: String,
     val isCompleted: Boolean,
-    val rating: Int,
-    val isStarred: Boolean,
     val boardGeometry: LevelBoardGeometry,
 )
 
@@ -35,19 +33,3 @@ data class LevelBoardPoint(
 )
 
 enum class LevelBoardTile { FLOOR, GOAL, VOID }
-
-interface LevelCatalog {
-    fun getSetSummaries(): List<LevelSetSummary>
-
-    fun getLevelSummaries(setId: Int): List<LevelSummary>
-
-    fun setRating(
-        puzzleId: Int,
-        rating: Int,
-    )
-
-    fun setStarred(
-        puzzleId: Int,
-        isStarred: Boolean,
-    )
-}

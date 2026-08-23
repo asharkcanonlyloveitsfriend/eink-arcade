@@ -5,19 +5,16 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import com.example.einkarcade.appstate.LastSelectionStore
 import com.example.einkarcade.appstate.SelectionStore
-import com.example.einkarcade.catalog.LevelCatalog
+import com.example.einkarcade.catalog.LevelSetSummary
 import com.example.einkarcade.catalog.LevelSummary
 import com.example.einkarcade.catalog.LevelSummaryMapper
-import com.example.einkarcade.catalog.RepositoryLevelCatalog
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.data.LevelDataSource
 import com.example.einkarcade.data.LevelsRepository
 import com.example.einkarcade.session.GameSession
 import com.example.einkarcade.session.LevelCompletionRecorder
-import com.example.einkarcade.session.LevelMetadataService
 import com.example.einkarcade.session.LevelNavigator
 import com.example.einkarcade.sokoban.GameEngine
-import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
 import com.example.einkarcade.sokoban.TileMap
 import com.example.einkarcade.ui.GameRenderEvent
@@ -25,18 +22,30 @@ import com.example.einkarcade.ui.GameScreenState
 import com.example.einkarcade.ui.GameUiMode
 import com.example.einkarcade.ui.LevelTransitionSnapshot
 
-class GameController(
-    context: Context,
-    injectedSets: List<LevelSet>? = null,
-    private val selectionStore: SelectionStore = LastSelectionStore(context),
-    levelCatalog: LevelCatalog = RepositoryLevelCatalog(context, injectedSets),
-    private val dataSource: LevelDataSource = LevelsRepository(context),
+class GameController private constructor(
+    initialSets: List<LevelSet>?,
+    private val selectionStore: SelectionStore,
+    private val dataSource: LevelDataSource,
 ) {
-    private val levelMetadataService = LevelMetadataService(levelCatalog)
+    constructor(
+        context: Context,
+        initialSets: List<LevelSet>? = null,
+        selectionStore: SelectionStore = LastSelectionStore(context),
+        dataSource: LevelDataSource = LevelsRepository(context),
+    ) : this(initialSets, selectionStore, dataSource)
+
+    internal constructor(
+        selectionStore: SelectionStore,
+        dataSource: LevelDataSource,
+        initialSets: List<LevelSet>? = null,
+    ) : this(initialSets, selectionStore, dataSource)
+
     private val levelCompletionRecorder = LevelCompletionRecorder(dataSource)
     private val gameScreenState = mutableStateOf<GameScreenState?>(null)
     private val uiModeState = mutableStateOf(GameUiMode.GAMEPLAY)
     private val transitionSnapshotState = mutableStateOf<LevelTransitionSnapshot?>(null)
+    private var levelSets: List<LevelSet> = emptyList()
+    private val levelSetSummariesState = mutableStateOf<List<LevelSetSummary>>(emptyList())
     private lateinit var navigator: LevelNavigator
     private lateinit var session: GameSession
 
@@ -49,6 +58,9 @@ class GameController(
     val transitionSnapshot: State<LevelTransitionSnapshot?>
         get() = transitionSnapshotState
 
+    val levelSetSummaries: State<List<LevelSetSummary>>
+        get() = levelSetSummariesState
+
     val playerPosition: Position
         get() = requireSession().playerPosition
 
@@ -58,13 +70,10 @@ class GameController(
     val tileMap: TileMap
         get() = requireScreenState().tileMap
 
-    val currentPuzzleId: Int
-        get() = requireScreenState().puzzleId
-
     var onRenderEvent: ((GameRenderEvent) -> Unit)? = null
 
     init {
-        rebuildState(injectedSets ?: dataSource.loadSets().orEmpty())
+        rebuildState(initialSets ?: dataSource.loadSets().orEmpty())
     }
 
     fun selectSetById(setId: Int) {
@@ -79,35 +88,7 @@ class GameController(
         beginLevelTransition { navigator.selectNextLevel() }
     }
 
-    fun levels(): List<Level> = navigator.levelsInCurrentSet
-
     fun getCurrentLevelSummaries(): List<LevelSummary> = navigator.levelsInCurrentSet.map(LevelSummaryMapper::map)
-
-    fun getCurrentRating(): Int = requireScreenState().rating
-
-    fun toggleThumbUp() = toggleLikeByPuzzleId(currentPuzzleId)
-
-    fun toggleThumbDown() = toggleDislikeByPuzzleId(currentPuzzleId)
-
-    fun toggleStar() = toggleStarByPuzzleId(currentPuzzleId)
-
-    fun toggleLikeByPuzzleId(puzzleId: Int) {
-        val target = findCurrentSetLevel(puzzleId) ?: return
-        val rating = levelMetadataService.toggleLike(target)
-        if (puzzleId == currentPuzzleId) updateScreenState { it.copy(rating = rating) }
-    }
-
-    fun toggleDislikeByPuzzleId(puzzleId: Int) {
-        val target = findCurrentSetLevel(puzzleId) ?: return
-        val rating = levelMetadataService.toggleDislike(target)
-        if (puzzleId == currentPuzzleId) updateScreenState { it.copy(rating = rating) }
-    }
-
-    fun toggleStarByPuzzleId(puzzleId: Int) {
-        val target = findCurrentSetLevel(puzzleId) ?: return
-        val starred = levelMetadataService.toggleStar(target)
-        if (puzzleId == currentPuzzleId) updateScreenState { it.copy(isStarred = starred) }
-    }
 
     fun reloadLevelSets() {
         rebuildState(dataSource.loadSets().orEmpty())
@@ -168,6 +149,7 @@ class GameController(
             }
 
             LevelCompletionRecorder.Result.CLEAN_SOLUTION -> {
+                refreshLevelSetSummaries()
                 uiModeState.value = GameUiMode.LEVEL_SOLVED
             }
 
@@ -188,6 +170,8 @@ class GameController(
     }
 
     private fun rebuildState(sets: List<LevelSet>) {
+        levelSets = sets
+        refreshLevelSetSummaries()
         navigator = LevelNavigator(sets, selectionStore)
         transitionSnapshotState.value = null
         uiModeState.value = GameUiMode.GAMEPLAY
@@ -196,6 +180,18 @@ class GameController(
             return
         }
         startSession()
+    }
+
+    private fun refreshLevelSetSummaries() {
+        levelSetSummariesState.value =
+            levelSets.map { set ->
+                LevelSetSummary(
+                    id = set.id,
+                    name = set.name,
+                    levelCount = set.levels.size,
+                    completedCount = set.levels.count { it.isCompleted },
+                )
+            }
     }
 
     private fun startSession() {
@@ -212,13 +208,9 @@ class GameController(
                 setId = set.id,
                 levelName = level.name,
                 puzzleId = level.puzzleId,
-                rating = level.rating,
-                isStarred = level.isStarred,
                 tileMap = level.tileMap,
             )
     }
-
-    private fun findCurrentSetLevel(puzzleId: Int): Level? = navigator.levelsInCurrentSet.firstOrNull { it.puzzleId == puzzleId }
 
     private fun emitStateChanged(annotation: GameRenderEvent.StateChangeAnnotation? = null) {
         val session = requireSession()
@@ -240,9 +232,5 @@ class GameController(
     private fun requireSession(): GameSession {
         check(::session.isInitialized) { "Game session is not initialized" }
         return session
-    }
-
-    private fun updateScreenState(transform: (GameScreenState) -> GameScreenState) {
-        gameScreenState.value = transform(requireScreenState())
     }
 }

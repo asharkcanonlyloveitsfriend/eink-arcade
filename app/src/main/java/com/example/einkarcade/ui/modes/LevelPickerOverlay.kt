@@ -62,10 +62,6 @@ fun LevelPickerOverlay(
     levels: List<LevelSummary>,
     selectedPuzzleId: Int,
     onPickLevel: (puzzleId: Int) -> Unit,
-    onToggleLike: (puzzleId: Int) -> Unit,
-    onToggleStar: (puzzleId: Int) -> Unit,
-    onToggleDislike: (puzzleId: Int) -> Unit,
-    refreshNonce: Long,
     onDismiss: () -> Unit,
 ) {
     BackHandler { onDismiss() }
@@ -104,7 +100,7 @@ fun LevelPickerOverlay(
     val cardAspect =
         configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.toFloat()
 
-    LaunchedEffect(selectedIndex, refreshNonce) {
+    LaunchedEffect(selectedIndex) {
         if (selectedIndex < 0) return@LaunchedEffect
 
         // Wait until the grid has measured so we know spanCount and viewport height.
@@ -173,15 +169,6 @@ fun LevelPickerOverlay(
                     level = level,
                     isSelected = isSelected,
                     aspectRatio = cardAspect,
-                    onToggleDislike = {
-                        onToggleDislike(level.puzzleId)
-                    },
-                    onToggleLike = {
-                        onToggleLike(level.puzzleId)
-                    },
-                    onToggleStar = {
-                        onToggleStar(level.puzzleId)
-                    },
                     onClick = {
                         if (!isSelected) {
                             onPickLevel(level.puzzleId)
@@ -287,9 +274,6 @@ private fun LevelCard(
     level: LevelSummary,
     isSelected: Boolean,
     aspectRatio: Float,
-    onToggleDislike: () -> Unit,
-    onToggleLike: () -> Unit,
-    onToggleStar: () -> Unit,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -302,26 +286,6 @@ private fun LevelCard(
     val density = LocalDensity.current
     val selectionStrokePx = remember(density) { with(density) { 6.dp.toPx() } }
     val selectionCornerRadiusPx = remember(density) { with(density) { 8.dp.toPx() } }
-
-    val trashIcon =
-        if (level.rating == -1) {
-            R.drawable.ic_trash_filled
-        } else {
-            R.drawable.ic_trash
-        }
-
-    val heartIcon =
-        if (level.rating == 1) {
-            R.drawable.ic_heart_filled
-        } else {
-            R.drawable.ic_heart
-        }
-    val starIcon =
-        if (level.isStarred) {
-            R.drawable.ic_star_filled
-        } else {
-            R.drawable.ic_star
-        }
 
     Box(
         modifier =
@@ -412,131 +376,6 @@ private fun LevelCard(
             )
         }
 
-        // Trash in the bottom-left corner
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(6.dp)),
-        ) {
-            Canvas(
-                modifier = Modifier.matchParentSize(),
-            ) {
-                drawRoundRect(
-                    brush =
-                        androidx.compose.ui.graphics.Brush.radialGradient(
-                            colors =
-                                listOf(
-                                    Color.Black.copy(alpha = 0.35f),
-                                    Color.Black.copy(alpha = 0.25f),
-                                    Color.Black.copy(alpha = 0.01f),
-                                    Color.Transparent,
-                                ),
-                            center = center,
-                            radius = size.maxDimension * 1.15f,
-                        ),
-                )
-            }
-            Image(
-                painter = painterResource(trashIcon),
-                contentDescription = "Trash",
-                colorFilter = ColorFilter.tint(Color.LightGray),
-                modifier =
-                    Modifier
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
-                        .size(24.dp)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onToggleDislike,
-                        ),
-            )
-        }
-
-        // Star in the top-right corner
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(6.dp)),
-        ) {
-            Canvas(
-                modifier = Modifier.matchParentSize(),
-            ) {
-                drawRoundRect(
-                    brush =
-                        androidx.compose.ui.graphics.Brush.radialGradient(
-                            colors =
-                                listOf(
-                                    Color.Black.copy(alpha = 0.35f),
-                                    Color.Black.copy(alpha = 0.25f),
-                                    Color.Black.copy(alpha = 0.01f),
-                                    Color.Transparent,
-                                ),
-                            center = center,
-                            radius = size.maxDimension * 1.15f,
-                        ),
-                )
-            }
-            Image(
-                painter = painterResource(starIcon),
-                contentDescription = "Star",
-                colorFilter = ColorFilter.tint(Color.LightGray),
-                modifier =
-                    Modifier
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
-                        .size(24.dp)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onToggleStar,
-                        ),
-            )
-        }
-
-        // Heart in the bottom-right corner
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(6.dp)),
-        ) {
-            Canvas(
-                modifier = Modifier.matchParentSize(),
-            ) {
-                drawRoundRect(
-                    brush =
-                        androidx.compose.ui.graphics.Brush.radialGradient(
-                            colors =
-                                listOf(
-                                    Color.Black.copy(alpha = 0.35f),
-                                    Color.Black.copy(alpha = 0.25f),
-                                    Color.Black.copy(alpha = 0.01f),
-                                    Color.Transparent,
-                                ),
-                            center = center,
-                            radius = size.maxDimension * 1.15f,
-                        ),
-                )
-            }
-            Image(
-                painter = painterResource(heartIcon),
-                contentDescription = "Heart",
-                colorFilter = ColorFilter.tint(Color.LightGray),
-                modifier =
-                    Modifier
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
-                        .size(24.dp)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onToggleLike,
-                        ),
-            )
-        }
     }
 }
 

@@ -58,9 +58,7 @@ The animation model was designed around the 20 Hz refresh behavior of the e-ink 
 
 ### Puzzle progress
 
-- Persist puzzle metadata, completion state, ratings, starred puzzles, and best solutions locally
-  with Room.
-- Like, dislike, or star puzzles from inside the app.
+- Persist puzzle metadata, completion state, and best solutions locally with Room.
 - Send local puzzle progress back to the sync endpoint.
 
 ## Requirements
@@ -104,7 +102,6 @@ the locally stored catalog is available without bootstrapping again.
 - Use the back gesture or button to undo the last move.
 - Tap the level name at the top left to choose a puzzle.
 - Tap the level-set name at the top center to choose or synchronize a set.
-- Use the star, heart, and dislike controls to save and rate puzzles.
 - Use the side controls to restart or skip a puzzle.
 
 ## Sync API
@@ -116,8 +113,6 @@ The app sends a `POST` request to `/api/sync` with local puzzle progress:
   "puzzles": [
     {
       "puzzle_id": 1,
-      "rating": 0,
-      "is_starred": false,
       "last_completed_at": null,
       "user_solution": null
     }
