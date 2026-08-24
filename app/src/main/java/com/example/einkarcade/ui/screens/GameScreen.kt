@@ -6,19 +6,24 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.einkarcade.GameController
+import com.example.einkarcade.R
 import com.example.einkarcade.data.LevelSetService
 import com.example.einkarcade.ui.GameTitleBar
 import com.example.einkarcade.ui.GameUiMode
+import com.example.einkarcade.ui.ShadowedIconButton
 import com.example.einkarcade.ui.modes.LevelPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSetPickerOverlay
 import com.example.einkarcade.ui.modes.LevelSolvedOverlay
@@ -52,7 +57,9 @@ fun GameScreen(
                         levelSetError =
                             LevelSetError(
                                 title = "Level set couldn't be imported",
-                                message = exception.message ?: "The selected file could not be read.",
+                                message =
+                                    exception.message
+                                        ?: "The selected file could not be read.",
                             )
                     }
                 }
@@ -74,13 +81,27 @@ fun GameScreen(
                 AndroidView(
                     modifier =
                         Modifier
-                            .fillMaxSize()
+                            .wrapContentSize()
+                            .align(Alignment.Center)
                             .testTag("levelSolvedView"),
                     factory = { ctx ->
                         LevelSolvedOverlay(ctx).apply {
+                            boxMoveCount = gameController.boxMoveCount
+                            isNewBestSolution = gameController.wonWithNewBestSolution
                             onAdvance = { gameController.advanceToNextLevel() }
                         }
                     },
+                )
+                ShadowedIconButton(
+                    iconResource = R.drawable.ic_forward,
+                    contentDescription = "Next level",
+                    buttonSize = 92.dp,
+                    iconSize = 64.dp,
+                    onClick = { gameController.advanceToNextLevel() },
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .testTag("solvedLevelForwardButton"),
                 )
             }
 
@@ -129,7 +150,9 @@ fun GameScreen(
                             levelSetError =
                                 LevelSetError(
                                     title = "Level set couldn't be renamed",
-                                    message = exception.message ?: "The level set could not be renamed.",
+                                    message =
+                                        exception.message
+                                            ?: "The level set could not be renamed.",
                                 )
                         }
                     }
@@ -145,7 +168,9 @@ fun GameScreen(
                             levelSetError =
                                 LevelSetError(
                                     title = "Level set couldn't be deleted",
-                                    message = exception.message ?: "The level set could not be deleted.",
+                                    message =
+                                        exception.message
+                                            ?: "The level set could not be deleted.",
                                 )
                         }
                     }

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,6 +43,7 @@ import com.example.einkarcade.R
 import com.example.einkarcade.catalog.LevelBoardGeometry
 import com.example.einkarcade.catalog.LevelSummary
 import com.example.einkarcade.ui.PagedScrollIndicator
+import com.example.einkarcade.ui.ShadowedIconButton
 import com.example.einkarcade.ui.verticalPageSwipe
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
@@ -200,7 +200,11 @@ fun LevelPickerOverlay(
                     .padding(vertical = SCROLLBAR_VERTICAL_MARGIN_DP.dp),
         )
 
-        BackButton(
+        ShadowedIconButton(
+            iconResource = R.drawable.ic_back,
+            contentDescription = "Back",
+            buttonSize = 52.dp,
+            iconSize = 32.dp,
             onClick = onDismiss,
             modifier =
                 Modifier
@@ -209,48 +213,6 @@ fun LevelPickerOverlay(
                         start = 18.dp,
                         top = 12.dp,
                     ),
-        )
-    }
-}
-
-@Composable
-private fun BackButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick,
-                ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(modifier = Modifier.matchParentSize()) {
-            drawCircle(
-                brush =
-                    androidx.compose.ui.graphics.Brush.radialGradient(
-                        colors =
-                            listOf(
-                                Color.Black.copy(alpha = 0.55f),
-                                Color.Black.copy(alpha = 0.25f),
-                                Color.Black.copy(alpha = 0.01f),
-                                Color.Transparent,
-                            ),
-                        center = center,
-                        radius = size.maxDimension * 0.75f,
-                    ),
-            )
-        }
-        Image(
-            painter = painterResource(R.drawable.ic_back),
-            contentDescription = "Back",
-            colorFilter = ColorFilter.tint(Color.LightGray),
-            modifier = Modifier.size(32.dp),
         )
     }
 }

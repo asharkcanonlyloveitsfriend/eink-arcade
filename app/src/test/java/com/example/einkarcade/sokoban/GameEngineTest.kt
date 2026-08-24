@@ -48,16 +48,21 @@ class GameEngineTest {
     }
 
     @Test
-    fun everyMoveInHistoryCanBeUndoneInReverseOrder() {
+    fun consecutiveBoxMovesAreCombinedIntoOneHistoryEntry() {
         val engine = createSingleBoxHallwayEngine()
 
         assertMoved(engine.moveBox(firstBoxPosition, secondBoxPosition))
         assertMoved(engine.moveBox(secondBoxPosition, thirdBoxPosition))
         assertMoved(engine.moveBox(thirdBoxPosition, fourthBoxPosition))
 
-        assertNotNull(engine.undoLastMoveAt(fourthBoxPosition))
-        assertNotNull(engine.undoLastMoveAt(thirdBoxPosition))
-        assertNotNull(engine.undoLastMoveAt(secondBoxPosition))
+        assertEquals(
+            listOf(listOf(firstBoxPosition, secondBoxPosition, thirdBoxPosition, fourthBoxPosition)),
+            engine.getBoxMoveHistory(),
+        )
+        assertEquals(
+            listOf(firstBoxPosition, secondBoxPosition, thirdBoxPosition, fourthBoxPosition),
+            engine.undoLastMoveAt(fourthBoxPosition),
+        )
         assertEquals(setOf(firstBoxPosition), engine.boxPositions)
         assertNull(engine.undoLastMoveAt(firstBoxPosition))
     }
@@ -118,12 +123,46 @@ class GameEngineTest {
     }
 
     @Test
-    fun playerCannotMoveAfterLevelIsSolved() {
+    fun playerCanMoveAfterLevelIsSolved() {
         val engine = createSingleBoxHallwayEngine()
 
         assertMoved(engine.moveBox(firstBoxPosition, Position(1, 7)))
 
-        assertFalse(engine.movePlayerTo(Position(1, 1)))
+        assertTrue(engine.movePlayerTo(Position(1, 1)))
+    }
+
+    @Test
+    fun undoingASolvedLevelIsRejected() {
+        val engine = createSingleBoxHallwayEngine()
+
+        assertMoved(engine.moveBox(firstBoxPosition, Position(1, 7)))
+
+        assertNull(engine.undoLastMoveAt(Position(1, 7)))
+        assertEquals(setOf(Position(1, 7)), engine.boxPositions)
+    }
+
+    @Test
+    fun movingABoxAfterTheLevelIsSolvedIsRejected() {
+        val boxStart = Position(1, 3)
+        val goal = Position(1, 5)
+        val floorBeyondGoal = Position(1, 6)
+        val engine =
+            GameEngine(
+                Level.fromAscii(
+                    "Solved move test",
+                    """
+                    ########
+                    #@ $ . #
+                    ########
+                    """.trimIndent(),
+                ),
+            )
+
+        assertMoved(engine.moveBox(boxStart, goal))
+
+        assertEquals(GameEngine.BoxMoveResult.Rejected, engine.moveBox(goal, floorBeyondGoal))
+        assertEquals(setOf(goal), engine.boxPositions)
+        assertEquals(1, engine.boxMoveCount)
     }
 
     @Test
@@ -169,18 +208,17 @@ class GameEngineTest {
     }
 
     @Test
-    fun movingABoxIntoVoidCanBeUndone() {
-        val player = Position(1, 1)
+    fun movingABoxIntoVoidCannotBeUndoneAfterItSolvesTheLevel() {
         val box = Position(1, 2)
         val void = Position(1, 3)
         val engine = createBoxAdjacentToVoidEngine()
 
         assertEquals(GameEngine.BoxMoveResult.Removed(void), engine.moveBox(box, void))
-        assertEquals(listOf(box, void), engine.undoLastMoveAt(void))
+        assertNull(engine.undoLastMoveAt(void))
 
-        assertEquals(setOf(box), engine.boxPositions)
-        assertEquals(player, engine.playerPosition)
-        assertTrue(engine.isAtStart)
+        assertEquals(emptySet<Position>(), engine.boxPositions)
+        assertEquals(box, engine.playerPosition)
+        assertFalse(engine.isAtStart)
     }
 
     @Test

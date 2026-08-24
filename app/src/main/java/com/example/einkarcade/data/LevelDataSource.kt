@@ -10,6 +10,10 @@ interface LevelDataSource {
     fun recordCompletion(
         level: Level,
         solutionHistory: List<List<Position>>,
-    ): String
-
+    ): CompletionRecord
 }
+
+data class CompletionRecord(
+    val timestamp: String,
+    val isNewBestSolution: Boolean,
+)

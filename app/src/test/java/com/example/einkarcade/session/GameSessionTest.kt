@@ -20,7 +20,7 @@ class GameSessionTest {
 
     @Test
     fun undoRestoresThePreviousBoxMoveOnlyAtItsDestination() {
-        val session = GameSession(Level.fromAscii("Test", "@ $."))
+        val session = GameSession(Level.fromAscii("Test", "@ $ ."))
         val path = listOf(Position(0, 2), Position(0, 3))
         session.moveBox(path.first(), path.last())
 

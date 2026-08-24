@@ -14,6 +14,9 @@ class GameEngine(
     val boxPositions: Set<Position>
         get() = gameState.boxPositions
 
+    val boxMoveCount: Int
+        get() = boxMoveHistory.size
+
     val isLevelSolved: Boolean
         get() = gameState.boxPositions.all { level.tileMap.isGoal(it) }
 
@@ -28,6 +31,7 @@ class GameEngine(
     fun getBoxMoveHistory(): List<List<Position>> = boxMoveHistory.toList()
 
     fun undoLastMoveAt(position: Position): List<Position>? {
+        if (isLevelSolved) return null
         if (boxMoveHistory.lastOrNull()?.last() != position) return null
         return undoLastMove()
     }
@@ -57,20 +61,21 @@ class GameEngine(
     fun moveBox(
         from: Position,
         to: Position,
-    ): BoxMoveResult =
-        if (level.tileMap.isVoid(to)) {
+    ): BoxMoveResult {
+        if (isLevelSolved) return BoxMoveResult.Rejected
+        if (!gameState.hasBoxAt(from)) return BoxMoveResult.Rejected
+
+        return if (level.tileMap.isVoid(to)) {
             pushBoxIntoVoid(from, to)
         } else {
             performBoxMove(from, to)
         }
+    }
 
     private fun performBoxMove(
         from: Position,
         to: Position,
     ): BoxMoveResult {
-        if (isLevelSolved) return BoxMoveResult.Rejected
-        if (!gameState.hasBoxAt(from)) return BoxMoveResult.Rejected
-
         val boxPathfinder =
             BoxPathfinder(
                 fullGrid = walkableGrid,
@@ -87,7 +92,7 @@ class GameEngine(
             }
 
         // Apply the planned move.
-        boxMoveHistory.add(boxPath)
+        addBoxMoveToHistory(boxPath)
         gameState.moveBox(from, to)
         gameState.movePlayer(finalPlayerPosition)
         return BoxMoveResult.Moved(boxPath)
@@ -97,9 +102,6 @@ class GameEngine(
         from: Position,
         to: Position,
     ): BoxMoveResult {
-        if (isLevelSolved) return BoxMoveResult.Rejected
-        if (!gameState.hasBoxAt(from)) return BoxMoveResult.Rejected
-
         val dirRow = from.row - playerPosition.row
         val dirCol = from.col - playerPosition.col
         val isAdjacentPush = abs(dirRow) + abs(dirCol) == 1
@@ -109,7 +111,7 @@ class GameEngine(
         if (pushedTo != to) return BoxMoveResult.Rejected
         if (!level.tileMap.isVoid(to)) return BoxMoveResult.Rejected
 
-        boxMoveHistory.add(listOf(from, to))
+        addBoxMoveToHistory(listOf(from, to))
         gameState.removeBox(from)
         gameState.movePlayer(from)
         return BoxMoveResult.Removed(to)
@@ -128,14 +130,21 @@ class GameEngine(
     }
 
     fun movePlayerTo(position: Position): Boolean {
-        if (isLevelSolved) return false
-
         val pathfinder = Pathfinder(walkableGrid)
         if (!pathfinder.canFindPath(playerPosition, position)) return false
         if (position == playerPosition) return false
 
         gameState.movePlayer(position)
         return true
+    }
+
+    private fun addBoxMoveToHistory(move: List<Position>) {
+        val previousMove = boxMoveHistory.lastOrNull()
+        if (previousMove?.last() == move.first()) {
+            boxMoveHistory[boxMoveHistory.lastIndex] = previousMove + move.drop(1)
+        } else {
+            boxMoveHistory.add(move)
+        }
     }
 
     private val walkableGrid: Array<Array<Boolean>>

@@ -1,11 +1,18 @@
 package com.example.einkarcade
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import com.example.einkarcade.content.LevelSet
 import com.example.einkarcade.sokoban.Level
@@ -63,7 +70,31 @@ class MainActivityTest {
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun playerSolvesLevelAndAdvancesToNextLevel() {
+    fun playerSolvesLevelAndAdvancesThroughTheWinOverlay() {
+        solveFirstLevel()
+        assertSolvedOverlayIsDisplayed()
+
+        composeTestRule.onNodeWithTag("levelSolvedView").performClick()
+
+        finishTransitionAndAssertNextLevel()
+    }
+
+    @Test
+    fun playerAdvancesThroughTheSolvedLevelForwardButton() {
+        solveFirstLevel()
+        assertSolvedOverlayIsDisplayed()
+
+        composeTestRule
+            .onNodeWithContentDescription("Next level")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            .performClick()
+
+        finishTransitionAndAssertNextLevel()
+    }
+
+    private fun solveFirstLevel() {
         composeTestRule
             .onNodeWithText("Level 1", substring = true)
             .assertIsDisplayed()
@@ -80,20 +111,18 @@ class MainActivityTest {
             click(gridOffsetInMiddleRow(viewport = viewport, col = 2))
             click(gridOffsetInMiddleRow(viewport = viewport, col = 3))
         }
+    }
 
+    private fun assertSolvedOverlayIsDisplayed() {
         composeTestRule
             .onNodeWithTag("levelSolvedView")
             .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("You win! Moves: 1!")
+            .assertIsDisplayed()
+    }
 
-        composeTestRule.onNodeWithTag("levelSolvedView").performTouchInput {
-            click(
-                Offset(
-                    x = visibleSize.width * 0.95f,
-                    y = visibleSize.height * 0.1f,
-                ),
-            )
-        }
-
+    private fun finishTransitionAndAssertNextLevel() {
         composeTestRule.onNodeWithTag("gameCanvas").performTouchInput {
             click(
                 Offset(

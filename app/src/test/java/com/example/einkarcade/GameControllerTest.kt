@@ -3,6 +3,7 @@ package com.example.einkarcade
 import com.example.einkarcade.appstate.SelectionStore
 import com.example.einkarcade.catalog.LevelSetSummary
 import com.example.einkarcade.content.LevelSet
+import com.example.einkarcade.data.CompletionRecord
 import com.example.einkarcade.data.LevelDataSource
 import com.example.einkarcade.sokoban.Level
 import com.example.einkarcade.sokoban.Position
@@ -50,7 +51,39 @@ class GameControllerTest {
 
         controller.moveBox(boxFrom = Position(0, 1), boxTo = Position(0, 2))
 
+        assertEquals(1, controller.boxMoveCount)
+        assertEquals(true, controller.wonWithNewBestSolution)
         assertEquals(1, controller.levelSetSummaries.value.single().completedCount)
+    }
+
+    @Test
+    fun completionAndRestartUpdateBestSolutionState() {
+        val dataSource = FakeDataSource(isNewBestSolution = false)
+        val controller =
+            controller(
+                initialSets =
+                    listOf(
+                        LevelSet(
+                            id = 1,
+                            name = "One",
+                            levels = listOf(Level.fromAscii("Level 1", "@$.", puzzleId = 11)),
+                        ),
+                    ),
+                dataSource = dataSource,
+            )
+
+        controller.moveBox(boxFrom = Position(0, 1), boxTo = Position(0, 2))
+
+        assertEquals(false, controller.wonWithNewBestSolution)
+
+        dataSource.isNewBestSolution = true
+        controller.restart()
+        controller.moveBox(boxFrom = Position(0, 1), boxTo = Position(0, 2))
+        assertEquals(true, controller.wonWithNewBestSolution)
+
+        controller.restart()
+        assertEquals(false, controller.wonWithNewBestSolution)
+        assertEquals(0, controller.boxMoveCount)
     }
 
     private fun controller(
@@ -83,7 +116,9 @@ class GameControllerTest {
         override fun load(): Pair<Int, Int> = 0 to 0
     }
 
-    private class FakeDataSource : LevelDataSource {
+    private class FakeDataSource(
+        var isNewBestSolution: Boolean = true,
+    ) : LevelDataSource {
         var sets: List<LevelSet> = emptyList()
 
         override fun loadSets(): List<LevelSet> = sets
@@ -91,6 +126,6 @@ class GameControllerTest {
         override fun recordCompletion(
             level: Level,
             solutionHistory: List<List<Position>>,
-        ): String = "completed"
+        ): CompletionRecord = CompletionRecord("completed", isNewBestSolution)
     }
 }

@@ -67,6 +67,12 @@ class GameController private constructor(
     val boxPositions: Set<Position>
         get() = requireSession().boxPositions
 
+    val boxMoveCount: Int
+        get() = requireSession().boxMoveCount
+
+    var wonWithNewBestSolution: Boolean = false
+        private set
+
     val tileMap: TileMap
         get() = requireScreenState().tileMap
 
@@ -96,6 +102,7 @@ class GameController private constructor(
 
     fun restart() {
         requireSession().restart()
+        wonWithNewBestSolution = false
         emitStateChanged()
         uiModeState.value = GameUiMode.GAMEPLAY
     }
@@ -106,7 +113,7 @@ class GameController private constructor(
     }
 
     fun undoLastMoveAt(position: Position): Boolean {
-        if (uiMode != GameUiMode.GAMEPLAY || !requireSession().undoLastMoveAt(position)) return false
+        if (!requireSession().undoLastMoveAt(position)) return false
         emitStateChanged()
         return true
     }
@@ -143,17 +150,19 @@ class GameController private constructor(
             }
 
         emitStateChanged(annotation)
-        when (levelCompletionRecorder.record(session)) {
-            LevelCompletionRecorder.Result.NOT_SOLVED -> {
+        when (val result = levelCompletionRecorder.record(session)) {
+            LevelCompletionRecorder.Result.NotSolved -> {
                 Unit
             }
 
-            LevelCompletionRecorder.Result.CLEAN_SOLUTION -> {
+            is LevelCompletionRecorder.Result.CleanSolution -> {
+                wonWithNewBestSolution = result.isNewBestSolution
                 refreshLevelSetSummaries()
                 uiModeState.value = GameUiMode.LEVEL_SOLVED
             }
 
-            LevelCompletionRecorder.Result.CHEAT_SOLUTION -> {
+            LevelCompletionRecorder.Result.CheatSolution -> {
+                wonWithNewBestSolution = false
                 uiModeState.value = GameUiMode.LEVEL_SOLVED
                 emit(GameRenderEvent.LevelSolvedWithCheat)
             }
@@ -196,6 +205,7 @@ class GameController private constructor(
 
     private fun startSession() {
         session = GameSession(navigator.currentLevel)
+        wonWithNewBestSolution = false
         refreshScreenState()
     }
 

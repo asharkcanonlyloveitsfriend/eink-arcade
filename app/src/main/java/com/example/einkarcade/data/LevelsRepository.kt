@@ -103,10 +103,9 @@ class LevelsRepository(
 
     override fun recordCompletion(
         level: Level,
-        solutionHistory: List<List<com.example.einkarcade.sokoban.Position>>,
-    ): String {
-        val normalized = normalizeSolution(solutionHistory)
-        val newPushCount = normalized.size
+        solutionHistory: List<List<Position>>,
+    ): CompletionRecord {
+        val newPushCount = solutionHistory.size
         val existingSolutionJson = dao.getUserSolution(level.puzzleId)
         val timestamp = utcFormatter.format(Instant.now())
 
@@ -126,11 +125,11 @@ class LevelsRepository(
 
         if (shouldPersistSolution) {
             val userSolutionJson =
-                if (normalized.isEmpty()) {
+                if (solutionHistory.isEmpty()) {
                     null
                 } else {
                     val outerArray = JSONArray()
-                    for (path in normalized) {
+                    for (path in solutionHistory) {
                         val pathArray = JSONArray()
                         for (pos in path) {
                             val posArray = JSONArray()
@@ -147,26 +146,9 @@ class LevelsRepository(
             dao.updatePuzzleCompletion(level.puzzleId, timestamp, existingSolutionJson)
         }
 
-        return timestamp
+        return CompletionRecord(
+            timestamp = timestamp,
+            isNewBestSolution = shouldPersistSolution,
+        )
     }
-
-    private fun normalizeSolution(history: List<List<Position>>): List<List<Position>> {
-        if (history.isEmpty()) return history
-        val result = mutableListOf<List<Position>>()
-        for (path in history) {
-            if (result.isEmpty()) {
-                result.add(path)
-            } else {
-                val last = result.last()
-                if (last.last() == path.first()) {
-                    val merged = last + path.drop(1)
-                    result[result.lastIndex] = merged
-                } else {
-                    result.add(path)
-                }
-            }
-        }
-        return result
-    }
-
 }
