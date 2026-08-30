@@ -103,7 +103,7 @@ class GameController private constructor(
     fun restart() {
         requireSession().restart()
         wonWithNewBestSolution = false
-        emitStateChanged()
+        emitStateChanged(GameRenderEvent.StateChangeAnnotation.Restart)
         uiModeState.value = GameUiMode.GAMEPLAY
     }
 

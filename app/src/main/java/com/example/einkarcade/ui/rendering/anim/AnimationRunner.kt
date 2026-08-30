@@ -15,6 +15,7 @@ internal class AnimationRunner(
 ) {
     private val queue = ArrayDeque<Animation>()
     private var active: Animation? = null
+    private var scheduleGeneration = 0
 
     fun enqueue(animation: Animation) {
         queue.addLast(animation)
@@ -32,6 +33,15 @@ internal class AnimationRunner(
     }
 
     fun hidesPlayer(): Boolean = active?.hidesPlayer() == true
+
+    /** Stops all transient effects, including callbacks already posted for a previous board state. */
+    fun clear() {
+        val previous = active
+        active = null
+        queue.clear()
+        scheduleGeneration++
+        previous?.let { invalidateRects(it.dirtyRects()) }
+    }
 
     private fun startNext() {
         val previous = active
@@ -60,11 +70,13 @@ internal class AnimationRunner(
             startNext()
         } else {
             val delayMs = ticks * ANIMATION_TICK_MS
-            postDelayed(Runnable { advance() }, delayMs)
+            val generation = scheduleGeneration
+            postDelayed(Runnable { advance(generation) }, delayMs)
         }
     }
 
-    private fun advance() {
+    private fun advance(generation: Int) {
+        if (generation != scheduleGeneration) return
         active?.let { invalidateRects(it.dirtyRects()) }
         scheduleNextStep()
     }

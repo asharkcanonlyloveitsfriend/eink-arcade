@@ -192,6 +192,8 @@ internal class GameBoardView(
         boxPositions: Set<Position>,
         annotation: GameRenderEvent.StateChangeAnnotation?,
     ) {
+        animationRunner.clear()
+
         val viewport = staticFrame!!.viewport
         val previousPlayer = this.playerPosition!!
         val previousBoxes = this.boxPositions

@@ -29,9 +29,13 @@ sealed interface GameRenderEvent {
     ) : GameRenderEvent
 
     sealed interface StateChangeAnnotation {
-        data class BoxRemoved(val position: Position) : StateChangeAnnotation
+        data class BoxRemoved(
+            val position: Position,
+        ) : StateChangeAnnotation
 
-        data class BoxMoved(val path: List<Position>) : StateChangeAnnotation
+        data class BoxMoved(
+            val path: List<Position>,
+        ) : StateChangeAnnotation
     }
 
     data object LevelSolvedWithCheat : GameRenderEvent
