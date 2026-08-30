@@ -149,6 +149,7 @@ class LevelsRepository(
         return CompletionRecord(
             timestamp = timestamp,
             isNewBestSolution = shouldPersistSolution,
+            boxMoveCount = newPushCount,
         )
     }
 }

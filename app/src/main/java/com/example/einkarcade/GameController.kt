@@ -67,8 +67,8 @@ class GameController private constructor(
     val boxPositions: Set<Position>
         get() = requireSession().boxPositions
 
-    val boxMoveCount: Int
-        get() = requireSession().boxMoveCount
+    var solvedBoxMoveCount: Int = 0
+        private set
 
     var wonWithNewBestSolution: Boolean = false
         private set
@@ -103,7 +103,8 @@ class GameController private constructor(
     fun restart() {
         requireSession().restart()
         wonWithNewBestSolution = false
-        emitStateChanged(GameRenderEvent.StateChangeAnnotation.Restart)
+        solvedBoxMoveCount = 0
+        emitStateChanged()
         uiModeState.value = GameUiMode.GAMEPLAY
     }
 
@@ -157,12 +158,14 @@ class GameController private constructor(
 
             is LevelCompletionRecorder.Result.CleanSolution -> {
                 wonWithNewBestSolution = result.isNewBestSolution
+                solvedBoxMoveCount = result.boxMoveCount
                 refreshLevelSetSummaries()
                 uiModeState.value = GameUiMode.LEVEL_SOLVED
             }
 
             LevelCompletionRecorder.Result.CheatSolution -> {
                 wonWithNewBestSolution = false
+                solvedBoxMoveCount = 0
                 uiModeState.value = GameUiMode.LEVEL_SOLVED
                 emit(GameRenderEvent.LevelSolvedWithCheat)
             }
@@ -206,6 +209,7 @@ class GameController private constructor(
     private fun startSession() {
         session = GameSession(navigator.currentLevel)
         wonWithNewBestSolution = false
+        solvedBoxMoveCount = 0
         refreshScreenState()
     }
 

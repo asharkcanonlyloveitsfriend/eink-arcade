@@ -27,9 +27,6 @@ class GameSession(
     val boxMoveHistory: List<List<Position>>
         get() = engine.getBoxMoveHistory()
 
-    val boxMoveCount: Int
-        get() = engine.boxMoveCount
-
     fun restart() {
         engine = GameEngine(level)
     }

@@ -86,7 +86,7 @@ fun GameScreen(
                             .testTag("levelSolvedView"),
                     factory = { ctx ->
                         LevelSolvedOverlay(ctx).apply {
-                            boxMoveCount = gameController.boxMoveCount
+                            boxMoveCount = gameController.solvedBoxMoveCount
                             isNewBestSolution = gameController.wonWithNewBestSolution
                             onAdvance = { gameController.advanceToNextLevel() }
                         }

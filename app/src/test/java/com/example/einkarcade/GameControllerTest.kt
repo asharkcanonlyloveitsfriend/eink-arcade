@@ -51,7 +51,7 @@ class GameControllerTest {
 
         controller.moveBox(boxFrom = Position(0, 1), boxTo = Position(0, 2))
 
-        assertEquals(1, controller.boxMoveCount)
+        assertEquals(1, controller.solvedBoxMoveCount)
         assertEquals(true, controller.wonWithNewBestSolution)
         assertEquals(1, controller.levelSetSummaries.value.single().completedCount)
     }
@@ -83,7 +83,7 @@ class GameControllerTest {
 
         controller.restart()
         assertEquals(false, controller.wonWithNewBestSolution)
-        assertEquals(0, controller.boxMoveCount)
+        assertEquals(0, controller.solvedBoxMoveCount)
     }
 
     private fun controller(
@@ -126,6 +126,6 @@ class GameControllerTest {
         override fun recordCompletion(
             level: Level,
             solutionHistory: List<List<Position>>,
-        ): CompletionRecord = CompletionRecord("completed", isNewBestSolution)
+        ): CompletionRecord = CompletionRecord("completed", isNewBestSolution, boxMoveCount = 1)
     }
 }

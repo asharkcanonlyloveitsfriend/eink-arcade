@@ -10,6 +10,7 @@ class LevelCompletionRecorder(
 
         data class CleanSolution(
             val isNewBestSolution: Boolean,
+            val boxMoveCount: Int,
         ) : Result
 
         data object CheatSolution : Result
@@ -21,6 +22,9 @@ class LevelCompletionRecorder(
 
         val completion = dataSource.recordCompletion(session.level, session.boxMoveHistory)
         session.level.markCompleted(completion.timestamp)
-        return Result.CleanSolution(completion.isNewBestSolution)
+        return Result.CleanSolution(
+            isNewBestSolution = completion.isNewBestSolution,
+            boxMoveCount = completion.boxMoveCount,
+        )
     }
 }

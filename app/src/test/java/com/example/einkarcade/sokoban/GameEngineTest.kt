@@ -11,7 +11,6 @@ class GameEngineTest {
     private val firstBoxPosition = Position(1, 3)
     private val secondBoxPosition = Position(1, 4)
     private val thirdBoxPosition = Position(1, 5)
-    private val fourthBoxPosition = Position(1, 6)
 
     @Test
     fun undoIsUnavailableBeforeABoxMove() {
@@ -48,23 +47,31 @@ class GameEngineTest {
     }
 
     @Test
-    fun consecutiveBoxMovesAreCombinedIntoOneHistoryEntry() {
+    fun consecutiveBoxMovesAreRecordedAndUndoneSeparately() {
         val engine = createSingleBoxHallwayEngine()
 
         assertMoved(engine.moveBox(firstBoxPosition, secondBoxPosition))
         assertMoved(engine.moveBox(secondBoxPosition, thirdBoxPosition))
-        assertMoved(engine.moveBox(thirdBoxPosition, fourthBoxPosition))
 
         assertEquals(
-            listOf(listOf(firstBoxPosition, secondBoxPosition, thirdBoxPosition, fourthBoxPosition)),
+            listOf(
+                listOf(firstBoxPosition, secondBoxPosition),
+                listOf(secondBoxPosition, thirdBoxPosition),
+            ),
             engine.getBoxMoveHistory(),
         )
+
         assertEquals(
-            listOf(firstBoxPosition, secondBoxPosition, thirdBoxPosition, fourthBoxPosition),
-            engine.undoLastMoveAt(fourthBoxPosition),
+            listOf(secondBoxPosition, thirdBoxPosition),
+            engine.undoLastMoveAt(thirdBoxPosition),
+        )
+        assertEquals(setOf(secondBoxPosition), engine.boxPositions)
+
+        assertEquals(
+            listOf(firstBoxPosition, secondBoxPosition),
+            engine.undoLastMoveAt(secondBoxPosition),
         )
         assertEquals(setOf(firstBoxPosition), engine.boxPositions)
-        assertNull(engine.undoLastMoveAt(firstBoxPosition))
     }
 
     @Test
@@ -162,7 +169,6 @@ class GameEngineTest {
 
         assertEquals(GameEngine.BoxMoveResult.Rejected, engine.moveBox(goal, floorBeyondGoal))
         assertEquals(setOf(goal), engine.boxPositions)
-        assertEquals(1, engine.boxMoveCount)
     }
 
     @Test

@@ -18,7 +18,10 @@ class LevelCompletionRecorderTest {
 
         val result = LevelCompletionRecorder(dataSource).record(session)
 
-        assertEquals(LevelCompletionRecorder.Result.CleanSolution(isNewBestSolution = true), result)
+        assertEquals(
+            LevelCompletionRecorder.Result.CleanSolution(isNewBestSolution = true, boxMoveCount = 1),
+            result,
+        )
         assertEquals(5, dataSource.recordedPuzzleId)
         assertTrue(session.level.isCompleted)
     }
@@ -42,7 +45,7 @@ class LevelCompletionRecorderTest {
         session.moveBox(Position(0, 1), Position(0, 2))
 
         assertEquals(
-            LevelCompletionRecorder.Result.CleanSolution(isNewBestSolution = false),
+            LevelCompletionRecorder.Result.CleanSolution(isNewBestSolution = false, boxMoveCount = 1),
             LevelCompletionRecorder(dataSource).record(session),
         )
     }
@@ -59,7 +62,7 @@ class LevelCompletionRecorderTest {
             solutionHistory: List<List<Position>>,
         ): CompletionRecord {
             recordedPuzzleId = level.puzzleId
-            return CompletionRecord("timestamp", isNewBestSolution)
+            return CompletionRecord("timestamp", isNewBestSolution, boxMoveCount = 1)
         }
     }
 }

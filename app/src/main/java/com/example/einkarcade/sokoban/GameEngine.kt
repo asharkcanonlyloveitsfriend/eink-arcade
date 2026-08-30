@@ -14,9 +14,6 @@ class GameEngine(
     val boxPositions: Set<Position>
         get() = gameState.boxPositions
 
-    val boxMoveCount: Int
-        get() = boxMoveHistory.size
-
     val isLevelSolved: Boolean
         get() = gameState.boxPositions.all { level.tileMap.isGoal(it) }
 
@@ -139,12 +136,7 @@ class GameEngine(
     }
 
     private fun addBoxMoveToHistory(move: List<Position>) {
-        val previousMove = boxMoveHistory.lastOrNull()
-        if (previousMove?.last() == move.first()) {
-            boxMoveHistory[boxMoveHistory.lastIndex] = previousMove + move.drop(1)
-        } else {
-            boxMoveHistory.add(move)
-        }
+        boxMoveHistory.add(move)
     }
 
     private val walkableGrid: Array<Array<Boolean>>

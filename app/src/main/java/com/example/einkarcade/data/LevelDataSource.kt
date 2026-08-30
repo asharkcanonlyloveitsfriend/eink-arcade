@@ -16,4 +16,5 @@ interface LevelDataSource {
 data class CompletionRecord(
     val timestamp: String,
     val isNewBestSolution: Boolean,
+    val boxMoveCount: Int,
 )
