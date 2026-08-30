@@ -35,7 +35,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -46,10 +45,12 @@ import com.example.einkarcade.ui.PagedScrollIndicator
 import com.example.einkarcade.ui.ShadowedIconButton
 import com.example.einkarcade.ui.verticalPageSwipe
 import com.example.einkarcade.ui.rendering.AndroidGameAssets
+import com.example.einkarcade.ui.rendering.draw.BackgroundBitmapCache
 import com.example.einkarcade.ui.rendering.draw.EntityDrawer
 import com.example.einkarcade.ui.rendering.draw.TileDrawer
 import com.example.einkarcade.ui.rendering.geom.ResolvedEntityGeometry
 import com.example.einkarcade.ui.rendering.geom.computeBoardViewport
+import kotlin.math.roundToInt
 
 // Page layout.
 private const val PAGE_LEFT_MARGIN_DP = 24
@@ -139,12 +140,19 @@ fun LevelPickerOverlay(
                 (gridHeight - (cardHeight * LevelPickerPaging.GRID_SIZE)) /
                     (LevelPickerPaging.GRID_SIZE - 1)
             ).coerceAtLeast(0.dp)
-        Image(
-            painter = painterResource(R.drawable.bg_space),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            if (size.width <= 0f || size.height <= 0f) return@Canvas
+
+            val background =
+                BackgroundBitmapCache.get(
+                    context = context,
+                    width = size.width.roundToInt(),
+                    height = size.height.roundToInt(),
+                )
+            drawIntoCanvas { canvas ->
+                canvas.nativeCanvas.drawBitmap(background, 0f, 0f, null)
+            }
+        }
 
         Column(
             modifier =

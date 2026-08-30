@@ -35,6 +35,34 @@ internal class BackgroundDrawer(
             return
         }
 
+        val screenBitmap = createBitmap(viewW, viewH)
+        val screenCanvas = Canvas(screenBitmap)
+
+        if (viewW > viewH) {
+            // The source art is authored for portrait. Render it in swapped bounds, then rotate
+            // that portrait rendering clockwise to fill the landscape screen.
+            screenCanvas.save()
+            screenCanvas.translate(viewW.toFloat(), 0f)
+            screenCanvas.rotate(90f)
+            drawFittedBackground(screenCanvas, viewH, viewW)
+            screenCanvas.restore()
+        } else {
+            drawFittedBackground(screenCanvas, viewW, viewH)
+        }
+
+        cachedScreenBitmap?.recycle()
+        cachedScreenBitmap = screenBitmap
+        cachedScreenW = viewW
+        cachedScreenH = viewH
+
+        canvas.drawBitmap(screenBitmap, 0f, 0f, null)
+    }
+
+    private fun drawFittedBackground(
+        canvas: Canvas,
+        viewW: Int,
+        viewH: Int,
+    ) {
         val bitmap = requireBackgroundBitmap()
         val bmpW = bitmap.width
         val bmpH = bitmap.height
@@ -55,19 +83,8 @@ internal class BackgroundDrawer(
             backgroundSrcRect.set(0, top, bmpW, top + srcH)
         }
 
-        // Render the fitted background into a cached screen-sized bitmap
-        val screenBitmap = createBitmap(viewW, viewH)
-        val screenCanvas = Canvas(screenBitmap)
-
         backgroundDstRect.set(0, 0, viewW, viewH)
-        screenCanvas.drawBitmap(bitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
-
-        cachedScreenBitmap?.recycle()
-        cachedScreenBitmap = screenBitmap
-        cachedScreenW = viewW
-        cachedScreenH = viewH
-
-        canvas.drawBitmap(screenBitmap, 0f, 0f, null)
+        canvas.drawBitmap(bitmap, backgroundSrcRect, backgroundDstRect, backgroundPaint)
     }
 
     private fun requireBackgroundBitmap(): Bitmap {
